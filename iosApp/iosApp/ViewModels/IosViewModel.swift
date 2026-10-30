@@ -225,6 +225,7 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardLabelAtTop: Bool? = nil
     @Published var resolvedBoardShowMessageBar: Bool? = nil
     @Published var resolvedBoardShowSpeakButton: Bool? = nil
+    @Published var resolvedBoardSpeechPolicy: String? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
     @Published private(set) var boardStack: [String] = []
@@ -1093,9 +1094,9 @@ final class IosViewModel: ObservableObject {
     }
 
     /// Whether a single board/button selection speaks immediately, honoring the
-    /// global speech policy and the resolved board activation behavior.
+    /// effective Screen speech policy and the resolved board activation behavior.
     var shouldSpeakSelectionImmediately: Bool {
-        settingsFacade.speechPolicySpeaksSelection(policy: speechPolicy, behavior: boardActivationBehavior)
+        settingsFacade.speechPolicySpeaksSelection(policy: resolvedBoardSpeechPolicy ?? speechPolicy, behavior: boardActivationBehavior)
     }
 
     func setBoardShowMessageBar(_ enabled: Bool) {
@@ -1455,6 +1456,30 @@ final class IosViewModel: ObservableObject {
         }
     }
 
+    func previewSpeech(name: String, text: String, paragraphsPerPage: Int) -> [SpeechImportPage] {
+        (try? boardsFacade.previewSpeech(name: name, text: text, paragraphsPerPage: Int32(paragraphsPerPage))) ?? []
+    }
+
+    func importSpeech(name: String, text: String, paragraphsPerPage: Int) async -> String? {
+        guard !isCreatingBoardSet else { return nil }
+        isCreatingBoardSet = true
+        defer { isCreatingBoardSet = false }
+        do {
+            let set = try await boardsFacade.importSpeech(
+                name: name, text: text, paragraphsPerPage: Int32(paragraphsPerPage),
+                previousLabel: NSLocalizedString("speech_import.previous", comment: ""),
+                nextLabel: NSLocalizedString("speech_import.next", comment: "")
+            )
+            await loadBoardSets()
+            selectedBoardSetId = set.id
+            selectedBoardId = set.rootBoardId
+            await loadSelectedBoard()
+            return set.id
+        } catch {
+            return nil
+        }
+    }
+
     func createBoardSet(name: String, rows: Int, columns: Int) async {
         isCreatingBoardSet = true
         defer { isCreatingBoardSet = false }
@@ -1655,6 +1680,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowMessageBar = nil
             resolvedBoardShowSpeakButton = nil
             resolvedBoardActivationBehavior = nil
+            resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
             return
         }
@@ -1670,6 +1696,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowMessageBar = resolved?.showMessageBar
             resolvedBoardShowSpeakButton = resolved?.showSpeakButton
             resolvedBoardActivationBehavior = resolved?.activationBehavior
+            resolvedBoardSpeechPolicy = resolved?.speechPolicy
             resolvedBoardReturnBehavior = resolved?.returnBehavior
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !boardName.isEmpty {
@@ -1689,6 +1716,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardShowMessageBar = nil
             resolvedBoardShowSpeakButton = nil
             resolvedBoardActivationBehavior = nil
+            resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
         }
     }

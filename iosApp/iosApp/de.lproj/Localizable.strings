@@ -504,3 +504,17 @@
 "boardset.print_failed" = "PDF konnte nicht exportiert werden. Bitte erneut versuchen.";
 "boardset.print_link" = "Gehe zu: %@ (Seite %d)";
 "boardset.print_preparing" = "PDF wird erstellt…";
+
+// Speech import
+"speech_import.title" = "Rede importieren";
+"speech_import.help" = "Füge deinen Redetext ein. Eine Leerzeile beginnt eine neue Schaltfläche; entferne eine Leerzeile, um Absätze zusammenzuführen. Markdown-Überschriften benennen Seiten und werden nicht vorgelesen. Tippe auf eine Schaltfläche, um den vollständigen Absatz vorzulesen.";
+"speech_import.name" = "Name der Rede";
+"speech_import.text" = "Redetext";
+"speech_import.count" = "Absätze pro Seite: %d";
+"speech_import.preview" = "Vorschau · %d Seiten";
+"speech_import.fewer" = "Weniger";
+"speech_import.more" = "Mehr";
+"speech_import.create" = "Bildschirm erstellen";
+"speech_import.error" = "Die Rede konnte nicht importiert werden. Dein Text ist noch vorhanden. Versuche es erneut.";
+"speech_import.previous" = "Zurück";
+"speech_import.next" = "Weiter";

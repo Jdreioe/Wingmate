@@ -241,6 +241,8 @@ fn screens(recents: &[String]) -> Element<'_, Message> {
             action("New Screen", button::primary)
                 .on_press(Message::Editor(crate::editor::Event::New)),
             action("Open OBF or OBZ file", button::secondary).on_press(Message::ChooseBoardFile),
+            action("Import speech", button::secondary)
+                .on_press(Message::SpeechImport(crate::speech_import::Event::Open)),
         ]
         .spacing(12),
         text("Recent files").size(21),

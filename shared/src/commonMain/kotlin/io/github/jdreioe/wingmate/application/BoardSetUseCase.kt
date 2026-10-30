@@ -199,6 +199,21 @@ class BoardSetUseCase(
         return saved
     }
 
+    suspend fun importSpeech(
+        name: String,
+        text: String,
+        paragraphsPerPage: Int,
+        previousLabel: String,
+        nextLabel: String,
+    ): ObfBoardSet {
+        val graph = io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport.createGraph(
+            id = generateId("speech"), name = name, text = text,
+            paragraphsPerPage = paragraphsPerPage, previousLabel = previousLabel, nextLabel = nextLabel,
+            now = Clock.System.now().toEpochMilliseconds(),
+        )
+        return saveBoardSetGraph(graph).getOrThrow().boardSet
+    }
+
     suspend fun createCalculatorBoardSet(name: String = "Calculator"): ObfBoardSet =
         createBoardSetFromBoards(name, CalculatorBoardTemplate.boards())
 

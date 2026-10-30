@@ -260,6 +260,10 @@ fun BoardSetManagerRoot(
         )
     }
 
+    if (state.showSpeechImport) {
+        SpeechImportDialog(state = state, onAction = viewModel::onAction)
+    }
+
     if (state.showCreateDialog) {
         CreateBoardSetDialog(
             draft = state.createDraft,
@@ -352,6 +356,7 @@ internal fun BoardSetManagerScreen(
         onBack = { onAction(BoardSetManagerAction.BackClicked) },
         onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
         onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
+        onImportSpeech = { onAction(BoardSetManagerAction.SpeechImportClicked) },
         onRetry = { onAction(BoardSetManagerAction.RetryLoad) },
         onImport = if (importAvailable) {
             { onAction(BoardSetManagerAction.ImportClicked) }
@@ -410,6 +415,7 @@ private fun BoardSetLibraryScreen(
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
+    onImportSpeech: () -> Unit,
     onRetry: () -> Unit,
     onImport: (() -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
@@ -457,11 +463,14 @@ private fun BoardSetLibraryScreen(
         },
         floatingActionButton = {
             if (!isLoading && !isCreating) {
-                ExtendedFloatingActionButton(
-                    onClick = onCreate,
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text(stringResource(R.string.board_sets_new)) }
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+                    Button(onClick = onImportSpeech) { Text(stringResource(R.string.speech_import_title)) }
+                    ExtendedFloatingActionButton(
+                        onClick = onCreate,
+                        icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                        text = { Text(stringResource(R.string.board_sets_new)) }
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -499,7 +508,7 @@ private fun BoardSetLibraryScreen(
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 152.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     statusMessage?.let {
@@ -1573,7 +1582,7 @@ private fun BoardSetWorkspaceRoot(
                                         activeBoard.sounds.firstOrNull { it.id == id }
                                     }
                                     if (shouldSpeakSelectionImmediately(
-                                        settings.speechPolicy,
+                                        resolvedBoardSettings.speechPolicy ?: settings.speechPolicy,
                                         resolvedBoardSettings.activationBehavior
                                     )) {
                                         if (part != null) {

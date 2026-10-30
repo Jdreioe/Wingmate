@@ -67,6 +67,7 @@ data class IosResolvedBoardSettings(
     val messageBarEditable: Boolean,
     val activationBehavior: String,
     val returnBehavior: String,
+    val speechPolicy: String? = null,
 )
 
 data class IosBoardCell(
@@ -170,6 +171,24 @@ class BoardsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet =
         nativeCall { boardSetUseCase.createBoardSet(name, rows, columns) }
+    @Throws(NativeFailure::class)
+    fun previewSpeech(name: String, text: String, paragraphsPerPage: Int): List<io.github.jdreioe.wingmate.domain.obf.SpeechImportPage> {
+        if (paragraphsPerPage !in 1..io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport.MAX_PARAGRAPHS_PER_PAGE) {
+            throw NativeFailure(NativeFailureKind.Validation)
+        }
+        return io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport.preview(name, text, paragraphsPerPage)
+    }
+
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun importSpeech(
+        name: String, text: String, paragraphsPerPage: Int, previousLabel: String, nextLabel: String,
+    ): ObfBoardSet = nativeCall {
+        if (name.isBlank() || previewSpeech(name, text, paragraphsPerPage).isEmpty()) {
+            throw NativeFailure(NativeFailureKind.Validation)
+        }
+        boardSetUseCase.importSpeech(name, text, paragraphsPerPage, previousLabel, nextLabel)
+    }
+
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun createKeyboardBoardSet(name: String, preset: String): ObfBoardSet = nativeCall {
         boardSetUseCase.createKeyboardBoardSet(
@@ -317,6 +336,7 @@ class BoardsFacade(
             messageBarEditable = resolved.messageBarEditable,
             activationBehavior = resolved.activationBehavior.name,
             returnBehavior = resolved.returnBehavior.name,
+            speechPolicy = resolved.speechPolicy?.name,
         )
     }
 

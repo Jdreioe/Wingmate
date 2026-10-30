@@ -131,6 +131,11 @@ struct SymbolBoardWorkspaceView: View {
     @State private var route: BoardSetRoute = .library
     @State private var hasAppliedStartupDestination = false
     @State private var showCreateBoardsetSheet = false
+    @State private var showSpeechImport = false
+    @State private var speechName = ""
+    @State private var speechText = ""
+    @State private var speechParagraphsPerPage = 4
+    @State private var speechImportFailed = false
     @State private var showAddBoardSheet = false
 
     @State private var createBoardsetName: String = ""
@@ -269,6 +274,9 @@ struct SymbolBoardWorkspaceView: View {
                     route = .workspace(boardSetId: startupId, mode: .run)
                 }
             }
+        }
+        .sheet(isPresented: $showSpeechImport) {
+            speechImportSheet
         }
         .sheet(isPresented: $showCreateBoardsetSheet) {
             createBoardsetSheet
@@ -435,6 +443,11 @@ struct SymbolBoardWorkspaceView: View {
             }
             .padding(.horizontal)
             .padding(.top, 12)
+
+            Button("speech_import.title") { showSpeechImport = true }
+                .buttonStyle(.bordered)
+                .frame(minHeight: 44)
+                .padding(.horizontal)
 
             if model.boardSets.isEmpty {
                 emptyLibraryState
@@ -1129,6 +1142,70 @@ struct SymbolBoardWorkspaceView: View {
         case .renameBoard: "boardset.rename_board"
         case .resizeBoard: "boardset.resize_board"
         case .backgroundColor: "boardset.background_color"
+        }
+    }
+
+    private var speechImportSheet: some View {
+        let pages = model.previewSpeech(name: speechName, text: speechText, paragraphsPerPage: speechParagraphsPerPage)
+        return NavigationStack {
+            Form {
+                Section {
+                    Text("speech_import.help")
+                    TextField(NSLocalizedString("speech_import.name", comment: ""), text: $speechName)
+                    TextEditor(text: $speechText)
+                        .frame(minHeight: 180)
+                        .accessibilityLabel(Text("speech_import.text"))
+                    Stepper(value: $speechParagraphsPerPage, in: 1...8) {
+                        Text(String(format: NSLocalizedString("speech_import.count", comment: ""), speechParagraphsPerPage))
+                    }
+                }
+                Section {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("\(index + 1). \(page.name)").font(.headline)
+                            ForEach(Array(page.paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                                Text(paragraph)
+                            }
+                        }
+                    }
+                } header: {
+                    Text(String(format: NSLocalizedString("speech_import.preview", comment: ""), pages.count))
+                }
+            }
+            .disabled(model.isCreatingBoardSet)
+            .navigationTitle(Text("speech_import.title"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("common.cancel") { showSpeechImport = false }
+                        .disabled(model.isCreatingBoardSet)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if model.isCreatingBoardSet {
+                        ProgressView()
+                    } else {
+                        Button("speech_import.create") {
+                            speechImportFailed = false
+                            Task {
+                                if let id = await model.importSpeech(
+                                    name: speechName, text: speechText, paragraphsPerPage: speechParagraphsPerPage
+                                ) {
+                                    showSpeechImport = false
+                                    speechName = ""
+                                    speechText = ""
+                                    route = .workspace(boardSetId: id, mode: .run)
+                                } else {
+                                    speechImportFailed = true
+                                }
+                            }
+                        }
+                        .disabled(speechName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || pages.isEmpty)
+                    }
+                }
+            }
+            .alert("speech_import.error", isPresented: $speechImportFailed) {
+                Button("common.ok", role: .cancel) { }
+            }
+            .interactiveDismissDisabled(model.isCreatingBoardSet)
         }
     }
 

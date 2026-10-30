@@ -543,3 +543,17 @@
 "boardset.print_failed" = "Kunne ikke eksportere PDF. Prøv igen.";
 "boardset.print_link" = "Gå til: %@ (side %d)";
 "boardset.print_preparing" = "Forbereder PDF…";
+
+// Speech import
+"speech_import.title" = "Importér tale";
+"speech_import.help" = "Indsæt din tale. En tom linje starter en ny knap; fjern en tom linje for at samle afsnit. Markdown-overskrifter navngiver sider og læses ikke op. Tryk på en knap for at læse hele afsnittet op.";
+"speech_import.name" = "Talens navn";
+"speech_import.text" = "Taletekst";
+"speech_import.count" = "Afsnit pr. side: %d";
+"speech_import.preview" = "Forhåndsvisning · %d sider";
+"speech_import.fewer" = "Færre";
+"speech_import.more" = "Flere";
+"speech_import.create" = "Opret skærm";
+"speech_import.error" = "Talen kunne ikke importeres. Din tekst er stadig her. Prøv igen.";
+"speech_import.previous" = "Forrige";
+"speech_import.next" = "Næste";

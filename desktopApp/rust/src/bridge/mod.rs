@@ -29,6 +29,8 @@ unsafe extern "C" {
     fn wm_string_free(value: *mut c_char);
     fn wm_library_json(context: *mut c_void) -> *mut c_char;
     fn wm_recents_json(context: *mut c_void) -> *mut c_char;
+    fn wm_preview_speech_json(context: *mut c_void, value: *const c_char) -> *mut c_char;
+    fn wm_import_speech_json(context: *mut c_void, value: *const c_char) -> *mut c_char;
     fn wm_import_file_json(context: *mut c_void, path: *const c_char) -> *mut c_char;
     fn wm_open_json(context: *mut c_void, id: *const c_char) -> *mut c_char;
     fn wm_activate_json(context: *mut c_void, id: *const c_char) -> *mut c_char;
@@ -192,6 +194,15 @@ impl NativeCore {
     }
     pub fn recents(&self) -> Result<Vec<String>, CoreError> {
         self.read(wm_recents_json)
+    }
+    pub fn preview_speech(
+        &self,
+        value: &serde_json::Value,
+    ) -> Result<Vec<crate::speech_import::Page>, CoreError> {
+        self.input(&value.to_string(), wm_preview_speech_json)
+    }
+    pub fn import_speech(&self, value: &serde_json::Value) -> Result<Activation, CoreError> {
+        self.input(&value.to_string(), wm_import_speech_json)
     }
     pub fn import_file(&self, path: &str) -> Result<Activation, CoreError> {
         self.input(path, wm_import_file_json)
