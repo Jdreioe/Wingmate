@@ -41,6 +41,7 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.ElevenLabsVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.NoGoogleApiRequestHeaders
@@ -92,6 +93,7 @@ internal fun createCoreDataModule(): Module = module {
         singleOf(::AzureVoiceCatalog)
         single<GoogleApiRequestHeaders> { NoGoogleApiRequestHeaders }
         singleOf(::GoogleVoiceCatalog)
+        singleOf(::ElevenLabsVoiceCatalog)
         single { DictionaryLoader(getOrNull<io.github.jdreioe.wingmate.domain.FileStorage>()) } // For language dictionary pretraining and caching
         single<TextPredictionService> {
             LocalTextPredictionService(

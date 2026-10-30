@@ -55,7 +55,11 @@ internal class DefaultVoiceSelectionOperations(
         )
 
     override suspend fun refreshCloudVoices(engine: TtsEngine): List<Voice> = withContext(Dispatchers.Default) {
-        if (engine == TtsEngine.GOOGLE_CLOUD) voiceUseCase.refreshFromGoogle() else voiceUseCase.refreshFromAzure()
+        when (engine) {
+            TtsEngine.ELEVENLABS -> voiceUseCase.refreshFromElevenLabs()
+            TtsEngine.GOOGLE_CLOUD -> voiceUseCase.refreshFromGoogle()
+            else -> voiceUseCase.refreshFromAzure()
+        }
     }
 
     override suspend fun cachedVoices(engine: TtsEngine): List<Voice> =

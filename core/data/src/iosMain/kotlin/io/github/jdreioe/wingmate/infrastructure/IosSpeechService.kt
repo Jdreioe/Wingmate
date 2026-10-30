@@ -288,6 +288,10 @@ class IosSpeechService(
     // Synthesizes with exactly [engine]; the session may have chosen it before settings changed.
     private suspend fun synthesize(text: String, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
         when (engine) {
+            TtsEngine.ELEVENLABS -> {
+                val config = configRepository.getElevenLabsSpeechConfig() ?: return@withContext null
+                ElevenLabsTtsClient.synthesize(httpClient, text, voice, config)
+            }
             TtsEngine.GOOGLE_CLOUD -> {
                 val config = configRepository.getGoogleSpeechConfig() ?: return@withContext null
                 GoogleTtsClient.synthesize(
@@ -310,6 +314,10 @@ class IosSpeechService(
 
     private suspend fun synthesizeSegments(segments: List<SpeechSegment>, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
         when (engine) {
+            TtsEngine.ELEVENLABS -> {
+                val config = configRepository.getElevenLabsSpeechConfig() ?: return@withContext null
+                ElevenLabsTtsClient.synthesizeSegments(httpClient, segments, voice, config)
+            }
             TtsEngine.GOOGLE_CLOUD -> {
                 val config = configRepository.getGoogleSpeechConfig() ?: return@withContext null
                 GoogleTtsClient.synthesizeSegments(
@@ -349,6 +357,7 @@ class IosSpeechService(
             ?: primaryLanguage?.takeIf(String::isNotBlank)
             ?: "en-US"
         return when (engine) {
+            TtsEngine.ELEVENLABS -> this.also { require(it.resolvedProvider() == VoiceProvider.ELEVENLABS) }
             TtsEngine.GOOGLE_CLOUD -> if (resolvedProvider() == VoiceProvider.GOOGLE) this else {
                 Voice(primaryLanguage = language, selectedLanguage = language)
             }

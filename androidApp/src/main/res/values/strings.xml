@@ -705,4 +705,15 @@
     <string name="speech_import_error">The speech could not be imported. Your text is still here. Try again.</string>
     <string name="speech_import_previous">Previous</string>
     <string name="speech_import_next">Next</string>
+    <string name="elevenlabs_title">ElevenLabs</string>
+    <string name="elevenlabs_setup">Set up ElevenLabs</string>
+    <string name="elevenlabs_description">Use voices from your ElevenLabs account, including personal voice clones. Requires internet. Text is sent to ElevenLabs and usage counts toward your account allowance.</string>
+    <string name="elevenlabs_key">ElevenLabs API key</string>
+    <string name="elevenlabs_help">Create an API key in ElevenLabs with Voices read and Text to Speech access, then paste it here. Add library voices or create a personal voice in your ElevenLabs account first.</string>
+    <string name="elevenlabs_save">Save securely and verify</string>
+    <string name="elevenlabs_clear">Remove key</string>
+    <string name="elevenlabs_configured">ElevenLabs key is stored securely on this device.</string>
+    <string name="elevenlabs_error">Could not complete the request. Check your connection, API key permissions, and available voices, then retry.</string>
+    <string name="voice_elevenlabs_title_with_lang">ElevenLabs voices (%1$s)</string>
+    <string name="voice_no_elevenlabs_match">No matching ElevenLabs voices. Set up your API key and refresh.</string>
 </resources>

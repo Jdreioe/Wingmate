@@ -38,7 +38,8 @@ internal object SpeechCacheIdentity {
         dictionary: List<PronunciationEntry>,
     ): String = digest(
         content,
-        engine.name,
+        // ElevenLabs audio differs per model; other engines keep their existing keys.
+        if (engine == TtsEngine.ELEVENLABS) "${engine.name}/${ElevenLabsTtsClient.MODEL_ID}" else engine.name,
         voice.name,
         voice.primaryLanguage,
         voice.selectedLanguage,

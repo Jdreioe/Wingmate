@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
@@ -44,7 +45,7 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 import platform.posix.memcpy
 
-/** Stores Azure BYOK configuration in a this-device-only Keychain item. */
+/** Stores cloud speech credentials in separate this-device-only Keychain items. */
 @OptIn(ExperimentalForeignApi::class)
 class IosConfigRepository : ConfigRepository {
     private val defaults by lazy { NSUserDefaults.standardUserDefaults() }
@@ -104,6 +105,23 @@ class IosConfigRepository : ConfigRepository {
     override suspend fun clearGoogleSpeechConfig() = withContext(Dispatchers.Default) {
         deleteGoogleKeychain()
         OperationalLogger.info("google_speech_config.clear", "succeeded", enabled = false)
+    }
+
+    override suspend fun getElevenLabsSpeechConfig(): ElevenLabsSpeechConfig? = withContext(Dispatchers.Default) {
+        readElevenLabsKeychain()
+    }
+
+    override suspend fun saveElevenLabsSpeechConfig(config: ElevenLabsSpeechConfig) = withContext(Dispatchers.Default) {
+        val normalized = config.copy(apiKey = config.apiKey.trim())
+        require(normalized.apiKey.isNotEmpty()) { "ElevenLabs API key is required" }
+        writeElevenLabsKeychain(normalized)
+        check(readElevenLabsKeychain() == normalized) { "Secure ElevenLabs credential write could not be verified" }
+        OperationalLogger.info("elevenlabs_speech_config.save", "succeeded", enabled = true)
+    }
+
+    override suspend fun clearElevenLabsSpeechConfig() = withContext(Dispatchers.Default) {
+        deleteElevenLabsKeychain()
+        OperationalLogger.info("elevenlabs_speech_config.clear", "succeeded", enabled = false)
     }
 
     private fun readKeychain(): SpeechServiceConfig? = memScoped {
@@ -182,6 +200,44 @@ class IosConfigRepository : ConfigRepository {
         check(status == errSecSuccess || status == errSecItemNotFound) { "Could not clear Google Keychain item ($status)" }
     }
 
+    private fun readElevenLabsKeychain(): ElevenLabsSpeechConfig? = memScoped {
+        val query = baseQuery(ELEVENLABS_SERVICE, ACCOUNT)
+        CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
+        CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitOne)
+        val result = alloc<CFTypeRefVar>()
+        val status = SecItemCopyMatching(query, result.ptr)
+        CFRelease(query)
+        if (status == errSecItemNotFound) return@memScoped null
+        check(status == errSecSuccess) { "Could not read ElevenLabs configuration from Keychain ($status)" }
+        val value = result.value ?: return@memScoped null
+        val data = value.reinterpret<cnames.structs.__CFData>()
+        val length = CFDataGetLength(data).toInt()
+        val bytes = ByteArray(length)
+        if (length > 0) bytes.usePinned { memcpy(it.addressOf(0), CFDataGetBytePtr(data), length.convert()) }
+        CFRelease(value)
+        json.decodeFromString(ElevenLabsSpeechConfig.serializer(), bytes.decodeToString())
+    }
+
+    private fun writeElevenLabsKeychain(config: ElevenLabsSpeechConfig) {
+        deleteElevenLabsKeychain()
+        val query = baseQuery(ELEVENLABS_SERVICE, ACCOUNT)
+        val bytes = json.encodeToString(ElevenLabsSpeechConfig.serializer(), config).encodeToByteArray()
+        val data = bytes.usePinned { CFDataCreate(null, it.addressOf(0).reinterpret(), bytes.size.convert()) }
+        CFDictionarySetValue(query, kSecValueData, data)
+        CFDictionarySetValue(query, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        val status = SecItemAdd(query, null)
+        CFRelease(data)
+        CFRelease(query)
+        check(status == errSecSuccess) { "Could not store ElevenLabs configuration in Keychain ($status)" }
+    }
+
+    private fun deleteElevenLabsKeychain() {
+        val query = baseQuery(ELEVENLABS_SERVICE, ACCOUNT)
+        val status = SecItemDelete(query)
+        CFRelease(query)
+        check(status == errSecSuccess || status == errSecItemNotFound) { "Could not clear ElevenLabs Keychain item ($status)" }
+    }
+
     private fun baseQuery(service: String = SERVICE, account: String = ACCOUNT) =
         CFDictionaryCreateMutable(null, 0, null, null)!!.also { query ->
         CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
@@ -195,6 +251,7 @@ class IosConfigRepository : ConfigRepository {
         const val LEGACY_KEY = "speech_config"
         const val SERVICE = "io.github.jdreioe.wingmate.azure-speech"
         const val GOOGLE_SERVICE = "io.github.jdreioe.wingmate.google-speech"
+        const val ELEVENLABS_SERVICE = "io.github.jdreioe.wingmate.elevenLabs-speech"
         const val ACCOUNT = "default"
     }
 }

@@ -7,6 +7,7 @@ import kotlinx.serialization.Transient
 enum class VoiceProvider {
     AZURE,
     GOOGLE,
+    ELEVENLABS,
 }
 
 @Serializable
@@ -86,6 +87,7 @@ fun Voice.resolvedGoogleModel(): GoogleVoiceModel? {
 
 fun List<Voice>.forTtsEngine(engine: TtsEngine): List<Voice> = when (engine) {
     TtsEngine.SYSTEM -> emptyList()
+    TtsEngine.ELEVENLABS -> filter { it.resolvedProvider() == VoiceProvider.ELEVENLABS }
     TtsEngine.GOOGLE_CLOUD -> filter { it.resolvedProvider() == VoiceProvider.GOOGLE }
     TtsEngine.AZURE_USER_RESOURCE,
     TtsEngine.AZURE_MANAGED,
@@ -238,3 +240,11 @@ data class SaidText(
     /** Whether this playback was eligible for the user-facing History feed. */
     val visibleInHistory: Boolean = true,
 )
+
+@Serializable
+data class ElevenLabsSpeechConfig(val apiKey: String = "") {
+    override fun toString(): String = "ElevenLabsSpeechConfig(apiKey=<redacted>)"
+}
+
+@Serializable
+data class ElevenLabsSpeechConfigStatus(val credentialConfigured: Boolean = false)

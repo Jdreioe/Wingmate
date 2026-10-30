@@ -80,6 +80,7 @@ class InMemorySaidTextRepository : SaidTextRepository {
 class InMemoryConfigRepository : ConfigRepository {
     private var cfg: SpeechServiceConfig? = null
     private var googleCfg: GoogleSpeechConfig? = null
+    private var elevenLabsCfg: ElevenLabsSpeechConfig? = null
     override suspend fun getSpeechConfig(): SpeechServiceConfig? {
         return cfg
     }
@@ -99,6 +100,16 @@ class InMemoryConfigRepository : ConfigRepository {
     }
     override suspend fun clearGoogleSpeechConfig() {
         googleCfg = null
+    }    override suspend fun getElevenLabsSpeechConfig(): ElevenLabsSpeechConfig? {
+        return elevenLabsCfg
+    }
+    override suspend fun saveElevenLabsSpeechConfig(config: ElevenLabsSpeechConfig) {
+        elevenLabsCfg = config.copy(apiKey = config.apiKey.trim()).also {
+            require(it.apiKey.isNotEmpty()) { "ElevenLabs API key is required" }
+        }
+    }
+    override suspend fun clearElevenLabsSpeechConfig() {
+        elevenLabsCfg = null
     }
 }
 

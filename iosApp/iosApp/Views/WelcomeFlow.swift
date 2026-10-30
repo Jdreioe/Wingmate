@@ -9,6 +9,7 @@ struct WelcomeFlow: View {
     @State private var showVoicePicker = false
     @State private var showLanguagePicker = false
     @State private var showGoogleSetup = false
+    @State private var showElevenLabsSetup = false
     @State private var selectedVoice: Shared.Voice? = nil
     @State private var selectedTtsEngine: String? = nil
     @State private var voiceSelectorFollowsAzureSetup = false
@@ -122,6 +123,16 @@ struct WelcomeFlow: View {
                     showLanguagePicker = false
                 }
             )
+        }
+        .sheet(isPresented: $showElevenLabsSetup) {
+            ElevenLabsSetupView(model: model, onClose: {
+                showElevenLabsSetup = false
+                if model.elevenLabsConfigured {
+                    selectedTtsEngine = "ELEVENLABS"
+                    voiceSelectorFollowsAzureSetup = false
+                    currentStep = 4
+                }
+            })
         }
         .sheet(isPresented: $showGoogleSetup) {
             GoogleTtsSetupView(
@@ -355,6 +366,11 @@ struct WelcomeFlow: View {
                         }
                     }
                 )
+
+                Button("elevenlabs.setup") {
+                    showElevenLabsSetup = true
+                }
+                Text("elevenlabs.description").font(.footnote)
 
                 TtsOptionCard(
                     title: NSLocalizedString("welcome_flow.google_tts.title", comment: ""),
@@ -683,7 +699,7 @@ struct WelcomeFlow: View {
                         case 2:
                             if selectedTtsEngine == "GOOGLE_CLOUD" && !model.googleConfigured {
                                 showGoogleSetup = true
-                            } else if selectedTtsEngine == "SYSTEM" || selectedTtsEngine == "GOOGLE_CLOUD" {
+                            } else if selectedTtsEngine == "SYSTEM" || selectedTtsEngine == "GOOGLE_CLOUD" || selectedTtsEngine == "ELEVENLABS" {
                                 currentStep = 4
                             } else {
                                 currentStep = 3

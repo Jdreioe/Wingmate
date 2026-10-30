@@ -337,6 +337,7 @@ private fun settingsRouteTitle(route: SettingsRoute): String = when (route) {
     is SettingsRoute.Category -> settingsCategoryTitle(route.tab)
     SettingsRoute.VoiceSelection -> stringResource(R.string.voice_select_title)
     SettingsRoute.LanguageSelection -> stringResource(R.string.language_dialog_title)
+    SettingsRoute.ElevenLabsSetup -> "ElevenLabs"
     SettingsRoute.GoogleSetup -> stringResource(R.string.google_setup_title)
     // F0 setup renders its own full-screen layout; the bar keeps a stable title.
     SettingsRoute.F0Setup -> stringResource(R.string.ui_settings_speech_title)
@@ -382,6 +383,10 @@ private fun SettingsRouteContent(
         SettingsRoute.F0Setup -> F0SetupScreen(
             onDone = { onAction(SettingsAction.F0SetupCompleted) },
             onBack = { onAction(SettingsAction.BackClicked) }
+        )
+        SettingsRoute.ElevenLabsSetup -> ElevenLabsSetupScreen(
+            onDone = { onAction(SettingsAction.ElevenLabsSetupCompleted) },
+            onBack = { onAction(SettingsAction.BackClicked) },
         )
         SettingsRoute.GoogleSetup -> GoogleTtsSetupScreen(
             onDone = { onAction(SettingsAction.GoogleSetupCompleted) },
@@ -433,6 +438,7 @@ private fun CategoryContent(
                 replacingCredentials = state.replacingAzureCredentials,
                 onReplaceCredentials = { onAction(SettingsAction.ReplaceAzureCredentialsClicked) },
                 googleCredentialConfigured = state.googleCredentialConfigured,
+                onOpenElevenLabsSetup = { onAction(SettingsAction.ElevenLabsSetupOpened) },
                 onOpenGoogleSetup = { onAction(SettingsAction.GoogleSetupOpened) },
                 onClearGoogleCredentials = { onAction(SettingsAction.GoogleCredentialsCleared) },
                 onOpenVoiceSelection = { onAction(SettingsAction.VoiceSelectionOpened) },
@@ -1130,6 +1136,7 @@ private fun SpeechSection(
     replacingCredentials: Boolean,
     onReplaceCredentials: () -> Unit,
     googleCredentialConfigured: Boolean,
+    onOpenElevenLabsSetup: () -> Unit,
     onOpenGoogleSetup: () -> Unit,
     onClearGoogleCredentials: () -> Unit,
     onOpenVoiceSelection: () -> Unit = {},
@@ -1142,12 +1149,18 @@ private fun SpeechSection(
             subtitle = stringResource(
                 when (ttsEngine) {
                     TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                    TtsEngine.ELEVENLABS -> R.string.elevenlabs_title
                     TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
                     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
                 }
             )
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = ttsEngine == TtsEngine.ELEVENLABS,
+                    onClick = { onTtsEngineChange(TtsEngine.ELEVENLABS) },
+                    label = { Text("ElevenLabs") },
+                )
                 FilterChip(
                     selected = ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED,
                     onClick = { onTtsEngineChange(TtsEngine.AZURE_USER_RESOURCE) },
@@ -1180,6 +1193,12 @@ private fun SpeechSection(
             )
         }
 
+        if (ttsEngine == TtsEngine.ELEVENLABS) {
+            SettingsGroupDivider()
+            Button(onClick = onOpenElevenLabsSetup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.elevenlabs_setup))
+            }
+        }
         if (ttsEngine == TtsEngine.GOOGLE_CLOUD) {
             SettingsGroupDivider()
             Column(
@@ -1204,7 +1223,7 @@ private fun SpeechSection(
         }
 
         Spacer(Modifier.height(12.dp))
-        if (ttsEngine != TtsEngine.GOOGLE_CLOUD) {
+        if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
             OutlinedButton(
                 onClick = onOpenF0Setup,
                 modifier = Modifier.fillMaxWidth()
@@ -2068,11 +2087,13 @@ private fun VoiceSelectionContent(
             is VoiceSelectionUiState.Ready -> {
                 val titleRes = when (ttsEngine) {
                     TtsEngine.SYSTEM -> if (selectedLanguage != null) R.string.voice_system_title_with_lang else R.string.voice_system_title
+                    TtsEngine.ELEVENLABS -> if (selectedLanguage != null) R.string.voice_elevenlabs_title_with_lang else R.string.elevenlabs_title
                     TtsEngine.GOOGLE_CLOUD -> if (selectedLanguage != null) R.string.voice_google_title_with_lang else R.string.voice_google_title
                     else -> if (selectedLanguage != null) R.string.voice_azure_title_with_lang else R.string.voice_azure_title
                 }
                 val emptyRes = when (ttsEngine) {
                     TtsEngine.SYSTEM -> R.string.voice_no_system_match
+                    TtsEngine.ELEVENLABS -> R.string.voice_no_elevenlabs_match
                     TtsEngine.GOOGLE_CLOUD -> R.string.voice_no_google_match
                     else -> R.string.voice_no_azure_match
                 }

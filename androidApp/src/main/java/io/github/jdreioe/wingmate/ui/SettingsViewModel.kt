@@ -62,6 +62,7 @@ internal sealed interface SettingsRoute {
     data object LanguageSelection : SettingsRoute
     data object F0Setup : SettingsRoute
     data object GoogleSetup : SettingsRoute
+    data object ElevenLabsSetup : SettingsRoute
 }
 
 internal sealed interface SettingsMessage {
@@ -110,8 +111,10 @@ internal sealed interface SettingsAction {
     data object LanguageSelectionOpened : SettingsAction
     data object F0SetupOpened : SettingsAction
     data object GoogleSetupOpened : SettingsAction
+    data object ElevenLabsSetupOpened : SettingsAction
     data object F0SetupCompleted : SettingsAction
     data object GoogleSetupCompleted : SettingsAction
+    data object ElevenLabsSetupCompleted : SettingsAction
 
     data class TtsEngineSelected(val engine: TtsEngine) : SettingsAction
     data class AzureEndpointChanged(val value: String) : SettingsAction
@@ -417,6 +420,11 @@ internal class SettingsViewModel(
                 SettingsRoute.LanguageSelection, "language_selection"
             )
             SettingsAction.F0SetupOpened -> openSubPage(SettingsRoute.F0Setup, "azure_f0_setup")
+            SettingsAction.ElevenLabsSetupOpened -> openSubPage(SettingsRoute.ElevenLabsSetup, "elevenlabs_setup")
+            SettingsAction.ElevenLabsSetupCompleted -> {
+                persist { it.copy(ttsEngine = TtsEngine.ELEVENLABS) }
+                setRoute(SettingsRoute.Category(SettingsTab.Speech))
+            }
             SettingsAction.GoogleSetupOpened -> openSubPage(
                 SettingsRoute.GoogleSetup, "google_tts_setup"
             )
@@ -925,6 +933,7 @@ internal class SettingsViewModel(
         SettingsRoute.LanguageSelection,
         SettingsRoute.F0Setup,
         SettingsRoute.GoogleSetup,
+        SettingsRoute.ElevenLabsSetup,
         -> SettingsRoute.Category(SettingsTab.Speech)
     }
 

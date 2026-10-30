@@ -94,6 +94,7 @@ enum class TtsEngine {
     AZURE_USER_RESOURCE,
     AZURE_MANAGED,
     GOOGLE_CLOUD,
+    ELEVENLABS,
 }
 
 @Serializable

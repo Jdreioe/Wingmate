@@ -1270,6 +1270,9 @@ struct VoiceSelectionSheet: View {
     }
 
     private func refreshProviderVoices() async throws -> [Shared.Voice] {
+        if ttsEngine == "ELEVENLABS" {
+            return try await speechFacade.refreshVoicesFromElevenLabs()
+        }
         if ttsEngine == "GOOGLE_CLOUD" {
             return try await speechFacade.refreshVoicesFromGoogle()
         }
