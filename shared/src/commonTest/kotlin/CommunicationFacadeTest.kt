@@ -40,6 +40,22 @@ class CommunicationFacadeTest {
     }
 
     @Test
+    fun likelyNextUsesVisibleHistoryAndClearingRemovesSuggestions() = withFakeMain {
+        val repository = InMemorySaidTextRepository()
+        val facade = facade(repository)
+        repository.add(SaidText(id = 1, saidText = "Hello", createdAt = 1000L))
+        repository.add(SaidText(id = 2, saidText = "Water", audioFilePath = "/tmp/water.m4a", createdAt = 2000L))
+        repository.add(SaidText(id = 3, saidText = "Private", createdAt = 3000L, visibleInHistory = false))
+        repository.add(SaidText(id = 4, saidText = "Hello", createdAt = 4000L))
+
+        val result = facade.likelyNext()
+        assertEquals(listOf("Water"), result.phrases.map { it.text })
+        assertEquals("/tmp/water.m4a", result.phrases.single().recordingPath)
+        repository.deleteAll()
+        assertTrue(facade.likelyNext().phrases.isEmpty())
+    }
+
+    @Test
     fun historyListsOnlyVisibleSaidTextsAsPhrases() = withFakeMain {
         val saidRepo = InMemorySaidTextRepository()
         val facade = facade(saidRepo)

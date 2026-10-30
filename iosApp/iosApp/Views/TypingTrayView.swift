@@ -2,10 +2,11 @@ import SwiftUI
 import Shared
 
 /// Which Typing Screen Page the tray shows.
-enum TypingPage: Equatable {
+enum TypingPage: Hashable {
     case all
     case category(String)
     case history
+    case likelyNext
 }
 
 /// The Typing Screen in the tray below the Message bar. Its Page elements (Page
@@ -25,6 +26,7 @@ struct TypingTrayView: View {
     let requestMic: (String) -> Void
     let onShowKeyboard: () -> Void
 
+    @AccessibilityFocusState private var focusedPage: TypingPage?
     @State private var categoryMenu: Shared.Phrase? = nil
     @State private var confirmDeleteCategory: Shared.Phrase? = nil
 
@@ -48,6 +50,8 @@ struct TypingTrayView: View {
         }
         .onChange(of: model.historyVisible) { _, _ in leaveHistoryIfUnavailable() }
         .onChange(of: model.historyPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.likelyNextPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.likelyNextPageEnabled) { _, _ in leaveHistoryIfUnavailable() }
         .confirmationDialog(
             categoryMenu?.text ?? "",
             isPresented: Binding(get: { categoryMenu != nil }, set: { if !$0 { categoryMenu = nil } }),
@@ -95,6 +99,7 @@ struct TypingTrayView: View {
     /// History can disappear while open (turned off in Settings); fall back to All Phrases.
     private func leaveHistoryIfUnavailable() {
         if page == .history && !historyAvailable { selectPage(.all) }
+        if page == .likelyNext && !model.likelyNextAvailable { selectPage(.all) }
     }
 
     private func selectPage(_ newPage: TypingPage) {
@@ -113,6 +118,7 @@ struct TypingTrayView: View {
                     selected: page == .all,
                     fontSize: chipFontSize
                 ) { selectPage(.all) }
+                .accessibilityFocused($focusedPage, equals: .all)
                 ForEach(categories, id: \.id) { category in
                     let selected = page == .category(category.id)
                     CategoryChip(
@@ -123,6 +129,7 @@ struct TypingTrayView: View {
                         // Tapping the open Category again opens its menu (move, delete).
                         if selected { requestMutation { categoryMenu = category } } else { selectPage(.category(category.id)) }
                     }
+                    .accessibilityFocused($focusedPage, equals: .category(category.id))
                     .contextMenu { categoryActions(category) }
                     .accessibilityAddTraits(selected ? .isSelected : [])
                     .accessibilityHint(Text(selected ? "accessibility.category.menu_hint" : ""))
@@ -133,6 +140,11 @@ struct TypingTrayView: View {
                         selected: page == .history,
                         fontSize: chipFontSize
                     ) { selectPage(.history) }
+                    .accessibilityFocused($focusedPage, equals: .history)
+                }
+                if model.likelyNextAvailable {
+                    CategoryChip(title: NSLocalizedString("typing.likely_next", comment: ""), selected: page == .likelyNext, fontSize: chipFontSize) { selectPage(.likelyNext) }
+                        .accessibilityFocused($focusedPage, equals: .likelyNext)
                 }
                 if showAdd {
                     Button(action: { requestMutation(onAddCategory) }) {
@@ -186,14 +198,15 @@ struct TypingTrayView: View {
         case .all: return model.state.phrases
         case .category(let id): return model.state.phrases.filter { $0.parentId == id }
         case .history: return model.historyPhrases
+        case .likelyNext: return model.likelyNextPhrases
         }
     }
 
     private var phraseCollection: some View {
         let phrases = pagePhrases
-        let isHistory = page == .history
+        let isHistory = page == .history || page == .likelyNext
         // Long presses activate Phrases under hold-to-select, so editing gestures stay off.
-        let editable = !isHistory && model.holdToSelectMillis <= 0
+        let editable = !isHistory && model.holdToSelectMillis <= 0 && !model.selectOnTouchDown
         let columns = Array(
             repeating: GridItem(.flexible(), spacing: 8),
             count: max(1, Int(tray.phraseColumns))
@@ -237,6 +250,21 @@ struct TypingTrayView: View {
             }
             .padding(8)
         }
+        .id(page)
+        .transition(.opacity)
+        .scrollDisabled(model.selectOnTouchDown)
+        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
+            guard model.swipeBetweenPages, !model.selectOnTouchDown, model.holdToSelectMillis <= 0,
+                  abs(value.translation.width) >= 64, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+            var pages: [TypingPage] = [.all] + model.state.categories.map { .category($0.id) }
+            if historyAvailable { pages.append(.history) }
+            if model.likelyNextAvailable { pages.append(.likelyNext) }
+            guard let index = pages.firstIndex(of: page) else { return }
+            let next = index + (value.translation.width < 0 ? 1 : -1)
+            guard pages.indices.contains(next) else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { selectPage(pages[next]) }
+            focusedPage = pages[next]
+        })
         .overlay {
             if isHistory && phrases.isEmpty {
                 Text("history.empty").foregroundStyle(.secondary)
@@ -267,6 +295,7 @@ struct TypingActionStrip: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
         }
+        .scrollDisabled(model.selectOnTouchDown)
         .accessibilityElement(children: .contain)
     }
 }
@@ -343,7 +372,7 @@ private struct TypingActionButton: View {
             }
             .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
         .accessibilityValue(Text(unsupported ? "typing.action.unsupported" : enabled ? "" : "typing.action.unavailable"))

@@ -406,7 +406,7 @@ struct PhraseItemView: View {
             }
             .contentShape(tileShape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown && model.holdToSelectMillis <= 0))
         .simultaneousGesture(
             LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
                 .onEnded { _ in
@@ -449,7 +449,7 @@ struct PhraseItemView: View {
         .accessibilityHint(Text("accessibility.phrase.insert_hint"))
         .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speakPhrase(phrase) }
 
-        if editable {
+        if editable && !model.selectOnTouchDown {
             tile
                 .accessibilityAction(named: Text("accessibility.phrase.edit_action")) { onEdit() }
                 .accessibilityAction(named: Text("accessibility.phrase.delete_action")) { onDelete(phrase.id) }

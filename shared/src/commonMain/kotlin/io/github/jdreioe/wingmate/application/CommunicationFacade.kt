@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.application.bloc.PhraseListStore
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.likelyNextMessages
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.loggingClassName
@@ -45,7 +46,11 @@ class CommunicationFacade(
     }
 
     /** Visible History in repository order, mapped as read-only Phrases for the History Page. */
-    suspend fun history(): HistoryResult {
+    suspend fun history(): HistoryResult = readHistory(false)
+
+    suspend fun likelyNext(): HistoryResult = readHistory(true)
+
+    private suspend fun readHistory(likelyNext: Boolean): HistoryResult {
         val said = try {
             saidTextRepository.list()
         } catch (failure: CancellationException) {
@@ -56,7 +61,7 @@ class CommunicationFacade(
         }
         return HistoryResult(
             status = HistoryStatus.Success,
-            phrases = said.filter { it.visibleInHistory }.map { s ->
+            phrases = (if (likelyNext) likelyNextMessages(said, limit = 8) else said.filter { it.visibleInHistory }).map { s ->
                 val createdAt = s.createdAt ?: s.date ?: 0L
                 Phrase(
                     id = "history-" + (s.id?.toString() ?: createdAt.toString()),

@@ -130,6 +130,13 @@ final class IosViewModel: ObservableObject {
     }
 
     // History items exposed as phrases for UI rendering
+    private var historyLoadGeneration = 0
+    @Published var likelyNextPhrases: [Shared.Phrase] = []
+    @Published var likelyNextPageEnabled = false
+    @Published var selectOnTouchDown = false
+    @Published var swipeBetweenPages = false
+    @Published var boardBackgroundImageUrl: String? = nil
+    @Published var boardBackgroundImageFit = "Fill"
     @Published var historyPhrases: [Shared.Phrase] = []
 
     // Speech engine preference. The session falls back to the device voice by itself.
@@ -297,6 +304,7 @@ final class IosViewModel: ObservableObject {
             communicationFacade.refreshPhrases()
             try? await session.reloadAfterRestore()
             await loadTypingTray()
+            await loadHistory()
         }
         return result
     }
@@ -402,8 +410,6 @@ final class IosViewModel: ObservableObject {
             }
         }
     await loadTypingTray()
-    // Preload history once Koin is up
-    await loadHistory()
     // Load pronunciations
     await loadPronunciations()
     // Load boardsets and selected board for symbol mode
@@ -517,10 +523,14 @@ final class IosViewModel: ObservableObject {
                 self.usageLoggingEnabled = settings.usageLoggingEnabled
                 self.featureUsageReportingEnabled = settings.featureUsageReportingEnabled
                 self.historyVisible = settings.historyVisible
+                self.likelyNextPageEnabled = settings.likelyNextPageEnabled
+                self.selectOnTouchDown = settings.selectOnTouchDown
+                self.swipeBetweenPages = settings.swipeBetweenPages
                 self.startupUsesScreens = opensScreens
                 self.startupBoardSetId = settings.startupBoardSetId
                 self.boardModeEnabled = opensScreens
             }
+            await loadHistory()
         } catch {
             // Keep the native defaults when shared settings are unavailable.
         }
@@ -827,14 +837,62 @@ final class IosViewModel: ObservableObject {
 
     // MARK: - History
     func loadHistory() async {
+        historyLoadGeneration += 1
+        let generation = historyLoadGeneration
         guard historyVisible else {
             historyPhrases = []
+            likelyNextPhrases = []
             return
         }
         // On a read failure keep the History already shown; cancellation leaves it as is too.
         guard let result = try? await communicationFacade.history(), result.isSuccess else { return }
+        guard historyVisible, generation == historyLoadGeneration else { return }
         await MainActor.run { self.historyPhrases = result.phrases.reversed() }
+        if likelyNextPageEnabled {
+            if let next = try? await communicationFacade.likelyNext(), next.isSuccess, historyVisible, likelyNextPageEnabled, generation == historyLoadGeneration {
+                likelyNextPhrases = next.phrases
+            }
+        } else { likelyNextPhrases = [] }
     }
+    var likelyNextAvailable: Bool { historyVisible && likelyNextPageEnabled && !likelyNextPhrases.isEmpty }
+
+    func setLikelyNextPageEnabled(_ enabled: Bool) {
+        likelyNextPageEnabled = enabled
+        if !enabled { likelyNextPhrases = [] }
+        Task {
+            try? await settingsFacade.updateLikelyNextPageEnabled(enabled: enabled)
+            await loadHistory()
+        }
+    }
+
+    func setSelectOnTouchDown(_ enabled: Bool) {
+        selectOnTouchDown = enabled
+        Task { try? await settingsFacade.updateSelectOnTouchDown(enabled: enabled) }
+    }
+
+    func setSwipeBetweenPages(_ enabled: Bool) {
+        swipeBetweenPages = enabled
+        Task { try? await settingsFacade.updateSwipeBetweenPages(enabled: enabled) }
+    }
+
+    func setPageBackground(imageUrl: String?, fit: String) async {
+        guard canEditSelectedBoardSet, await editingIsAuthorized(),
+              let setId = selectedBoardSetId, let pageId = selectedBoardId else { return }
+        do {
+            _ = try await boardsFacade.setBoardBackgroundImage(boardSetId: setId, boardId: pageId, imageUrl: imageUrl, fit: fit)
+            await loadSelectedBoard()
+            boardStatusMessage = nil
+        } catch { boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
+    }
+
+    func swipePage(by offset: Int) async {
+        guard swipeBetweenPages, !selectOnTouchDown, holdToSelectMillis <= 0,
+              let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
+              let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
+        boardStack = []
+        await selectBoard(id: ids[index + offset])
+    }
+
     func setTtsEngine(_ engine: String) {
         ttsEngine = engine
         useSystemTts = engine == "SYSTEM"
@@ -1061,6 +1119,7 @@ final class IosViewModel: ObservableObject {
             Task { await loadHistory() }
         } else {
             historyPhrases = []
+            likelyNextPhrases = []
         }
         Task { _ = try? await settingsFacade.updateHistoryVisible(visible: visible) }
     }
@@ -1601,6 +1660,8 @@ final class IosViewModel: ObservableObject {
         }
         do {
             selectedBoard = try await boardsFacade.getBoard(id: id)
+            boardBackgroundImageUrl = selectedBoard.flatMap { boardsFacade.backgroundImageUrl(board: $0) }
+            boardBackgroundImageFit = selectedBoard.map { boardsFacade.backgroundImageFit(board: $0) } ?? "Fill"
             await refreshSelectedBoardMetadata()
             let resolved = try? await boardsFacade.resolveBoardSettings(boardId: id)
             resolvedBoardShowLabels = resolved?.showLabels
