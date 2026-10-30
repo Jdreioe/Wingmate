@@ -122,7 +122,7 @@ object TypingScreenProjector {
             actionButton("typing:ssml:telephone", "Telephone", ":wrap=<say-as interpret-as=\"telephone\">|</say-as>"),
             actionButton("typing:ssml:currency", "Currency", ":wrap=<say-as interpret-as=\"currency\">|</say-as>"),
         )
-        // ElevenLabs audio tags direct delivery; other voices read them aloud.
+        // ElevenLabs audio tags direct delivery; other voices skip them.
         val emotionButtons = listOf(
             actionButton("typing:tag:whispers", "Whisper", "+ [whispers] "),
             actionButton("typing:tag:laughs", "Laugh", "+ [laughs] "),

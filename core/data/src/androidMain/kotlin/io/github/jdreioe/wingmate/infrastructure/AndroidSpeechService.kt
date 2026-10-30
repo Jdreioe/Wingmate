@@ -501,7 +501,7 @@ class AndroidSpeechService(
             val directory = File(root, "wingmate/audio").apply { mkdirs() }
             val file = File(directory, "tts_v2_$cacheKey.mp3")
                 if (!file.exists() || file.length() == 0L) {
-                    val segments = SpeechTextProcessor.processText(normalizedText)
+                    val segments = SpeechTextProcessor.segmentsFor(engine, SpeechTextProcessor.processText(normalizedText))
                     val bytes = if (engine == TtsEngine.ELEVENLABS) {
                         ElevenLabsTtsClient.synthesizeSegments(client, segments, voiceForSsml, elevenLabsConfig!!, rate)
                     } else if (engine == TtsEngine.GOOGLE_CLOUD) {
@@ -701,12 +701,14 @@ class AndroidSpeechService(
 
                 // Cache Miss - Proceed to Synthesis
                 
+                // The cache key above keeps the Message's own text; only the request drops audio tags.
+                val spokenSegments = SpeechTextProcessor.segmentsFor(engine, segments)
                 val bytes = if (engine == TtsEngine.ELEVENLABS) {
-                    ElevenLabsTtsClient.synthesizeSegments(client, segments, vForSsml, elevenLabsConfig!!, rate)
+                    ElevenLabsTtsClient.synthesizeSegments(client, spokenSegments, vForSsml, elevenLabsConfig!!, rate)
                 } else if (engine == TtsEngine.GOOGLE_CLOUD) {
                     GoogleTtsClient.synthesizeSegments(
                         client,
-                        segments,
+                        spokenSegments,
                         vForSsml,
                         googleConfig!!,
                         pitch,
@@ -715,10 +717,10 @@ class AndroidSpeechService(
                     )
                 } else {
                     // Use segments-based SSML generation if ANY segment has language override OR pause
-                    val ssml = if (segments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
-                        AzureTtsClient.generateSsml(segments, vForSsml, dict)
+                    val ssml = if (spokenSegments.any { !it.languageTag.isNullOrBlank() || it.pauseDurationMs > 0 }) {
+                        AzureTtsClient.generateSsml(spokenSegments, vForSsml, dict)
                     } else {
-                        AzureTtsClient.generateSsml(combinedText, vForSsml, dict)
+                        AzureTtsClient.generateSsml(spokenSegments.joinToString("") { it.text }, vForSsml, dict)
                     }
                     AzureTtsClient.synthesize(client, ssml, azureConfig!!)
                 }
@@ -998,7 +1000,8 @@ class AndroidSpeechService(
 
 
     private suspend fun speakWithPlatformTts(requestId: Long, text: String, voice: Voice?, pitch: Double?, rate: Double?) {
-        val cleanText = text.replace(Regex("<[^>]+>"), "") // Strip tags for system TTS fallback
+        // System TTS reads markup aloud, so strip SSML and audio tags.
+        val cleanText = SpeechTextProcessor.stripAudioTags(text.replace(Regex("<[^>]+>"), ""))
         withContext(Dispatchers.Main) {
             val parsedVoiceId = AndroidTtsVoiceId.parse(voice?.name)
             val t = ensureTts(parsedVoiceId.enginePackageName)
@@ -1206,7 +1209,8 @@ class AndroidSpeechService(
         speakWithPlatformTts(requestId, text, voice, pitch, rate)
     }
 
-    private suspend fun playSegmentsWithPlatformTts(requestId: Long, segments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+    private suspend fun playSegmentsWithPlatformTts(requestId: Long, messageSegments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+        val segments = SpeechTextProcessor.segmentsFor(TtsEngine.SYSTEM, messageSegments)
         withContext(Dispatchers.Main) {
             val parsedVoiceId = AndroidTtsVoiceId.parse(voice?.name)
             val t = ensureTts(parsedVoiceId.enginePackageName)

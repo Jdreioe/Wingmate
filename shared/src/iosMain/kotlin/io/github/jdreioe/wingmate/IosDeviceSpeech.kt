@@ -113,7 +113,8 @@ internal class IosSessionSpeechService(
         }.device.requestId
         val language = voice?.selectedLanguage?.takeIf(String::isNotBlank)
             ?: voice?.primaryLanguage.orEmpty()
-        device.speak(segments, language, rate ?: 1.0, pitch ?: 1.0) { spoken ->
+        val spokenSegments = SpeechTextProcessor.segmentsFor(TtsEngine.SYSTEM, segments)
+        device.speak(spokenSegments, language, rate ?: 1.0, pitch ?: 1.0) { spoken ->
             val status = if (spoken) SpeechPlaybackStatus.IDLE else SpeechPlaybackStatus.FAILED
             route.update { current ->
                 // A newer request or a Stop makes this request's end irrelevant.

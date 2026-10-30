@@ -286,7 +286,9 @@ class IosSpeechService(
         SpeechCacheIdentity.speech(content, engine, voice, pitch, rate, pronunciationDictionaryRepository?.getAll().orEmpty())
 
     // Synthesizes with exactly [engine]; the session may have chosen it before settings changed.
-    private suspend fun synthesize(text: String, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
+    private suspend fun synthesize(message: String, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
+        // Cache keys use the Message's own text; only the request drops audio tags.
+        val text = if (engine == TtsEngine.ELEVENLABS) message else SpeechTextProcessor.stripAudioTags(message)
         when (engine) {
             TtsEngine.ELEVENLABS -> {
                 val config = configRepository.getElevenLabsSpeechConfig() ?: return@withContext null
@@ -312,7 +314,8 @@ class IosSpeechService(
         }
     }
 
-    private suspend fun synthesizeSegments(segments: List<SpeechSegment>, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
+    private suspend fun synthesizeSegments(messageSegments: List<SpeechSegment>, voice: Voice, engine: TtsEngine): ByteArray? = withContext(Dispatchers.Default) {
+        val segments = SpeechTextProcessor.segmentsFor(engine, messageSegments)
         when (engine) {
             TtsEngine.ELEVENLABS -> {
                 val config = configRepository.getElevenLabsSpeechConfig() ?: return@withContext null
