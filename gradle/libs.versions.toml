@@ -18,7 +18,7 @@ okio = "3.18.2"
 
 koin = "4.2.2"
 ktor = "3.6.0"
-kotlinx-serialization = "1.11.0"
+kotlinx-serialization = "1.12.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
