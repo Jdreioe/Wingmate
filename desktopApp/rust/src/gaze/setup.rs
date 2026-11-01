@@ -187,6 +187,9 @@ mod tests {
             .unwrap_err();
         assert_ne!(error.kind(), std::io::ErrorKind::NotFound);
         assert!(setup.child.is_none());
+        // Parallel process launches can briefly inherit this descriptor before exec.
+        // Release the lock explicitly so that closing our handle is not the only release.
+        lock.unlock().unwrap();
         drop(lock);
         assert_eq!(
             setup
