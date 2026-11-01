@@ -16,11 +16,11 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.test.filters.SdkSuppress
+import androidx.test.platform.app.InstrumentationRegistry
 import io.github.jdreioe.wingmate.configureEdgeToEdgeWindow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -31,6 +31,7 @@ class TypingKeyboardVisibilityTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private var previousKeyboardHeight = Float.NaN
+    private var previousAnimationScales = emptyMap<String, Float>()
 
     @Before
     fun rememberKeyboardHeight() {
@@ -41,6 +42,7 @@ class TypingKeyboardVisibilityTest {
 
     @After
     fun restoreKeyboardHeight() {
+        if (previousAnimationScales.isNotEmpty()) setAnimationScales(previousAnimationScales)
         composeRule.activity.getSharedPreferences("typing-screen-ui", 0).edit().apply {
             if (previousKeyboardHeight.isNaN()) remove("keyboard-height-dp")
             else putFloat("keyboard-height-dp", previousKeyboardHeight)
@@ -49,16 +51,14 @@ class TypingKeyboardVisibilityTest {
 
     @Test
     fun keyboardRetractionDoesNotDropTheMessageBeforeTheTrayReturns() {
-        // This watches the native keyboard animate frame by frame, so it only means
-        // something where animations run. CI emulators turn them off.
-        assumeTrue(
-            "Needs animations to observe the keyboard retracting",
-            Settings.Global.getFloat(
-                composeRule.activity.contentResolver,
-                Settings.Global.ANIMATOR_DURATION_SCALE,
-                1f,
-            ) > 0f,
-        )
+        // This test observes native animation frames even when the runner disables
+        // animations. Restore the runner's settings in teardown for the other tests.
+        previousAnimationScales = listOf(
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            Settings.Global.TRANSITION_ANIMATION_SCALE,
+            Settings.Global.WINDOW_ANIMATION_SCALE,
+        ).associateWith { Settings.Global.getFloat(composeRule.activity.contentResolver, it, 1f) }
+        setAnimationScales(previousAnimationScales.mapValues { 1f })
         composeRule.setContent {
             AppTheme {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) { PhraseScreen() }
@@ -149,6 +149,18 @@ class TypingKeyboardVisibilityTest {
 
         applyKeyboardInsets(visible = false, bottom = 0)
         composeRule.onNodeWithContentDescription("Show keyboard").assertExists()
+    }
+
+    private fun setAnimationScales(values: Map<String, Float>) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.adoptShellPermissionIdentity(android.Manifest.permission.WRITE_SECURE_SETTINGS)
+        try {
+            values.forEach { (name, value) ->
+                check(Settings.Global.putFloat(composeRule.activity.contentResolver, name, value))
+            }
+        } finally {
+            automation.dropShellPermissionIdentity()
+        }
     }
 
     private fun applyKeyboardInsets(visible: Boolean, bottom: Int) {

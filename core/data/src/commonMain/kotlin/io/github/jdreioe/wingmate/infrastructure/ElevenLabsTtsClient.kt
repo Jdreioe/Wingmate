@@ -14,12 +14,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
- * Account voices and low-latency multilingual speech, always sent to a fixed authority.
- * Eleven v4 Turbo understands audio tags such as `[whispers]` or `[laughs]` in the text.
+ * Account voices and multilingual speech, always sent to a fixed authority.
+ * Eleven v4 understands audio tags such as `[whispers]` or `[laughs]` in the text.
  */
 object ElevenLabsTtsClient {
     private const val BASE_URL = "https://api.elevenlabs.io"
-    const val MODEL_ID = "eleven_v4_turbo"
+    const val MODEL_ID = "eleven_v4"
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
 
     private fun key(client: HttpClient, config: ElevenLabsSpeechConfig): String {
