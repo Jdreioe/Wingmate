@@ -15,14 +15,10 @@ import io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
-import io.github.jdreioe.wingmate.infrastructure.QuickCoreDownloadProgress
-import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.channels.Channel
@@ -43,11 +39,6 @@ internal sealed interface BoardSetManagerMessage {
     data class Resource(@param:StringRes val id: Int) : BoardSetManagerMessage
     data class Dynamic(val value: String) : BoardSetManagerMessage
 }
-
-internal data class BoardSetManagerProgress(
-    val fraction: Float?,
-    val stage: String,
-)
 
 internal data class CreateBoardSetDraft(
     val name: String = "",
@@ -82,8 +73,6 @@ internal data class BoardSetManagerState(
     val pendingProtectedDeleteId: String? = null,
     val showDeleteAccessDialog: Boolean = false,
     val statusMessage: BoardSetManagerMessage? = null,
-    val quickCoreProgress: BoardSetManagerProgress? = null,
-    val isQuickCoreImporting: Boolean = false,
 )
 
 internal sealed interface BoardSetManagerAction {
@@ -144,8 +133,6 @@ internal sealed interface BoardSetManagerEvent {
  * state transitions deterministic without replacing the shared board-set use cases.
  */
 internal interface BoardSetManagerOperations {
-    val quickCoreProgress: Flow<QuickCoreDownloadProgress>
-
     suspend fun listBoardSets(): List<ObfBoardSet>
     suspend fun getBoardSet(id: String): ObfBoardSet?
     suspend fun duplicateBoardSet(id: String)
@@ -156,8 +143,6 @@ internal interface BoardSetManagerOperations {
     suspend fun requiresDeleteUnlock(): Boolean
     suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String): ObfBoardSet
     suspend fun importBoardSet(): BoardImportResult
-    suspend fun importQuickCore(slug: String): BoardImportResult
-    suspend fun renameBoardSet(id: String, name: String): ObfBoardSet?
     suspend fun createBoardSet(name: String, rows: Int, columns: Int, rootBoardName: String): ObfBoardSet
     suspend fun createCalculatorBoardSet(name: String): ObfBoardSet
     suspend fun createKeyboardBoardSet(name: String, preset: KeyboardPreset): ObfBoardSet
@@ -167,12 +152,8 @@ internal class DefaultBoardSetManagerOperations(
     private val useCase: BoardSetUseCase,
     private val speechCache: BoardSetSpeechCacheUseCase,
     private val importService: BoardImportService?,
-    private val quickCoreService: QuickCorePresetService?,
     private val editingAccessController: EditingAccessController?,
 ) : BoardSetManagerOperations {
-    override val quickCoreProgress: Flow<QuickCoreDownloadProgress> =
-        quickCoreService?.progress ?: emptyFlow()
-
     override suspend fun listBoardSets() = useCase.listBoardSets()
     override suspend fun getBoardSet(id: String) = useCase.getBoardSet(id)
     override suspend fun duplicateBoardSet(id: String) {
@@ -194,14 +175,6 @@ internal class DefaultBoardSetManagerOperations(
                 context = "Board import is unavailable",
             )
 
-    override suspend fun importQuickCore(slug: String): BoardImportResult =
-        quickCoreService?.importPreset(slug)
-            ?: BoardImportResult.Failure(
-                code = io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode.FILE_UNREADABLE,
-                context = "Quick Core import is unavailable",
-            )
-
-    override suspend fun renameBoardSet(id: String, name: String) = useCase.renameBoardSet(id, name)
     override suspend fun createBoardSet(
         name: String,
         rows: Int,
@@ -262,21 +235,6 @@ internal class BoardSetManagerViewModel(
     private val _events = Channel<BoardSetManagerEvent>()
     val events: Flow<BoardSetManagerEvent> = _events.receiveAsFlow()
     private var initialized = false
-
-    init {
-        viewModelScope.launch {
-            operations.quickCoreProgress.collectLatest { progress ->
-                _state.update {
-                    it.copy(
-                        quickCoreProgress = BoardSetManagerProgress(
-                            fraction = progress.fraction?.toFloat(),
-                            stage = progress.stage,
-                        )
-                    )
-                }
-            }
-        }
-    }
 
     fun onAction(action: BoardSetManagerAction) {
         when (action) {
@@ -354,7 +312,7 @@ internal class BoardSetManagerViewModel(
         if (restoredRoute == BoardSetManagerRoute.Library && action.initialBoardSetId != null) {
             viewModelScope.launch {
                 operations.getBoardSet(action.initialBoardSetId)?.let {
-                    if (action.initialMode == BoardWorkspaceMode.Edit || it.kind == ScreenKind.User) {
+                    if (it.kind == ScreenKind.User) {
                         openWorkspace(it.id, action.initialMode)
                     }
                 }
@@ -478,54 +436,32 @@ internal class BoardSetManagerViewModel(
 
     private fun createBoardSet(action: BoardSetManagerAction.CreateSubmitted) {
         dismissCreateDialog()
-        _state.update {
-            it.copy(
-                isCreating = true,
-                isQuickCoreImporting = action.template.quickCoreSlug != null,
-            )
-        }
+        _state.update { it.copy(isCreating = true) }
         viewModelScope.launch {
             val result = runCatching {
-                val quickCoreSlug = action.template.quickCoreSlug
-                if (quickCoreSlug != null) {
-                    when (val imported = operations.importQuickCore(quickCoreSlug)) {
-                        is BoardImportResult.Success -> operations.renameBoardSet(
-                            imported.boardSet.id,
-                            action.name.trim(),
-                        ) ?: imported.boardSet
-                        BoardImportResult.Cancelled -> null
-                        is BoardImportResult.Failure -> throw BoardSetCreationException(imported.context)
-                    }
-                } else {
-                    when (action.template) {
-                        BoardSetTemplate.Blank -> operations.createBoardSet(
-                            action.name.trim(),
-                            action.rows,
-                            action.columns,
-                            action.defaultBoardName,
-                        )
-                        BoardSetTemplate.Calculator -> operations.createCalculatorBoardSet(action.name.trim())
-                        BoardSetTemplate.Keyboard -> operations.createKeyboardBoardSet(
-                            action.name.trim(),
-                            action.keyboardPreset,
-                        )
-                        else -> error("Quick Core presets are imported separately")
-                    }
+                when (action.template) {
+                    BoardSetTemplate.Blank -> operations.createBoardSet(
+                        action.name.trim(),
+                        action.rows,
+                        action.columns,
+                        action.defaultBoardName,
+                    )
+                    BoardSetTemplate.Calculator -> operations.createCalculatorBoardSet(action.name.trim())
+                    BoardSetTemplate.Keyboard -> operations.createKeyboardBoardSet(
+                        action.name.trim(),
+                        action.keyboardPreset,
+                    )
                 }
             }
             result.onSuccess { created ->
-                if (created != null) {
-                    showCreatedBoardSet(created)
-                    if (action.template == BoardSetTemplate.Blank) {
-                        openWorkspace(created.id, BoardWorkspaceMode.Edit)
-                    } else if (action.template.quickCoreSlug != null) {
-                        openWorkspace(created.id, BoardWorkspaceMode.Run)
-                    }
+                showCreatedBoardSet(created)
+                if (action.template == BoardSetTemplate.Blank) {
+                    openWorkspace(created.id, BoardWorkspaceMode.Edit)
                 }
             }.onFailure {
                 setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_create_error))
             }
-            _state.update { it.copy(isCreating = false, isQuickCoreImporting = false) }
+            _state.update { it.copy(isCreating = false) }
         }
     }
 
@@ -604,8 +540,6 @@ internal class BoardSetManagerViewModel(
     private fun sendEvent(event: BoardSetManagerEvent) {
         viewModelScope.launch { _events.send(event) }
     }
-
-    private class BoardSetCreationException(message: String) : Exception(message)
 
     private companion object {
         const val ROUTE_BOARD_SET_ID = "board_set_manager.route.board_set_id"

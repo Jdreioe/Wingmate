@@ -29,13 +29,7 @@ import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.withWordType
 import io.github.jdreioe.wingmate.domain.obf.wordType
-import io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode
-import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
-import io.github.jdreioe.wingmate.infrastructure.QuickCorePreset
-import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.platform.ShareService
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.cancellation.CancellationException
 
 enum class BoardSetExportStatus {
@@ -108,13 +102,6 @@ data class IosBoardReturnResult(
     val boardStack: List<String>,
 )
 
-data class IosQuickCoreProgress(
-    val stage: String,
-    val downloadedBytes: Long,
-    val totalBytes: Long?,
-    val fraction: Double?,
-)
-
 /**
  * A feature-scoped native boundary around board sets, board editing, and the
  * shared board-session logic used by Android and iOS.
@@ -131,7 +118,6 @@ class BoardsFacade(
     private val boardRepository: BoardRepository,
     private val settingsUseCase: SettingsUseCase,
     private val boardSetSpeechCache: BoardSetSpeechCacheUseCase,
-    private val quickCorePresetService: QuickCorePresetService,
     private val shareService: ShareService,
 ) {
     // --- BoardSet helpers ---
@@ -197,31 +183,6 @@ class BoardsFacade(
         )
     }
 
-    /**
-     * Downloads and imports a Quick Core Screen named [name]. Fails with
-     * [NativeFailureKind.Cancelled] when the import was cancelled,
-     * [NativeFailureKind.NotFound] for an unknown preset,
-     * [NativeFailureKind.Network] when the download fails, and
-     * [NativeFailureKind.Validation] when the archive is not a usable Screen.
-     */
-    @Throws(NativeFailure::class, CancellationException::class)
-    suspend fun importQuickCorePreset(slug: String, name: String): ObfBoardSet = nativeCall {
-        if (QuickCorePreset.fromSlug(slug) == null) throw NativeFailure(NativeFailureKind.NotFound)
-        when (val imported = quickCorePresetService.importPreset(slug)) {
-            is BoardImportResult.Success ->
-                boardSetUseCase.renameBoardSet(imported.boardSet.id, name.trim()) ?: imported.boardSet
-            BoardImportResult.Cancelled -> {
-                // The importer reports its own coroutine's cancellation as Cancelled; keep that cancellation.
-                currentCoroutineContext().ensureActive()
-                throw NativeFailure(NativeFailureKind.Cancelled)
-            }
-            is BoardImportResult.Failure -> throw NativeFailure(imported.code.toQuickCoreFailureKind())
-        }
-    }
-    fun quickCoreProgress(): IosQuickCoreProgress {
-        val progress = quickCorePresetService.progress.value
-        return IosQuickCoreProgress(progress.stage, progress.downloadedBytes, progress.totalBytes, progress.fraction)
-    }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun createBoard(boardSetId: String, name: String, rows: Int, columns: Int): ObfBoard = nativeCall {
         requireBoardSet(boardSetId)
@@ -560,17 +521,6 @@ private fun ObfBoard.cellGrid(row: Int, col: Int): ObfGrid {
 
 /** A null from a shared rule that refused the change. Check existence first so null only means refusal. */
 private fun <T : Any> T?.orRejected(): T = this ?: throw NativeFailure(NativeFailureKind.Validation)
-
-/**
- * For Quick Core, [BoardImportErrorCode.FILE_UNREADABLE] mostly means the download
- * failed or came back empty, so retrying is the useful response. Every other
- * code describes an archive Wingmate refuses to import.
- */
-private fun BoardImportErrorCode.toQuickCoreFailureKind(): NativeFailureKind = when (this) {
-    BoardImportErrorCode.FILE_UNREADABLE -> NativeFailureKind.Network
-    BoardImportErrorCode.PERSISTENCE_FAILED -> NativeFailureKind.Persistence
-    else -> NativeFailureKind.Validation
-}
 
 private fun String.toBoardReturnBehavior(): BoardReturnBehavior =
     when (this) {

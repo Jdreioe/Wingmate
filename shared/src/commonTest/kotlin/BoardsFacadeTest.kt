@@ -14,13 +14,7 @@ import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryVoiceRepository
 import io.github.jdreioe.wingmate.infrastructure.NoopSpeechService
-import io.github.jdreioe.wingmate.infrastructure.ObfParser
-import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
-import io.github.jdreioe.wingmate.infrastructure.BoardImportService
-import io.github.jdreioe.wingmate.platform.ArchiveReader
-import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -233,7 +227,6 @@ class BoardsFacadeTest {
 
         assertEquals(NativeFailureKind.NotFound, kindOf { facade.renameBoardSet("missing", "Name") })
         assertEquals(NativeFailureKind.NotFound, kindOf { facade.renameBoard(boardSet.id, "missing", "Name") })
-        assertEquals(NativeFailureKind.NotFound, kindOf { facade.importQuickCorePreset("not-a-preset", "Name") })
         assertEquals(NativeFailureKind.Validation, kindOf { facade.deleteBoard(boardSet.id, boardSet.rootBoardId) })
         assertEquals(NativeFailureKind.Validation, kindOf { facade.clearBoardCellButton(boardSet.rootBoardId, 3, 3) })
 
@@ -257,21 +250,11 @@ class BoardsFacadeTest {
             voiceRepository = InMemoryVoiceRepository(),
             speechService = NoopSpeechService(),
         )
-        val quickCore = QuickCorePresetService(
-            client = HttpClient(),
-            importer = BoardImportService(
-                obfParser = ObfParser(),
-                boardRepository = boards,
-                boardSetRepository = boardSets,
-                filePicker = NoopFilePicker,
-            ),
-        )
         return BoardsFacade(
             boardSetUseCase = boardSetUseCase,
             boardRepository = boards,
             settingsUseCase = SettingsUseCase(settings),
             boardSetSpeechCache = speechCache,
-            quickCorePresetService = quickCore,
             shareService = share,
         )
     }
@@ -280,11 +263,5 @@ class BoardsFacadeTest {
         override fun shareAudio(filePath: String): Boolean = false
         override fun shareText(text: String): Boolean = false
         override fun shareFile(fileName: String, content: ByteArray): Boolean = shared
-    }
-
-    private object NoopFilePicker : FilePicker {
-        override suspend fun pickFile(title: String, extensions: List<String>): String? = null
-        override suspend fun readFileAsText(path: String): String? = null
-        override suspend fun openArchive(path: String): ArchiveReader? = null
     }
 }

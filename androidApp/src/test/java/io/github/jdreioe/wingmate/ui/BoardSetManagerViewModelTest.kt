@@ -5,7 +5,6 @@ import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
-import io.github.jdreioe.wingmate.infrastructure.QuickCoreDownloadProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -60,7 +59,7 @@ class BoardSetManagerViewModelTest {
     }
 
     @Test
-    fun `system typing screen can be opened for editing but never as a startup screen`() = runTest {
+    fun `system typing screen cannot be opened as a Screens workspace`() = runTest {
         val operations = FakeBoardSetManagerOperations().apply {
             boardSets += boardSet("typing", "Typing").copy(kind = ScreenKind.Typing)
         }
@@ -85,10 +84,7 @@ class BoardSetManagerViewModelTest {
             )
         )
 
-        assertEquals(
-            BoardSetManagerRoute.Workspace("typing", BoardWorkspaceMode.Edit),
-            editViewModel.state.value.route,
-        )
+        assertEquals(BoardSetManagerRoute.Library, editViewModel.state.value.route)
     }
 
     @Test
@@ -209,7 +205,6 @@ class BoardSetManagerViewModelTest {
     )
 
     private inner class FakeBoardSetManagerOperations : BoardSetManagerOperations {
-        override val quickCoreProgress = MutableStateFlow(QuickCoreDownloadProgress())
         val boardSets = mutableListOf<ObfBoardSet>()
         val deletedIds = mutableListOf<String>()
         val createdNames = mutableListOf<String>()
@@ -237,8 +232,6 @@ class BoardSetManagerViewModelTest {
             return boardSet("speech-1", draft.name).also(boardSets::add)
         }
         override suspend fun importBoardSet(): BoardImportResult = BoardImportResult.Cancelled
-        override suspend fun importQuickCore(slug: String): BoardImportResult = BoardImportResult.Cancelled
-        override suspend fun renameBoardSet(id: String, name: String) = null
 
         override suspend fun createBoardSet(
             name: String,

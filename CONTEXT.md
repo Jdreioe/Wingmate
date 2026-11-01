@@ -21,7 +21,7 @@ The Communication workspace for free text, predictions, and saved phrases.
 _Avoid_: Keyboard, Phrase screen
 
 **Typing Screen**:
-The persistently customizable, built-in input surface of the Typing workspace that replaces the system keyboard when opened. It uses the shared Screen runtime with an All Phrases Page, one live Page per Category, an optional History Page, and an experimental Likely next Page; it cannot be deleted or selected as a startup Screen and is not part of normal vocabulary-package export.
+The built-in input surface of the Typing workspace that replaces the system keyboard when opened. It uses the shared Screen runtime with an All Phrases Page, one live Page per Category, an optional History Page, and an experimental Likely next Page; existing saved layouts are preserved, its layout cannot be edited or reset, and it cannot be deleted or selected as a startup Screen and is not part of normal vocabulary-package export.
 _Avoid_: Phrase screen, OBZ Screen
 
 **All Phrases Page**:

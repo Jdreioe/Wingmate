@@ -648,7 +648,7 @@ class PhraseScreenViewModelTest {
 
         override suspend fun movePhrase(from: Int, to: Int) = write()
 
-        override suspend fun template(columns: Int, reset: Boolean): BoardSetGraph {
+        override suspend fun template(columns: Int): BoardSetGraph {
             templateGate?.await()
             val graph = TypingScreenProjector.defaultTemplate(columns, now = 1L)
             return graph.copy(

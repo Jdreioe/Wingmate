@@ -44,8 +44,7 @@ clear, speak, home, Typing navigation, and prediction.
 App, Screen, and Page settings control labels, symbols, label placement, the
 Message bar, activation behavior, return behavior, and Page background color.
 Blank, calculator, and keyboard templates exist, although the choices currently
-differ by platform. Quick Core import exists internally but is not offered by
-the normal Screen creation flow.
+differ by platform.
 
 ## Speech and language
 

@@ -18,7 +18,7 @@ ElevenLabs, then refresh Wingmate's picker.
 Speech uses the non-turbo `eleven_v4` model and MP3 audio. Write audio tags in square brackets
 to direct delivery, such as `[whispers]`, `[laughs]`, or `[sarcastic]`; Wingmate
 sends them unchanged. The Typing Screen's Action strip has buttons for common
-emotion tags; use Reset Typing Screen to add them to an existing Typing Screen.
+emotion tags in newly created layouts. Existing saved layouts are kept.
 Other voice sources, including system speech fallback, skip tags. Wingmate sends speed
 0.7–1.2, but v4 may ignore it; use tags such as `[slowly]` instead. ElevenLabs
 does not expose pitch adjustment through this API. v4 ignores SSML breaks, so

@@ -20,7 +20,6 @@ import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.infrastructure.RealAacLogger
-import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.NoopSoundPlayer
 import io.github.jdreioe.wingmate.domain.SettingsRepository
@@ -80,7 +79,6 @@ val appModule = module {
             urlLoader = get()
         )
     }
-    single { QuickCorePresetService(getOrNull() ?: HttpClient(), get(), getOrNull()) }
     
     single<AacLogger> { RealAacLogger(get(), getOrNull(named("logDir")), get()) }
 

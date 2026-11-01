@@ -95,7 +95,6 @@ import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
-import io.github.jdreioe.wingmate.infrastructure.QuickCorePresetService
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -197,20 +196,17 @@ fun BoardSetManagerRoot(
     val useCase = koinInject<BoardSetUseCase>()
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
     val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
-    val quickCorePresetService = remember(koin) { koin.getOrNull<QuickCorePresetService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
     val operations = remember(
         useCase,
         boardSetSpeechCache,
         boardImportService,
-        quickCorePresetService,
         editingAccessController,
     ) {
         DefaultBoardSetManagerOperations(
             useCase = useCase,
             speechCache = boardSetSpeechCache,
             importService = boardImportService,
-            quickCoreService = quickCorePresetService,
             editingAccessController = editingAccessController,
         )
     }
@@ -290,9 +286,6 @@ fun BoardSetManagerRoot(
                     )
                 )
             },
-            quickCoreProgress = state.quickCoreProgress?.fraction,
-            quickCoreStage = state.quickCoreProgress?.stage,
-            isQuickCoreImporting = state.isQuickCoreImporting,
         )
     }
 
@@ -693,7 +686,7 @@ private fun BoardSetWorkspaceRoot(
         if (workspaceViewModel.state.value.savedGraph != null) return@LaunchedEffect
         try {
             val graph = withContext(Dispatchers.Default) {
-                useCase.loadBoardSetGraph(boardSetId)
+                useCase.loadBoardSetGraph(boardSetId)?.takeIf { it.boardSet.kind == ScreenKind.User }
             }?.withHomeFieldsBottomLeft()
             val requiresUnlock = graph != null &&
                 initialMode == BoardWorkspaceMode.Edit &&
@@ -1385,16 +1378,6 @@ private fun BoardSetWorkspaceRoot(
                 onRetry = { workspaceViewModel.onAction(BoardWorkspaceAction.RetryLoad) },
             ) {
                 if (activeGraph != null && activeBoard != null) {
-                    if (mode == BoardWorkspaceMode.Edit && activeGraph.boardSet.kind == ScreenKind.Typing) {
-                        TypingScreenEditor(
-                            graph = activeGraph,
-                            onGraphChange = {
-                                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(it))
-                            },
-                            onEditVocabulary = onSwitchToKeyboard,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
                     if (!isFullscreen && mode == BoardWorkspaceMode.Edit) {
                         BoardStrip(
                             boards = activeGraph.boards,
@@ -1714,7 +1697,6 @@ private fun BoardSetWorkspaceRoot(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
-                    }
                     }
                 }
             }

@@ -52,24 +52,8 @@ private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
     case blank
     case qwerty
     case alphabetical
-    case quickCore24 = "quick-core-24"
-    case quickCore40 = "quick-core-40"
-    case quickCore60 = "quick-core-60"
-    case quickCore84 = "quick-core-84"
-    case quickCore112 = "quick-core-112"
 
     var id: String { rawValue }
-
-    var quickCoreTitle: String? {
-        switch self {
-        case .quickCore24: NSLocalizedString("boardset.create_quick_core_24", comment: "")
-        case .quickCore40: NSLocalizedString("boardset.create_quick_core_40", comment: "")
-        case .quickCore60: NSLocalizedString("boardset.create_quick_core_60", comment: "")
-        case .quickCore84: NSLocalizedString("boardset.create_quick_core_84", comment: "")
-        case .quickCore112: NSLocalizedString("boardset.create_quick_core_112", comment: "")
-        default: nil
-        }
-    }
 }
 
 private enum BoardKeyAction: String, CaseIterable, Identifiable {
@@ -1232,15 +1216,6 @@ struct SymbolBoardWorkspaceView: View {
                         }
                     }
                 }
-                if model.isImportingQuickCore {
-                    Section("boardset.quick_core.downloading") {
-                        if let progress = model.quickCoreDownloadProgress {
-                            ProgressView(value: progress)
-                        } else {
-                            ProgressView()
-                        }
-                    }
-                }
             }
             .navigationTitle(Text("boardset.create"))
             .toolbar {
@@ -1253,12 +1228,7 @@ struct SymbolBoardWorkspaceView: View {
                     Button("common.save") {
                         showCreateBoardsetSheet = false
                         Task {
-                            if let quickCoreTitle = createBoardsetKind.quickCoreTitle {
-                                await model.importQuickCorePreset(
-                                    name: createBoardsetName.isEmpty ? quickCoreTitle : createBoardsetName,
-                                    slug: createBoardsetKind.rawValue
-                                )
-                            } else if createBoardsetKind == .blank {
+                            if createBoardsetKind == .blank {
                                 await model.createBoardSet(name: createBoardsetName, rows: createBoardsetRows, columns: createBoardsetColumns)
                             } else {
                                 await model.createKeyboardBoardSet(name: createBoardsetName, preset: createBoardsetKind.rawValue)
@@ -1269,7 +1239,6 @@ struct SymbolBoardWorkspaceView: View {
                             createBoardsetKind = .blank
                         }
                     }
-                    .disabled(model.isImportingQuickCore)
                 }
             }
         }

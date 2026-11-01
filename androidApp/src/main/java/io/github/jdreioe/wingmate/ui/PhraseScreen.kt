@@ -92,7 +92,6 @@ internal fun supportsMathMode(ttsEngine: TtsEngine): Boolean =
 fun PhraseScreen(
     onBackToWelcome: (() -> Unit)? = null,
     onOpenBoardSetManager: (() -> Unit)? = null,
-    onEditTypingScreen: (() -> Unit)? = null,
 ) {
     val koin = getKoin()
     val operations = remember(koin) {
@@ -154,7 +153,6 @@ fun PhraseScreen(
             operations.report(FeatureUsageEvents.SCREEN_VIEW, "screen" to "boardsets")
             open()
         } },
-        onEditTypingScreen = onEditTypingScreen,
     )
     when (state.dialog) {
         TypingDialog.Settings -> SettingsScreen(
@@ -194,7 +192,6 @@ internal fun PhraseScreenContent(
     onKeyboardHeight: (Dp) -> Unit = {},
     onToggleFullscreen: () -> Unit = {},
     onOpenBoardSetManager: (() -> Unit)? = null,
-    onEditTypingScreen: (() -> Unit)? = null,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val density = LocalDensity.current
@@ -220,14 +217,12 @@ internal fun PhraseScreenContent(
     val confirmDeleteCategory = ui.dialogCategory.takeIf { ui.dialog == TypingDialog.DeleteCategory }
     val showAddCategoryDialog = ui.dialog == TypingDialog.AddCategory
     var appBarMenuExpanded by remember { mutableStateOf(false) }
-    var typingMenuExpanded by remember { mutableStateOf(false) }
     val textFieldFocusRequester = remember { FocusRequester() }
     var inputSurface by rememberSaveable { mutableStateOf(TypingInputSurface.Tray) }
     val refocusInput = { if (inputSurface == TypingInputSurface.Keyboard) textFieldFocusRequester.requestFocus() }
     val toggleFullscreen = onToggleFullscreen
     val openBoardSets = { onOpenBoardSetManager?.invoke(); Unit }
     val openSettings = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.Settings)) }
-    val requestTypingScreenReset = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.Reset)) }
     fun control(effect: ObfButtonActionEffect) { onAction(PhraseScreenAction.Control(effect)); refocusInput() }
     val playInput = { control(ObfButtonActionEffect.Speak) }
     val pauseSpeech = { control(ObfButtonActionEffect.Pause) }
@@ -346,21 +341,6 @@ internal fun PhraseScreenContent(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.typing_screen_edit)) },
-                                                enabled = onEditTypingScreen != null,
-                                                onClick = {
-                                                    appBarMenuExpanded = false
-                                                    onEditTypingScreen?.invoke()
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.typing_screen_reset)) },
-                                                onClick = {
-                                                    appBarMenuExpanded = false
-                                                    requestTypingScreenReset()
-                                                }
-                                            )
-                                            DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.phrase_screen_toggle_fullscreen_cd)) },
                                                 leadingIcon = {
                                                     Icon(
@@ -432,34 +412,6 @@ internal fun PhraseScreenContent(
                                             imageVector = Icons.Filled.Settings,
                                             contentDescription = stringResource(R.string.phrase_screen_app_settings)
                                         )
-                                    }
-                                    Box {
-                                        IconButton(onClick = { typingMenuExpanded = true }) {
-                                            Icon(
-                                                imageVector = Icons.Filled.MoreVert,
-                                                contentDescription = stringResource(R.string.common_more_actions),
-                                            )
-                                        }
-                                        DropdownMenu(
-                                            expanded = typingMenuExpanded,
-                                            onDismissRequest = { typingMenuExpanded = false },
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.typing_screen_edit)) },
-                                                enabled = onEditTypingScreen != null,
-                                                onClick = {
-                                                    typingMenuExpanded = false
-                                                    onEditTypingScreen?.invoke()
-                                                },
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.typing_screen_reset)) },
-                                                onClick = {
-                                                    typingMenuExpanded = false
-                                                    requestTypingScreenReset()
-                                                },
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -1014,17 +966,6 @@ internal fun PhraseScreenContent(
             }
 
 
-            if (ui.dialog == TypingDialog.Reset) {
-                AlertDialog(
-                    onDismissRequest = { onAction(PhraseScreenAction.DismissDialog) },
-                    title = { Text(stringResource(R.string.typing_screen_reset)) },
-                    text = { Text(stringResource(R.string.typing_screen_reset_description)) },
-                    confirmButton = { TextButton(enabled = !ui.mutationInProgress, onClick = { onAction(PhraseScreenAction.Reset) }) {
-                        Text(stringResource(R.string.typing_screen_reset))
-                    } },
-                    dismissButton = { TextButton(onClick = { onAction(PhraseScreenAction.DismissDialog) }) { Text(stringResource(R.string.common_cancel)) } },
-                )
-            }
     }
 }
 
