@@ -1,0 +1,3 @@
+• Brug dine ElevenLabs-stemmer, også personlige stemmekloner og lydtags til udtryk.
+• Mørk tilstand bruger sort baggrund, når systemets strømbesparelse er slået til.
+• Fjernet forældet redigering/nulstilling af skriveskærmen og ubrugt Quick Core-import.

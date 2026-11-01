@@ -1,0 +1,3 @@
+• Use your ElevenLabs voices, including personal clones and expressive audio tags.
+• Dark mode uses black backgrounds when system power saving is on.
+• Removed obsolete Typing Screen edit/reset controls and unused Quick Core import.
