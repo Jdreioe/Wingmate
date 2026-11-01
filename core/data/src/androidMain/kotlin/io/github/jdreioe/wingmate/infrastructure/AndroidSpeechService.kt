@@ -59,7 +59,6 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
@@ -89,8 +88,6 @@ class AndroidSpeechService(
     private var mediaPlayer: MediaPlayer? = null
     private val playerLock = Any()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private data class PendingCache(val text: String, val voice: Voice?, val pitch: Double?, val rate: Double?)
-    private val pendingSpeechCache = ConcurrentHashMap.newKeySet<PendingCache>()
     private val audioManager: AudioManager by lazy { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     init {
@@ -98,7 +95,9 @@ class AndroidSpeechService(
             val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             connectivity.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    scope.launch(Dispatchers.IO) { retryPendingSpeechCache() }
+                    scope.launch(Dispatchers.IO) {
+                        GlobalContext.getOrNull()?.getOrNull<io.github.jdreioe.wingmate.domain.BoardSpeechCache>()?.cacheAll()
+                    }
                 }
             })
         }
@@ -465,7 +464,6 @@ class AndroidSpeechService(
     override suspend fun cacheSpeech(text: String, voice: Voice?, pitch: Double?, rate: Double?): Boolean {
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text).trim()
         if (normalizedText.isEmpty()) return true
-        val request = PendingCache(normalizedText, voice, pitch, rate)
         val settingsRepo = GlobalContext.getOrNull()?.let {
             runCatching { it.get<io.github.jdreioe.wingmate.domain.SettingsRepository>() }.getOrNull()
         }
@@ -473,7 +471,6 @@ class AndroidSpeechService(
         val engine = settings?.ttsEngine ?: TtsEngine.SYSTEM
         if (engine == TtsEngine.SYSTEM) return false
         if (!isOnline()) {
-            pendingSpeechCache += request
             return false
         }
 
@@ -527,13 +524,7 @@ class AndroidSpeechService(
             true
         }.getOrDefault(false)
 
-        if (cached) pendingSpeechCache.remove(request) else pendingSpeechCache += request
         return cached
-    }
-
-    override suspend fun retryPendingSpeechCache() {
-        if (!isOnline()) return
-        pendingSpeechCache.toList().forEach { cacheSpeech(it.text, it.voice, it.pitch, it.rate) }
     }
 
     /**

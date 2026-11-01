@@ -76,7 +76,8 @@ private enum class BoardSettingPreference {
     SpeakButton,
     MessageBarEditable,
     Activation,
-    Return
+    Return,
+    CacheSpeech
 }
 
 private data class BoardSettingChoice(
@@ -394,6 +395,13 @@ private fun BoardSettingsHome(
 
         SettingsGroup(title = stringResource(R.string.board_settings_group_communication)) {
             BoardSettingNavRow(
+                title = stringResource(R.string.board_settings_cache_speech),
+                subtitle = settingSubtitle(target, BoardSettingPreference.CacheSpeech, draft.cacheSpeech, enabledDisabled(resolved.cacheSpeech), enabledDisabled(inherited.cacheSpeech)),
+                icon = Icons.Filled.VolumeUp,
+                onClick = { onOpenPreference(BoardSettingPreference.CacheSpeech) }
+            )
+            SettingsGroupDivider()
+            BoardSettingNavRow(
                 title = stringResource(R.string.board_settings_message_bar),
                 subtitle = settingSubtitle(target, BoardSettingPreference.MessageBar, draft.showMessageBar, shownHidden(resolved.showMessageBar), shownHidden(inherited.showMessageBar)),
                 icon = Icons.Filled.ChatBubbleOutline,
@@ -502,6 +510,13 @@ private fun BoardSettingChoicesPage(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
+        if (preference == BoardSettingPreference.CacheSpeech) {
+            Text(
+                stringResource(R.string.board_settings_cache_speech_description),
+                modifier = Modifier.padding(bottom = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
         SettingsGroup(title = preferenceTitle(preference)) {
             choices.forEachIndexed { index, choice ->
                 if (index > 0) SettingsGroupDivider()
@@ -580,6 +595,17 @@ private fun choicesFor(
                 selected = draft.showSymbols == false,
                 enabled = resolved.showLabels
             ) { onDraftChange(draft.copy(showSymbols = false)) }
+        )
+        BoardSettingPreference.CacheSpeech -> listOf(
+            inheritedChoice(enabledDisabled(inherited.cacheSpeech), draft.cacheSpeech == null) {
+                onDraftChange(draft.copy(cacheSpeech = null))
+            },
+            BoardSettingChoice(enabledDisabled(true), draft.cacheSpeech == true) {
+                onDraftChange(draft.copy(cacheSpeech = true))
+            },
+            BoardSettingChoice(enabledDisabled(false), draft.cacheSpeech == false) {
+                onDraftChange(draft.copy(cacheSpeech = false))
+            }
         )
         BoardSettingPreference.LabelPosition -> listOf(
             inheritedChoice(topBottom(inherited.labelAtTop), draft.labelAtTop == null) {
@@ -669,8 +695,13 @@ private fun preferenceTitle(preference: BoardSettingPreference): String = string
         BoardSettingPreference.MessageBarEditable -> R.string.board_settings_message_bar_editable
         BoardSettingPreference.Activation -> R.string.board_settings_activation
         BoardSettingPreference.Return -> R.string.board_settings_after_selection
+        BoardSettingPreference.CacheSpeech -> R.string.board_settings_cache_speech
     }
 )
+
+@Composable
+private fun enabledDisabled(value: Boolean): String =
+    stringResource(if (value) R.string.board_settings_enabled else R.string.board_settings_disabled)
 
 @Composable
 private fun shownHidden(value: Boolean): String =

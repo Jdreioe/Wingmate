@@ -71,7 +71,7 @@ class BoardSetUseCase(
         canonicalGraph.copy(boardSet = updatedSet)
     }
 
-    /** Pre-warms the TTS audio cache for every button; safe to run in a background scope. */
+    /** Preloads TTS audio for opted-in Pages; safe to run in a background scope. */
     suspend fun warmSpeechCache(graph: BoardSetGraph) {
         speechCache?.cacheGraph(graph)
     }

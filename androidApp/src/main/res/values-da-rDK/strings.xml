@@ -694,4 +694,8 @@
     <string name="elevenlabs_error">Kunne ikke fuldføre anmodningen. Kontrollér forbindelsen, nøglens rettigheder og tilgængelige stemmer, og prøv igen.</string>
     <string name="voice_elevenlabs_title_with_lang">ElevenLabs-stemmer (%1$s)</string>
     <string name="voice_no_elevenlabs_match">Ingen matchende ElevenLabs-stemmer. Opsæt din API-nøgle, og opdatér.</string>
+    <string name="board_settings_cache_speech">Forudindlæs tale</string>
+    <string name="board_settings_cache_speech_description">Generér lyd til alle knapper med den valgte cloudstemme, før de bruges. Bruger kreditter hos taleudbyderen og lagerplads på enheden. Når du slår dette fra, stopper forudindlæsningen, og eksisterende lyd bevares.</string>
+    <string name="board_settings_enabled">Til</string>
+    <string name="board_settings_disabled">Fra</string>
 </resources>

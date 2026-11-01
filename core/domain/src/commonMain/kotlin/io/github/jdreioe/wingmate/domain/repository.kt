@@ -147,8 +147,6 @@ interface SpeechService {
         pitch: Double? = null,
         rate: Double? = null
     ): Boolean = false
-    /** Retry cache work that was deferred while the device was offline. */
-    suspend fun retryPendingSpeechCache() = Unit
     suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String? = null, voice: Voice? = null): Boolean = false
     suspend fun pause()
     suspend fun stop()

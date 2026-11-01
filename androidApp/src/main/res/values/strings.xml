@@ -694,4 +694,8 @@
     <string name="elevenlabs_error">Could not complete the request. Check your connection, API key permissions, and available voices, then retry.</string>
     <string name="voice_elevenlabs_title_with_lang">ElevenLabs voices (%1$s)</string>
     <string name="voice_no_elevenlabs_match">No matching ElevenLabs voices. Set up your API key and refresh.</string>
+    <string name="board_settings_cache_speech">Preload speech audio</string>
+    <string name="board_settings_cache_speech_description">Generate audio for all buttons with the selected cloud voice before they are used. Uses provider credits and device storage. Turning this off stops preloading and keeps existing audio.</string>
+    <string name="board_settings_enabled">On</string>
+    <string name="board_settings_disabled">Off</string>
 </resources>

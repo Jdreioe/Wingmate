@@ -50,6 +50,8 @@ data class BoardSettingsOverrides(
     val returnBehavior: BoardReturnBehavior? = null,
     /** Prepared speeches can speak directly without changing the app-wide preference. */
     val speechPolicy: SpeechPolicy? = null,
+    /** Generate cloud speech for every Button ahead of use. Off unless explicitly enabled. */
+    val cacheSpeech: Boolean? = null,
 ) {
     val isEmpty: Boolean
         get() = showLabels == null &&
@@ -60,7 +62,8 @@ data class BoardSettingsOverrides(
             messageBarEditable == null &&
             activationBehavior == null &&
             returnBehavior == null &&
-            speechPolicy == null
+            speechPolicy == null &&
+            cacheSpeech == null
 }
 
 data class ResolvedBoardSettings(
@@ -73,6 +76,7 @@ data class ResolvedBoardSettings(
     val activationBehavior: BoardActivationBehavior,
     val returnBehavior: BoardReturnBehavior,
     val speechPolicy: SpeechPolicy? = null,
+    val cacheSpeech: Boolean = false,
 )
 
 fun resolveBoardSettings(
@@ -108,6 +112,7 @@ fun resolveBoardSettings(
             ?: screen.returnBehavior
             ?: appReturnBehavior,
         speechPolicy = page.speechPolicy ?: screen.speechPolicy,
+        cacheSpeech = page.cacheSpeech ?: screen.cacheSpeech ?: false,
     )
 }
 

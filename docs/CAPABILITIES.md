@@ -55,7 +55,11 @@ select a voice, primary language, optional secondary language, and speech
 rate; use a pronunciation dictionary; and choose immediate speech or silent
 composition until the complete Message is activated.
 
-Generated speech may be cached locally. Cloud synthesis requires a network for
+Generated speech may be cached locally. On Android, Screen and Page settings offer
+opt-in speech preloading for all Buttons. It is off by default and uses the selected
+cloud voice, provider credits, and device storage. Pages inherit the Screen setting
+unless overridden. Existing audio remains cached when preloading is turned off.
+Cloud synthesis requires a network for
 uncached text. If a cloud voice is unavailable or fails, the device voice speaks
 the Message instead and Wingmate shows a notice. A network failure must not
 discard the active Message.

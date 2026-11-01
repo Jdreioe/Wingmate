@@ -15,7 +15,7 @@ Choose a voice in the voice picker, then select your language. Account voices
 include personal clones and saved library voices. Add or manage those voices in
 ElevenLabs, then refresh Wingmate's picker.
 
-Speech uses the non-turbo `eleven_v4` model and MP3 audio. Write audio tags in square brackets
+Speech uses the low-latency `eleven_v4_turbo` model and MP3 audio. Write audio tags in square brackets
 to direct delivery, such as `[whispers]`, `[laughs]`, or `[sarcastic]`; Wingmate
 sends them unchanged. The Typing Screen's Action strip has buttons for common
 emotion tags in newly created layouts. Existing saved layouts are kept.
@@ -35,7 +35,11 @@ use `xi-api-key` headers at `https://api.elevenlabs.io` with redirects disabled.
 Provider error bodies are never included in user-visible errors or diagnostics.
 
 Text is sent to ElevenLabs when speech or vocabulary precaching uses this source.
-The existing local audio cache avoids repeat requests. Existing system speech
+The existing local audio cache avoids repeat requests. On Android, **Preload speech
+audio** in Screen or Page settings generates Button audio ahead of use. It is off
+by default; Pages inherit their Screen preference unless overridden. Preloading
+uses provider credits and device storage, including when selecting a new voice.
+Turning it off keeps existing audio and stops subsequent preload requests. Existing system speech
 fallback remains available when cloud speech fails. Account quotas and provider
 retention policies apply; Wingmate does not request enterprise-only zero retention.
 Removing a key does not delete cached audio, History, or ElevenLabs account data.
