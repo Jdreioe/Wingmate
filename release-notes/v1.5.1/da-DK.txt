@@ -1,0 +1,1 @@
+Forudindlæsning af tale er nu slået fra som standard og kan aktiveres pr. skærm eller side, så du undgår uventet cloudforbrug. ElevenLabs-tale bruger igen v4 Turbo for hurtigere svar.

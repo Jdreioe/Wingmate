@@ -1,0 +1,1 @@
+Speech preloading is now off by default and can be enabled per Screen or Page, helping avoid unexpected cloud usage. ElevenLabs speech uses v4 Turbo again for faster responses.
