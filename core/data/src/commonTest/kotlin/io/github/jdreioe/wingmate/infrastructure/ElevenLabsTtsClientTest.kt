@@ -47,7 +47,7 @@ class ElevenLabsTtsClientTest {
             assertEquals("private-key", request.headers["xi-api-key"])
             assertFalse(request.url.toString().contains("private-key"))
             val body = request.body.toByteArray().decodeToString()
-            assertContains(body, "\"model_id\":\"eleven_v4\"")
+            assertContains(body, "\"model_id\":\"eleven_v4_turbo\"")
             assertContains(body, "\"language_code\":\"da\"")
             assertContains(body, "\"speed\":1.2")
             assertContains(body, "Hello")

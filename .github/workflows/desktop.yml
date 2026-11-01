@@ -49,7 +49,7 @@ jobs:
             package_format: appimage
             artifact_name: wingmate-linux
             artifact_path: desktopApp/target/x86_64-unknown-linux-gnu/release/*.AppImage
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             kotlin_target: MacosArm64
             test_kotlin_build_type: Debug

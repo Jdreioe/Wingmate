@@ -10,10 +10,12 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.withLanguageOverride
 
-/** Prewarms Azure audio for board fields without playing or recording them. */
+/** Preloads cloud audio only for Pages that opt in, without playing or recording it. */
 class BoardSetSpeechCacheUseCase(
     private val boardSetRepository: BoardSetRepository,
     private val boardRepository: BoardRepository,
@@ -41,12 +43,24 @@ class BoardSetSpeechCacheUseCase(
 
     suspend fun cacheGraph(graph: BoardSetGraph) {
         if (!online || !usesCloudTts()) return
-        graph.boards.forEach { board ->
-            board.buttons.forEach { button -> cacheField(board, button) }
+        for (board in graph.boards) {
+            for (button in board.buttons) {
+                // Re-read saved preferences so disabling preloading also stops an ongoing pass.
+                val currentSet = boardSetRepository.getBoardSet(graph.boardSet.id) ?: return
+                val currentBoard = boardRepository.getBoard(board.id) ?: continue
+                val currentButton = currentBoard.buttons.firstOrNull { it.id == button.id } ?: continue
+                cacheField(currentBoard, currentButton, currentSet.screenSettings)
+            }
         }
     }
 
     suspend fun cacheField(board: ObfBoard, button: ObfButton) {
+        val screen = boardSetRepository.listBoardSets().firstOrNull { board.id in it.boardIds }
+        cacheField(board, button, screen?.screenSettings ?: BoardSettingsOverrides())
+    }
+
+    private suspend fun cacheField(board: ObfBoard, button: ObfButton, screen: BoardSettingsOverrides) {
+        if (!(board.pageSettingsOverrides().cacheSpeech ?: screen.cacheSpeech ?: false)) return
         if (!online || !usesCloudTts()) return
         if (!button.soundId.isNullOrBlank()) return
         val settings = settingsRepository.get()
@@ -62,7 +76,7 @@ class BoardSetSpeechCacheUseCase(
     }
 
     suspend fun retryPending() {
-        if (online && usesCloudTts()) speechService.retryPendingSpeechCache()
+        cacheAll()
     }
 
     private suspend fun usesCloudTts(): Boolean = settingsRepository.get().ttsEngine != TtsEngine.SYSTEM

@@ -12,6 +12,19 @@ import kotlin.test.assertTrue
 class BoardSettingsTest {
 
     @Test
+    fun speechPreloadingDefaultsOffAndPersistsAnExplicitPageOptOut() {
+        val defaults = resolveBoardSettings(true, true, false)
+        assertFalse(defaults.cacheSpeech)
+        val screen = BoardSettingsOverrides(cacheSpeech = true)
+        assertTrue(resolveBoardSettings(true, true, false, screen = screen).cacheSpeech)
+        val page = BoardSettingsOverrides(cacheSpeech = false)
+        assertFalse(page.isEmpty)
+        val restored = decodeBoardSettings(encodeBoardSettings(page))
+        assertEquals(page, restored)
+        assertFalse(resolveBoardSettings(true, true, false, screen = screen, page = restored!!).cacheSpeech)
+    }
+
+    @Test
     fun pageOverridesScreenWhichOverridesAppDefaults() {
         val resolved = resolveBoardSettings(
             appShowLabels = true,

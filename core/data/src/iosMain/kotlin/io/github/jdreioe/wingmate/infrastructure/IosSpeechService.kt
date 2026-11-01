@@ -51,9 +51,6 @@ class IosSpeechService(
 
     private val sentenceAudioCache = SpeechAudioCache(maxBytes = 32L * 1024 * 1024)
     private val sentenceAudioCacheMutex = Mutex()
-    private data class PendingCache(val text: String, val voice: Voice?, val pitch: Double?, val rate: Double?)
-    private val pendingSpeechCache = mutableSetOf<PendingCache>()
-    private val pendingSpeechCacheMutex = Mutex()
     private var currentPlayer: AVAudioPlayer? = null
     private var currentPlayerRequestId: Long = 0
     private var requestGeneration: Long = 0
@@ -213,20 +210,12 @@ class IosSpeechService(
         val cacheKey = speechCacheKey(normalizedText, engine, effectiveVoice, pitch, rate)
         if (sentenceAudioCacheMutex.withLock { cacheKey in sentenceAudioCache }) return true
 
-        val request = PendingCache(normalizedText, voice, pitch, rate)
         val bytes = runCatching { synthesize(normalizedText, effectiveVoice, engine) }.getOrNull()
         if (bytes == null) {
-            pendingSpeechCacheMutex.withLock { pendingSpeechCache += request }
             return false
         }
         sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = bytes }
-        pendingSpeechCacheMutex.withLock { pendingSpeechCache -= request }
         return true
-    }
-
-    override suspend fun retryPendingSpeechCache() {
-        val requests = pendingSpeechCacheMutex.withLock { pendingSpeechCache.toList() }
-        requests.forEach { cacheSpeech(it.text, it.voice, it.pitch, it.rate) }
     }
 
     override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
