@@ -128,15 +128,16 @@ class ObfBoardContentTest {
     @Test
     fun sentenceControlsAndEditableMessageForwardToCallbacks() {
         val events = mutableListOf<String>()
+        var message by mutableStateOf("Hello")
         composeRule.setContent {
             AppTheme {
                 ObfBoardContent(
-                    state = ObfBoardUiState(board = board, messageText = "Hello", messageBarEditable = true),
+                    state = ObfBoardUiState(board = board, messageText = message, messageBarEditable = true),
                     onButtonClick = {},
                     onSpeakSentence = { events += "speak" },
                     onDeleteLast = { events += "delete" },
                     onClearSentence = { events += "clear" },
-                    onSentenceChanged = { events += "text:$it" },
+                    onSentenceChanged = { message = it; events += "text:$it" },
                 )
             }
         }
