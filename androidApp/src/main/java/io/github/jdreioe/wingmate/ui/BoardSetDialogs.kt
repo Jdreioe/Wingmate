@@ -17,7 +17,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -89,15 +88,10 @@ private fun ButtonShapePreview(shape: ObfButtonShape, selected: Boolean) {
             .border(1.dp, outline, resolvedShape)
     )
 }
-internal enum class BoardSetTemplate(val quickCoreSlug: String? = null) {
+internal enum class BoardSetTemplate {
     Blank,
     Calculator,
     Keyboard,
-    QuickCore24("quick-core-24"),
-    QuickCore40("quick-core-40"),
-    QuickCore60("quick-core-60"),
-    QuickCore84("quick-core-84"),
-    QuickCore112("quick-core-112"),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -111,9 +105,6 @@ internal fun CreateBoardSetDialog(
     onTemplateSelected: (BoardSetTemplate, suggestedName: String?) -> Unit,
     onKeyboardPresetSelected: (KeyboardPreset) -> Unit,
     onCreate: () -> Unit,
-    quickCoreProgress: Float? = null,
-    quickCoreStage: String? = null,
-    isQuickCoreImporting: Boolean = false,
 ) {
     val calculatorName = stringResource(R.string.calculator_default_name)
     val keyboardName = stringResource(R.string.keyboard_default_name)
@@ -180,25 +171,12 @@ internal fun CreateBoardSetDialog(
                         singleLine = true
                     )
                 }
-                if (isQuickCoreImporting) {
-                    Text(stringResource(R.string.board_dialog_quick_core_downloading))
-                    if (quickCoreStage == "importing") {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else if (quickCoreProgress != null) {
-                        LinearProgressIndicator(
-                            progress = { quickCoreProgress },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = onCreate,
-                enabled = draft.name.isNotBlank() && !isQuickCoreImporting
+                enabled = draft.name.isNotBlank()
             ) { Text(stringResource(R.string.board_dialog_create)) }
         },
         dismissButton = {

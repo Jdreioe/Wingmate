@@ -14,7 +14,6 @@ import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.ui.WelcomeScreen
 import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.BoardSetManagerRoot
-import io.github.jdreioe.wingmate.ui.BoardWorkspaceMode
 import io.github.jdreioe.wingmate.ui.AppTheme
 import io.github.jdreioe.wingmate.ui.InteractionInputRoot
 import io.github.jdreioe.wingmate.ui.rememberReactiveSettings
@@ -24,7 +23,6 @@ import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
-import io.github.jdreioe.wingmate.application.TYPING_SCREEN_ID
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import org.koin.compose.koinInject
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +56,6 @@ fun App() {
             var startupRetryKey by remember { mutableIntStateOf(0) }
             var createBoardSetOnLaunch by remember { mutableStateOf(false) }
             var startupBoardSetId by remember { mutableStateOf<String?>(null) }
-            var startupBoardSetMode by remember { mutableStateOf(BoardWorkspaceMode.Run) }
             val scope = rememberCoroutineScope()
 
             fun routeFor(mode: StartupMode): Screen = when (mode) {
@@ -87,7 +84,6 @@ fun App() {
                     settingsStateManager.applyLoadedSettings(savedSettings)
                     createBoardSetOnLaunch = mode == StartupMode.Screens && createScreen
                     startupBoardSetId = null
-                    startupBoardSetMode = BoardWorkspaceMode.Run
                     featureUsageReporter.setEnabled(analyticsEnabled)
                     if (analyticsEnabled) {
                         featureUsageReporter.reportEvent(
@@ -109,7 +105,6 @@ fun App() {
             fun showWelcomeFlow() {
                 createBoardSetOnLaunch = false
                 startupBoardSetId = null
-                startupBoardSetMode = BoardWorkspaceMode.Run
                 currentScreen = Screen.Welcome
                 featureUsageReporter.reportEvent(FeatureUsageEvents.WELCOME_REOPENED)
             }
@@ -117,7 +112,6 @@ fun App() {
             fun navigateAfterBackupRestore(settings: Settings, hasSelectedVoice: Boolean) {
                 createBoardSetOnLaunch = false
                 startupBoardSetId = settings.startupBoardSetId
-                startupBoardSetMode = BoardWorkspaceMode.Run
                 welcomeCompleted = settings.welcomeFlowCompleted
                 featureUsageReporter.setEnabled(settings.featureUsageReportingEnabled)
                 if (hasSelectedVoice) {
@@ -137,7 +131,6 @@ fun App() {
                     val hasSelectedVoice = loaded.selectedVoice != null
                     welcomeCompleted = settings.welcomeFlowCompleted
                     startupBoardSetId = settings.startupBoardSetId
-                    startupBoardSetMode = BoardWorkspaceMode.Run
                     currentScreen = if (hasSelectedVoice) routeFor(settings.startupMode) else Screen.Welcome
                     featureUsageReporter.reportEvent(
                         FeatureUsageEvents.APP_STARTED,
@@ -230,15 +223,8 @@ fun App() {
                                         onOpenBoardSetManager = {
                                             createBoardSetOnLaunch = false
                                             startupBoardSetId = null
-                                            startupBoardSetMode = BoardWorkspaceMode.Run
                                             currentScreen = Screen.BoardSets
                                         },
-                                        onEditTypingScreen = {
-                                            createBoardSetOnLaunch = false
-                                            startupBoardSetId = TYPING_SCREEN_ID
-                                            startupBoardSetMode = BoardWorkspaceMode.Edit
-                                            currentScreen = Screen.BoardSets
-                                        }
                                     )
                                 }
                                 Screen.BoardSets -> {
@@ -250,7 +236,6 @@ fun App() {
                                         },
                                         createOnLaunch = createBoardSetOnLaunch,
                                         initialBoardSetId = startupBoardSetId,
-                                        initialMode = startupBoardSetMode,
                                     )
                                 }
                                 null -> {

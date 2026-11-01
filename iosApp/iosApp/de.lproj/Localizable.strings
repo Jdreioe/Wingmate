@@ -240,7 +240,6 @@
 "boardset.error.no_board" = "Keine Seite ausgewählt.";
 "boardset.error.save_failed" = "Bildschirm konnte nicht gespeichert werden.";
 "boardset.error.not_found" = "Dieser Bildschirm oder diese Seite existiert nicht mehr.";
-"boardset.error.download_failed" = "Bildschirm konnte nicht heruntergeladen werden. Prüfe die Verbindung und versuche es erneut.";
 "boardset.error.cell_update_failed" = "Feld konnte nicht aktualisiert werden.";
 "boardset.error.cell_clear_failed" = "Feld konnte nicht geleert werden.";
 
@@ -428,18 +427,12 @@
 "boardset.create_blank" = "Leere Tafel";
 "boardset.create_keyboard_qwerty" = "QWERTY-Tastatur";
 "boardset.create_keyboard_alphabetical" = "Alphabetische Tastatur";
-"boardset.create_quick_core_24" = "Quick Core 24";
-"boardset.create_quick_core_40" = "Quick Core 40";
-"boardset.create_quick_core_60" = "Quick Core 60";
-"boardset.create_quick_core_84" = "Quick Core 84";
-"boardset.create_quick_core_112" = "Quick Core 112";
 "boardset.keyboard_layout" = "Tastaturebene";
 "boardset.keyboard_symbols" = "Symbole";
 "boardset.cell.keyboard_action" = "Tastaturfunktion";
 "boardset.native_keyboard.title" = "Tastatur";
 "boardset.native_keyboard.hint" = "Ein Wort oder einen Satz eingeben";
 "boardset.native_keyboard.return" = "Zurück zur Tafel";
-"boardset.quick_core.downloading" = "Quick Core wird heruntergeladen und vorbereitet…";
 "boardset.cell.insert_text" = "Von dieser Taste eingefügter Text";
 "boardset.cell.action.none" = "Keine Sonderaktion";
 "boardset.cell.action.spell" = "Beschriftung buchstabieren";

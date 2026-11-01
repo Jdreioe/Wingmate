@@ -24,7 +24,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-internal enum class TypingDialog { Settings, AddPhrase, EditPhrase, AddCategory, CategoryMenu, DeleteCategory, Reset, Unlock }
+internal enum class TypingDialog { Settings, AddPhrase, EditPhrase, AddCategory, CategoryMenu, DeleteCategory, Unlock }
 internal enum class TypingLoadStatus { Loading, Ready, Failed }
 
 private const val LIKELY_NEXT_LIMIT = 8
@@ -113,7 +113,6 @@ internal sealed interface PhraseScreenAction {
     data class MovePhrase(val movedId: String, val targetId: String) : PhraseScreenAction
     data class UndoDelete(val deletionId: Long) : PhraseScreenAction
     data class ForgetDelete(val deletionId: Long) : PhraseScreenAction
-    data object Reset : PhraseScreenAction
     data class CompleteWord(val word: String) : PhraseScreenAction
     data class InsertPrediction(val text: String) : PhraseScreenAction
 }
@@ -132,7 +131,7 @@ internal interface PhraseScreenOperations {
     suspend fun savePhrase(phrase: Phrase, editing: Boolean)
     suspend fun deletePhrase(id: String)
     suspend fun movePhrase(from: Int, to: Int)
-    suspend fun template(columns: Int, reset: Boolean = false): BoardSetGraph
+    suspend fun template(columns: Int): BoardSetGraph
     suspend fun categories(): List<CategoryItem>
     suspend fun addCategory(category: CategoryItem): CategoryItem
     suspend fun moveCategory(from: Int, to: Int)
@@ -175,8 +174,8 @@ internal class DefaultPhraseScreenOperations(
         phraseUseCase.move(from, to)
         report(FeatureUsageEvents.PHRASE_MOVED, "from_index" to from.toString(), "to_index" to to.toString())
     }
-    override suspend fun template(columns: Int, reset: Boolean): BoardSetGraph = withContext(Dispatchers.IO) {
-        if (reset) typing.reset(columns) else typing.getOrCreate(columns)
+    override suspend fun template(columns: Int): BoardSetGraph = withContext(Dispatchers.IO) {
+        typing.getOrCreate(columns)
     }
     override suspend fun categories() = withContext(Dispatchers.IO) { category.list() }
     override suspend fun addCategory(category: CategoryItem) = withContext(Dispatchers.IO) { this@DefaultPhraseScreenOperations.category.add(category) }
@@ -385,13 +384,6 @@ internal class PhraseScreenViewModel(
                 }
             }
             is PhraseScreenAction.ForgetDelete -> { deletedPhrases.remove(action.deletionId) }
-            PhraseScreenAction.Reset -> authorize(action) {
-                mutate(action) {
-                    val template = operations.template(state.value.settings.gridColumns, reset = true)
-                    _state.update { it.copy(template = template, templateStatus = TypingLoadStatus.Ready) }
-                    setDialog(null)
-                }
-            }
             is PhraseScreenAction.CompleteWord -> {
                 val result = TextEditingPolicy.completeWord(state.value.input.text, state.value.input.selection.start, action.word)
                 editInput(TextFieldValue(result.text, TextRange(result.cursor)))

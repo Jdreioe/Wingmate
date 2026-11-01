@@ -72,33 +72,6 @@ class TypingScreenUseCase(
         }
         return graph
     }
-
-    suspend fun reset(columns: Int): BoardSetGraph {
-        val previous = boardSetRepository.listBoardSets().firstOrNull { it.kind == ScreenKind.Typing }
-        val previousBoards = previous?.boardIds.orEmpty().mapNotNull { boardRepository.getBoard(it) }
-        val graph = TypingScreenProjector.defaultTemplate(columns).let { default ->
-            if (previous == null) default else default.copy(
-                boardSet = default.boardSet.copy(
-                    id = previous.id,
-                    createdAt = previous.createdAt,
-                ),
-            )
-        }
-        try {
-            boardRepository.saveBoards(graph.boards)
-            boardSetRepository.saveBoardSet(graph.boardSet)
-            previous?.boardIds.orEmpty().filterNot { oldId -> graph.boards.any { it.id == oldId } }
-                .forEach { boardRepository.deleteBoard(it) }
-        } catch (failure: Throwable) {
-            boardRepository.saveBoards(previousBoards)
-            if (previous != null) boardSetRepository.saveBoardSet(previous)
-            else boardSetRepository.deleteBoardSet(graph.boardSet.id)
-            graph.boards.filterNot { candidate -> previousBoards.any { it.id == candidate.id } }
-                .forEach { boardRepository.deleteBoard(it.id) }
-            throw failure
-        }
-        return graph
-    }
 }
 
 object TypingScreenProjector {

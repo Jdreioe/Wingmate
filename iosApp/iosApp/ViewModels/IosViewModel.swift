@@ -191,8 +191,6 @@ final class IosViewModel: ObservableObject {
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
-    @Published var quickCoreDownloadProgress: Double? = nil
-    @Published var isImportingQuickCore: Bool = false
     @Published var isCreatingBoardSet: Bool = false
     @Published var boardSets: [BoardSetInfo] = []
     @Published var selectedBoardSetId: String? = nil
@@ -1540,42 +1538,6 @@ final class IosViewModel: ObservableObject {
             boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
         } catch {
             boardStatusMessage = NSLocalizedString("boardset.error.create_failed", comment: "")
-        }
-    }
-
-    func importQuickCorePreset(name: String, slug: String) async {
-        isCreatingBoardSet = true
-        defer { isCreatingBoardSet = false }
-        isImportingQuickCore = true
-        quickCoreDownloadProgress = 0
-        let monitor = Task { @MainActor in
-            while !Task.isCancelled {
-                let progress = boardsFacade.quickCoreProgress()
-                quickCoreDownloadProgress = progress.fraction?.doubleValue
-                try? await Task.sleep(nanoseconds: 150_000_000)
-            }
-        }
-        defer {
-            monitor.cancel()
-            isImportingQuickCore = false
-        }
-        do {
-            let sharedSet = try await boardsFacade.importQuickCorePreset(slug: slug, name: normalizedBoardsetName(name))
-            let set = boardSetInfo(from: sharedSet)
-            await loadBoardSets()
-            selectedBoardSetId = set.id
-            selectedBoardId = set.rootBoardId
-            await loadSelectedBoard()
-            quickCoreDownloadProgress = 1
-            boardStatusMessage = NSLocalizedString("boardset.status.created", comment: "")
-        } catch {
-            if error.isNativeCancellation { return }
-            boardStatusMessage = NSLocalizedString(
-                error.nativeFailure?.kind == NativeFailureKind.network
-                    ? "boardset.error.download_failed"
-                    : "boardset.error.create_failed",
-                comment: ""
-            )
         }
     }
 
