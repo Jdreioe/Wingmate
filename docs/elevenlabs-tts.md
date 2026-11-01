@@ -15,7 +15,7 @@ Choose a voice in the voice picker, then select your language. Account voices
 include personal clones and saved library voices. Add or manage those voices in
 ElevenLabs, then refresh Wingmate's picker.
 
-Speech uses `eleven_v4_turbo` and MP3 audio. Write audio tags in square brackets
+Speech uses the non-turbo `eleven_v4` model and MP3 audio. Write audio tags in square brackets
 to direct delivery, such as `[whispers]`, `[laughs]`, or `[sarcastic]`; Wingmate
 sends them unchanged. The Typing Screen's Action strip has buttons for common
 emotion tags; use Reset Typing Screen to add them to an existing Typing Screen.
