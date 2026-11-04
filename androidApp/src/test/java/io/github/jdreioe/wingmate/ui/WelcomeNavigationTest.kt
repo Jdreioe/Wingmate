@@ -55,4 +55,12 @@ class WelcomeNavigationTest {
 
         assertEquals(atReview, atReview.change(Language).back(Language))
     }
+
+    @Test
+    fun `the setup Phrase is the trimmed sentence, only when kept`() {
+        assertEquals("Hi, I'm Alex.", WelcomeChoices(sentence = "  Hi, I'm Alex. ", keepSentence = true).phraseToSave)
+        assertEquals(null, WelcomeChoices(sentence = "Hi, I'm Alex.", keepSentence = false).phraseToSave)
+        assertEquals(null, WelcomeChoices(sentence = "   ", keepSentence = true).phraseToSave)
+        assertEquals(null, WelcomeChoices(sentence = null, keepSentence = true).phraseToSave)
+    }
 }

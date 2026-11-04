@@ -340,12 +340,15 @@ internal suspend fun SpeechService.speakPreview(
             cacheAudio = false,
             engine = engine,
         )
-        onStarted(playbackState().requestId)
+        val requestId = playbackState().requestId
+        onStarted(requestId)
         var waitedMillis = 0L
         while (isPlaying() && waitedMillis < 120_000) {
             delay(50)
             waitedMillis += 50
         }
+        // Past the limit, end this preview rather than leave it talking with no Stop shown.
+        if (isPlaying() && playbackState().requestId == requestId) stop()
     }
     check(playbackState().status != SpeechPlaybackStatus.FAILED) { "Preview playback failed" }
 }

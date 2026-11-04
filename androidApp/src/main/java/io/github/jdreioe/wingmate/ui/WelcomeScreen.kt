@@ -61,7 +61,7 @@ import org.koin.compose.getKoin
  */
 data class WelcomeChoices(
     val startupMode: StartupMode = StartupMode.Keyboard,
-    /** The sentence typed on Hear your voice, or null for the default one. Kept across side pages. */
+    /** The sentence on Hear your voice, or null until one is typed or kept. Kept across side pages. */
     val sentence: String? = null,
     /** Whether to keep [sentence] as a Phrase. */
     val keepSentence: Boolean = false,
@@ -1017,11 +1017,13 @@ private fun ReviewPage(
                     null -> unknown
                     else -> engine.cloudProviderName()?.let { sentOnlineTemplate.format(it) } ?: deviceEngine
                 }
-                val languages = settings?.let { listOf(it.primaryLanguage, it.secondaryLanguage) }
+                val multilingual = (voice?.supportedLanguages?.size ?: 0) > 1
+                // Only what this voice can speak: a second language stored for an earlier voice is not shown.
+                val languages = settings?.let { if (multilingual) listOf(it.primaryLanguage, it.secondaryLanguage) else listOf(it.primaryLanguage) }
                     ?.filter { it.isNotBlank() }
                     ?.joinToString(" · ") { languageName(it) }
                     ?.ifBlank { null } ?: unknown
-                ReviewVoice(name, "$speech · $speed", languages, multilingual = (voice?.supportedLanguages?.size ?: 0) > 1)
+                ReviewVoice(name, "$speech · $speed", languages, multilingual)
             }
         } catch (failure: CancellationException) {
             throw failure

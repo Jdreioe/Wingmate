@@ -44,6 +44,9 @@ import androidx.compose.ui.res.stringResource
 import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
+/** A speed save started when this page last left; the next instance waits for it. */
+private var pendingLeaveRateSave: Job? = null
+
 /**
  * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
  * tested (for example how they introduce themselves) as a Phrase. The sentence and that
@@ -52,7 +55,7 @@ import com.hojmoseit.wingmate.R
  */
 @Composable
 fun TestVoiceScreen(
-    /** The typed sentence, or null for the default one. */
+    /** The sentence shown, or null until one is typed or kept (then the default is shown). */
     sentence: String?,
     keepAsPhrase: Boolean,
     onSentenceChange: (String) -> Unit,
@@ -128,17 +131,20 @@ fun TestVoiceScreen(
         onDispose {
             // Leaving (Change language, recreation) must not leave a preview talking with no Stop.
             // Only this page's request is stopped, never newer speech that started meanwhile.
+            // Decided by what the speech service is doing, not this page's UI flag.
             val ownRequest = previewRequest
-            if (isPlaying && ownRequest != null) {
+            if (ownRequest != null) {
                 appScope.launch(Dispatchers.IO) {
-                    if (speechService.playbackState().requestId == ownRequest) runCatching { speechService.stop() }
+                    if (speechService.isPlaying() && speechService.playbackState().requestId == ownRequest) {
+                        runCatching { speechService.stop() }
+                    }
                 }
             }
             if (rateSaveJob?.isActive == true || rateSaveFailed) {
                 val voice = selectedVoice
                 rateSaveJob?.cancel()
                 if (voice != null) {
-                    appScope.launch(Dispatchers.IO) {
+                    pendingLeaveRateSave = appScope.launch(Dispatchers.IO) {
                         runCatching { voiceUseCase.select(voice) }
                             .onFailure { OperationalLogger.warn("voice_rate.save", "failed_on_leave", exceptionClass = it.loggingClassName()) }
                     }
@@ -169,6 +175,9 @@ fun TestVoiceScreen(
         loading = true
         loadFailed = false
         try {
+            // A speed saved as the previous instance of this page left (e.g. rotation) must land
+            // before the voice is read, or the page would show and build on the old speed.
+            pendingLeaveRateSave?.join()
             val (voice, savedEngine) = withContext(Dispatchers.IO) {
                 voiceUseCase.selected() to settingsUseCase.get().ttsEngine
             }
