@@ -715,11 +715,6 @@
     <string name="typing_hide_keyboard">Skjul tastatur</string>
     <string name="typing_panel_earlier">Tidligere handlinger</string>
     <string name="typing_panel_more">Flere handlinger</string>
-    <string name="board_dialog_size">Størrelse</string>
-    <string name="board_dialog_size_width">Bredde</string>
-    <string name="board_dialog_size_height">Højde</string>
-    <string name="board_dialog_size_hint">Ændrer, hvor meget plads knappen fylder på siden. Du kan også trække i hjørnet af en valgt knap.</string>
-    <string name="board_dialog_size_no_room">For at gøre den større skal du tømme en celle til højre for eller under den, eller tilføje rækker eller kolonner med Tilpas sidens størrelse.</string>
     <string name="board_import_error_unreadable">Filen kunne ikke åbnes. Vælg den igen, eller tjek at det er en .obf- eller .obz-fil.</string>
     <string name="board_import_error_not_a_board">Filen er ikke en tavle, Wingmate kan læse. Vælg en .obf- eller .obz-fil.</string>
     <string name="board_import_error_damaged">Denne .obz-fil er beskadiget eller er ikke et tavlearkiv.</string>

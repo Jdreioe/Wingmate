@@ -1944,26 +1944,6 @@ private fun BoardSetWorkspaceRoot(
             initialAction = target.button?.action,
             initialActions = target.button?.actions.orEmpty(),
             hasExistingValue = target.button != null,
-            size = target.button?.let {
-                val grid = activeBoard.grid ?: return@let null
-                val (anchorRow, anchorColumn) = grid.fieldAnchorAt(target.row, target.column) ?: return@let null
-                EditCellSize(
-                    current = grid.fieldSpanAt(anchorRow, anchorColumn),
-                    allowed = grid.availableFieldSpansAt(anchorRow, anchorColumn),
-                    onResize = { span ->
-                        val session = editSession ?: return@EditCellSize
-                        val resized = resizeDraftField(
-                            graph = session.draft,
-                            boardId = activeBoard.id,
-                            row = anchorRow,
-                            column = anchorColumn,
-                            rowSpan = span.rows,
-                            columnSpan = span.columns,
-                        )
-                        if (resized != session.draft) workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(resized))
-                    },
-                )
-            },
             onDismiss = { editingCell = null },
             onSave = { label, vocalization, imageUrl, recordingPath, backgroundColor, language, mathMode, hidden, linkedBoardId,
                        action, actions, shape, wordType ->

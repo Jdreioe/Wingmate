@@ -11,7 +11,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,10 +21,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,12 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
@@ -276,8 +268,6 @@ internal fun EditBoardCellDialog(
     initialAction: String? = null,
     initialActions: List<String> = emptyList(),
     hasExistingValue: Boolean,
-    /** The Button's size on its Page; null for an empty cell. Changes apply at once. */
-    size: EditCellSize? = null,
     onDismiss: () -> Unit,
     onSave: (
         label: String,
@@ -409,7 +399,6 @@ internal fun EditBoardCellDialog(
                     label = { Text(stringResource(R.string.board_dialog_vocalization)) },
                     singleLine = true
                 )
-                size?.let { CellSizeRow(it) }
                 if (showMathMode) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -847,98 +836,5 @@ TextButton(
                 showColorPicker = false
             }
         )
-    }
-}
-
-/**
- * A Button's size on its Page, as the editor offers it: the current span, the spans that fit
- * (free cells, inside the Page), and how to apply one. Applied at once, like the drag handle,
- * so Undo takes it back.
- */
-internal class EditCellSize(
-    val current: GridFieldSpan,
-    val allowed: List<GridFieldSpan>,
-    val onResize: (GridFieldSpan) -> Unit,
-)
-
-/**
- * Width and height steppers for the Button being edited: the way to resize without dragging,
- * for touch, switch and keyboard alike. A step that would not fit is disabled.
- */
-@Composable
-private fun CellSizeRow(size: EditCellSize) {
-    val current = size.current
-    val sizeText = stringResource(R.string.board_resize_size, current.columns, current.rows)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(stringResource(R.string.board_dialog_size), style = MaterialTheme.typography.labelLarge)
-        Text(
-            stringResource(R.string.board_dialog_size_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            SizeStepper(
-                label = stringResource(R.string.board_dialog_size_width),
-                value = current.columns,
-                decreaseLabel = stringResource(R.string.board_resize_decrease_width),
-                increaseLabel = stringResource(R.string.board_resize_increase_width),
-                canDecrease = current.copy(columns = current.columns - 1) in size.allowed,
-                canIncrease = current.copy(columns = current.columns + 1) in size.allowed,
-                onDecrease = { size.onResize(current.copy(columns = current.columns - 1)) },
-                onIncrease = { size.onResize(current.copy(columns = current.columns + 1)) },
-            )
-            SizeStepper(
-                label = stringResource(R.string.board_dialog_size_height),
-                value = current.rows,
-                decreaseLabel = stringResource(R.string.board_resize_decrease_height),
-                increaseLabel = stringResource(R.string.board_resize_increase_height),
-                canDecrease = current.copy(rows = current.rows - 1) in size.allowed,
-                canIncrease = current.copy(rows = current.rows + 1) in size.allowed,
-                onDecrease = { size.onResize(current.copy(rows = current.rows - 1)) },
-                onIncrease = { size.onResize(current.copy(rows = current.rows + 1)) },
-            )
-        }
-        // Announced as it changes, so a screen reader or switch user hears the new size.
-        Text(
-            sizeText,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        )
-        // A Button only grows into free cells: say so when it has none, instead of four
-        // disabled buttons with no reason.
-        val canGrow = current.copy(columns = current.columns + 1) in size.allowed ||
-            current.copy(rows = current.rows + 1) in size.allowed
-        if (!canGrow) {
-            Text(
-                stringResource(R.string.board_dialog_size_no_room),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SizeStepper(
-    label: String,
-    value: Int,
-    decreaseLabel: String,
-    increaseLabel: String,
-    canDecrease: Boolean,
-    canIncrease: Boolean,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FilledTonalIconButton(onClick = onDecrease, enabled = canDecrease, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Remove, contentDescription = decreaseLabel)
-            }
-            Text("$value", style = MaterialTheme.typography.titleLarge, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
-            FilledTonalIconButton(onClick = onIncrease, enabled = canIncrease, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.Add, contentDescription = increaseLabel)
-            }
-        }
     }
 }
