@@ -34,11 +34,13 @@ import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
@@ -135,12 +137,17 @@ fun WelcomeScreen(
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     val configRepository = remember(koin) { koin.getOrNull<ConfigRepository>() }
     val speechService = remember(koin) { koin.getOrNull<SpeechService>() }
+    val phraseUseCase = remember(koin) { koin.getOrNull<PhraseUseCase>() }
     val scope = rememberCoroutineScope()
 
     var path by rememberSaveable(stateSaver = stepListSaver) { mutableStateOf(listOf(WelcomeStep.Start)) }
     /** The path to Review while a page opened with Change is shown; empty otherwise. */
     var reviewPath by rememberSaveable(stateSaver = stepListSaver) { mutableStateOf(emptyList<WelcomeStep>()) }
     var choices by rememberSaveable(stateSaver = welcomeChoicesSaver) { mutableStateOf(initialChoices) }
+    // The Phrase this setup already added. Owned here, so leaving setup forgets it and a
+    // later setup can never edit or delete a Phrase the Communicator has been using.
+    var savedPhraseId by rememberSaveable { mutableStateOf<String?>(null) }
+    var savedPhraseText by rememberSaveable { mutableStateOf<String?>(null) }
     /** The engine whose voices the Voice page lists; saved only together with a voice. */
     var chosenEngine by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
     var startFailed by remember { mutableStateOf(false) }
@@ -155,8 +162,9 @@ fun WelcomeScreen(
         reviewPath = path
         path = path + target
     }
-    /** Moves on from the last page of a section, or back to Review after a Change. */
-    fun finishSection(next: WelcomeStep) {
+    /** Moves on from the last page of a section, or back to Review after a Change; once per page. */
+    fun finishSection(from: WelcomeStep, next: WelcomeStep) {
+        if (path.last() != from) return
         if (reviewPath.isNotEmpty()) {
             path = reviewPath
             reviewPath = emptyList()
@@ -223,6 +231,34 @@ fun WelcomeScreen(
         }
     }
 
+    /**
+     * Brings the setup Phrase in line with Review before setup is marked finished: a retry
+     * after a failed finish edits or removes the Phrase already added instead of adding
+     * another. Returns false if it could not be saved.
+     */
+    suspend fun syncSetupPhrase(wanted: String?): Boolean {
+        if (wanted == savedPhraseText) return true
+        return try {
+            val previousId = savedPhraseId
+            savedPhraseId = withContext(Dispatchers.Default) {
+                val phrases = checkNotNull(phraseUseCase)
+                val previous = previousId?.let { id -> phrases.list().firstOrNull { it.id == id } }
+                when {
+                    wanted == null -> previous?.let { phrases.delete(it.id) }.let { null }
+                    previous != null -> phrases.update(previous.copy(text = wanted)).id
+                    else -> phrases.add(Phrase(id = "", text = wanted, createdAt = 0)).id
+                }
+            }
+            savedPhraseText = wanted
+            true
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            OperationalLogger.warn("welcome.complete", "phrase_save_failed", exceptionClass = failure.loggingClassName())
+            false
+        }
+    }
+
     /** Leaves reopened setup, stopping a voice preview first so it does not play on. */
     fun leave() {
         val exit = onExit ?: return
@@ -277,13 +313,15 @@ fun WelcomeScreen(
                 onPop = ::pop,
                 onFinishSection = ::finishSection,
                 onChange = ::change,
-                onFinish = { onComplete(choices) },
+                onFinish = { syncSetupPhrase(choices.phraseToSave) && onComplete(choices) },
                 onWorkspaceChosen = {
-                    featureUsageReporter?.reportEvent(
-                        FeatureUsageEvents.STARTUP_MODE_SELECTED,
-                        "mode" to choices.startupMode.name.lowercase()
-                    )
-                    finishSection(WelcomeStep.Privacy)
+                    if (path.last() == WelcomeStep.Workspace) {
+                        featureUsageReporter?.reportEvent(
+                            FeatureUsageEvents.STARTUP_MODE_SELECTED,
+                            "mode" to choices.startupMode.name.lowercase()
+                        )
+                        finishSection(WelcomeStep.Workspace, WelcomeStep.Privacy)
+                    }
                 },
             )
         }
@@ -305,7 +343,7 @@ private fun WelcomeStepContent(
     onUseEngine: (TtsEngine, WelcomeStep) -> Unit,
     onAdvance: (from: WelcomeStep, to: WelcomeStep) -> Unit,
     onPop: () -> Unit,
-    onFinishSection: (WelcomeStep) -> Unit,
+    onFinishSection: (from: WelcomeStep, next: WelcomeStep) -> Unit,
     onChange: (WelcomeStep) -> Unit,
     onFinish: suspend () -> Boolean,
     onWorkspaceChosen: () -> Unit,
@@ -357,7 +395,7 @@ private fun WelcomeStepContent(
             initialPhraseToSave = choices.phraseToSave,
             onNext = { phraseToSave ->
                 onChoicesChange(choices.copy(phraseToSave = phraseToSave))
-                onFinishSection(WelcomeStep.Workspace)
+                onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace)
             },
             onBack = onPop,
         )
@@ -371,7 +409,7 @@ private fun WelcomeStepContent(
             choices = choices,
             onChoicesChange = onChoicesChange,
             onBack = onPop,
-            onContinue = { onFinishSection(WelcomeStep.Review) },
+            onContinue = { onFinishSection(WelcomeStep.Privacy, WelcomeStep.Review) },
         )
         WelcomeStep.Review -> ReviewPage(
             choices = choices,

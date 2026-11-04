@@ -701,4 +701,5 @@
     <string name="welcome_review_speech_online">Sendes online til %1$s</string>
     <string name="welcome_review_loading">Indlæser</string>
     <string name="welcome_reenter_key">Indtast nøglen igen</string>
+    <string name="test_voice_failed_cloud">Stemmen kunne ikke afspilles. Tjek din internetforbindelse, eller gå tilbage til stemmelisten og vælg Indtast nøglen igen.</string>
 </resources>

@@ -138,6 +138,8 @@ internal class VoiceSelectionViewModel(
     }
 
     private fun load() {
+        // A choice still saving when the page was left must not advance the next visit.
+        while (mutableEvents.tryReceive().isSuccess) Unit
         loadJob?.cancel()
         mutableState.value = VoiceSelectionUiState.Loading
         loadJob = viewModelScope.launch {

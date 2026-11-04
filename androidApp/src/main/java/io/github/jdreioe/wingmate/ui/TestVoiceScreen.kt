@@ -242,7 +242,8 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
             if (playbackFailed) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    stringResource(R.string.test_voice_failed),
+                    // A cloud voice usually fails because of the connection or the saved key.
+                    stringResource(if (engine == TtsEngine.SYSTEM) R.string.test_voice_failed else R.string.test_voice_failed_cloud),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -296,7 +297,10 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                         // Stop any ongoing speech before proceeding
                         scope.launch {
                             try {
-                                    speechService.stop()
+                                speechService.stop()
+                            } catch (e: CancellationException) {
+                                // The page has left; a cancelled tap must not move setup on again.
+                                throw e
                             } catch (e: Exception) {
                                 OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                             }

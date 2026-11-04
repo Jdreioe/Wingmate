@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -14,9 +15,7 @@ import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.ui.WelcomeChoices
 import io.github.jdreioe.wingmate.ui.WelcomeScreen
-import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.domain.OperationalLogger
-import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.BoardSetManagerRoot
@@ -34,7 +33,50 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 
-enum class Screen { Welcome, Phrases, BoardSets }
+/** Why setup is shown: decides whether it can be left and what its Start page confirms. */
+enum class WelcomeEntry {
+    /** First run, or an unfinished setup; it cannot be left. */
+    Required,
+    /** Opened again from a workspace; it can be left at any time. */
+    Reopened,
+    /** A restored backup still needs setup; Start confirms the restore. */
+    AfterRestore,
+}
+
+/** What App shows. Setup carries its entry, so no separate flags can disagree with it. */
+sealed interface Screen {
+    val analyticsName: String
+
+    data class Welcome(val entry: WelcomeEntry) : Screen {
+        override val analyticsName get() = "Welcome"
+    }
+    data object Phrases : Screen {
+        override val analyticsName get() = "Phrases"
+    }
+    data object BoardSets : Screen {
+        override val analyticsName get() = "BoardSets"
+    }
+}
+
+/** Keeps the shown screen across activity recreation (e.g. a font size change). */
+private val screenSaver = Saver<Screen?, String>(
+    save = { screen ->
+        when (screen) {
+            is Screen.Welcome -> "Welcome:${screen.entry.name}"
+            Screen.Phrases -> "Phrases"
+            Screen.BoardSets -> "BoardSets"
+            null -> ""
+        }
+    },
+    restore = { saved ->
+        when {
+            saved.startsWith("Welcome:") -> Screen.Welcome(WelcomeEntry.valueOf(saved.removePrefix("Welcome:")))
+            saved == "Phrases" -> Screen.Phrases
+            saved == "BoardSets" -> Screen.BoardSets
+            else -> null
+        }
+    },
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +84,6 @@ fun App() {
     val settingsRepository = koinInject<SettingsRepository>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val voiceUseCase = koinInject<VoiceUseCase>()
-    val phraseUseCase = koinInject<PhraseUseCase>()
     val backupManager = koinInject<CompleteBackupManager>()
     val settingsStateManager = koinInject<SettingsStateManager>()
     val communicationSession = koinInject<CommunicationSession>()
@@ -55,15 +96,9 @@ fun App() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            // True while setup was opened from a workspace; only then may it be left unfinished.
-            var welcomeReopened by rememberSaveable { mutableStateOf(false) }
-            // The setup Phrase already added in this setup, so retrying Review cannot add it twice.
-            var savedSetupPhraseId by rememberSaveable { mutableStateOf<String?>(null) }
-            var savedSetupPhraseText by rememberSaveable { mutableStateOf<String?>(null) }
-            // Saveable with the reopen flag, so recreation (e.g. a font size change) keeps
-            // the Communicator where they were instead of re-routing from startup.
-            var currentScreen by rememberSaveable { mutableStateOf<Screen?>(null) }
-            var restoredIntoSetup by rememberSaveable { mutableStateOf(false) }
+            // Saveable, so recreation keeps the Communicator where they were instead of
+            // re-routing from startup.
+            var currentScreen by rememberSaveable(stateSaver = screenSaver) { mutableStateOf<Screen?>(null) }
             // The restore already routed; recreation must not route it again.
             var handledRestoreRevision by rememberSaveable { mutableLongStateOf(0L) }
             var startupLoadState by remember { mutableStateOf<StartupLoadState>(StartupLoadState.Loading) }
@@ -77,34 +112,11 @@ fun App() {
 
             /**
              * Saves setup choices and opens the chosen workspace. Returns false, leaving the
-             * Communicator on Review with their choices intact, if anything could not be saved.
-             * The Phrase is saved first so setup only counts as finished once it exists; a retry
-             * skips a Phrase already added and repeats the idempotent settings write.
+             * Communicator on Review with their choices intact, if the settings could not be
+             * saved. The write is idempotent, so a retry is safe. Setup saves its Phrase first.
              */
             suspend fun completeWelcomeAndNavigate(choices: WelcomeChoices): Boolean {
                 val mode = choices.startupMode
-                // Brings the Phrase in line with Review: a retry after a failed finish edits or
-                // removes the Phrase it already added instead of adding another.
-                val wanted = choices.phraseToSave
-                if (wanted != savedSetupPhraseText) {
-                    try {
-                        val previousId = savedSetupPhraseId
-                        savedSetupPhraseId = withContext(Dispatchers.Default) {
-                            val previous = previousId?.let { id -> phraseUseCase.list().firstOrNull { it.id == id } }
-                            when {
-                                wanted == null -> previous?.let { phraseUseCase.delete(it.id) }.let { null }
-                                previous != null -> phraseUseCase.update(previous.copy(text = wanted)).id
-                                else -> phraseUseCase.add(Phrase(id = "", text = wanted, createdAt = 0)).id
-                            }
-                        }
-                        savedSetupPhraseText = wanted
-                    } catch (failure: CancellationException) {
-                        throw failure
-                    } catch (failure: Exception) {
-                        OperationalLogger.warn("welcome.complete", "phrase_save_failed", exceptionClass = failure.loggingClassName())
-                        return false
-                    }
-                }
                 val savedSettings = try {
                     withContext(Dispatchers.Default) {
                         // Read fresh: the voice pages saved engine and language during setup.
@@ -124,10 +136,6 @@ fun App() {
                     return false
                 }
                 settingsStateManager.applyLoadedSettings(savedSettings)
-                savedSetupPhraseId = null
-                savedSetupPhraseText = null
-                welcomeReopened = false
-                restoredIntoSetup = false
                 startupBoardSetId = null
                 featureUsageReporter.setEnabled(choices.featureUsageReportingEnabled)
                 if (choices.featureUsageReportingEnabled) {
@@ -141,7 +149,7 @@ fun App() {
                 currentScreen = target
                 featureUsageReporter.reportEvent(
                     FeatureUsageEvents.WELCOME_COMPLETED,
-                    "target" to target.name,
+                    "target" to target.analyticsName,
                     "startup_mode" to mode.name.lowercase()
                 )
                 return true
@@ -149,9 +157,7 @@ fun App() {
 
             fun showWelcomeFlow() {
                 startupBoardSetId = null
-                welcomeReopened = true
-                restoredIntoSetup = false
-                currentScreen = Screen.Welcome
+                currentScreen = Screen.Welcome(WelcomeEntry.Reopened)
                 featureUsageReporter.reportEvent(FeatureUsageEvents.WELCOME_REOPENED)
             }
 
@@ -167,7 +173,11 @@ fun App() {
                     val hasSelectedVoice = loaded.selectedVoice != null
                     if (currentScreen == null) {
                         startupBoardSetId = settings.startupBoardSetId
-                        currentScreen = if (needsWelcome(settings, hasSelectedVoice)) Screen.Welcome else routeFor(settings.startupMode)
+                        currentScreen = if (needsWelcome(settings, hasSelectedVoice)) {
+                            Screen.Welcome(WelcomeEntry.Required)
+                        } else {
+                            routeFor(settings.startupMode)
+                        }
                     }
                     featureUsageReporter.reportEvent(
                         FeatureUsageEvents.APP_STARTED,
@@ -192,10 +202,12 @@ fun App() {
                 if (loaded is StartupLoadState.Ready) {
                     settingsStateManager.applyLoadedSettings(loaded.settings)
                     startupBoardSetId = loaded.settings.startupBoardSetId
-                    welcomeReopened = false
                     featureUsageReporter.setEnabled(loaded.settings.featureUsageReportingEnabled)
-                    restoredIntoSetup = needsWelcome(loaded.settings, loaded.selectedVoice != null)
-                    currentScreen = if (restoredIntoSetup) Screen.Welcome else routeFor(loaded.settings.startupMode)
+                    currentScreen = if (needsWelcome(loaded.settings, loaded.selectedVoice != null)) {
+                        Screen.Welcome(WelcomeEntry.AfterRestore)
+                    } else {
+                        routeFor(loaded.settings.startupMode)
+                    }
                 }
             }
 
@@ -203,7 +215,7 @@ fun App() {
                 val screen = currentScreen ?: return@LaunchedEffect
                 featureUsageReporter.reportEvent(
                     FeatureUsageEvents.SCREEN_VIEW,
-                    "screen" to screen.name
+                    "screen" to screen.analyticsName
                 )
             }
 
@@ -246,17 +258,14 @@ fun App() {
                                         )
                                     }
                                 }
-                                else -> when (currentScreen) {
-                                Screen.Welcome -> {
+                                else -> when (val screen = currentScreen) {
+                                is Screen.Welcome -> {
                                     WelcomeScreen(
                                         initialChoices = remember { WelcomeChoices.fromSettings(settingsStateManager.getCurrentSettings()) },
                                         onComplete = ::completeWelcomeAndNavigate,
-                                        restoredFromBackup = restoredIntoSetup,
-                                        onExit = if (welcomeReopened) {
-                                            {
-                                                welcomeReopened = false
-                                                currentScreen = routeFor(settingsStateManager.getCurrentSettings().startupMode)
-                                            }
+                                        restoredFromBackup = screen.entry == WelcomeEntry.AfterRestore,
+                                        onExit = if (screen.entry == WelcomeEntry.Reopened) {
+                                            { currentScreen = routeFor(settingsStateManager.getCurrentSettings().startupMode) }
                                         } else {
                                             null
                                         },
