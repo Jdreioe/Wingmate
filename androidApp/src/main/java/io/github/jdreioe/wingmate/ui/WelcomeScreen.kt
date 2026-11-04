@@ -412,9 +412,10 @@ private fun WelcomeStepContent(
             secondaryLabel = voiceEngine?.takeIf { it != TtsEngine.SYSTEM }
                 ?.let { stringResource(R.string.welcome_reenter_key) },
             onSecondary = { voiceEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
-            // Keeping the voice already in use must not mean finding it again in a long list.
-            subtitle = keepableVoice?.let { stringResource(R.string.welcome_current_voice, it) },
-            primaryLabel = if (keepableVoice != null) stringResource(R.string.welcome_keep_voice) else null,
+            // A voice is already selected: name it, so Continue (which keeps it) needs no search
+            // through a long list. Tapping another voice chooses that one instead.
+            subtitle = keepableVoice?.let { stringResource(R.string.welcome_selected_voice, it) },
+            primaryLabel = if (keepableVoice != null) stringResource(R.string.common_continue) else null,
             onPrimary = { onAdvance(WelcomeStep.Voice, WelcomeStep.TestVoice) },
         ) {
             VoiceSelectionPage(

@@ -696,7 +696,6 @@
     <string name="welcome_voice_title">Choose a voice</string>
     <string name="welcome_language_title">Choose a language</string>
     <string name="welcome_review_language">Language</string>
-    <string name="welcome_keep_voice">Keep current voice</string>
     <string name="welcome_restoring">Restoring…</string>
     <string name="welcome_test_title">Hear your voice</string>
     <string name="welcome_test_sentence">Sentence to try</string>
@@ -706,7 +705,7 @@
     <string name="voice_preview_play">Play %1$s</string>
     <string name="voice_preview_stop">Stop %1$s</string>
     <string name="voice_preview_failed">This voice could not play.</string>
-    <string name="welcome_current_voice">Current voice: %1$s</string>
+    <string name="welcome_selected_voice">Selected: %1$s. Tap another voice to change it.</string>
     <string name="welcome_test_rate">Speed %1$.1f×</string>
     <string name="welcome_test_rate_failed">The speed could not be saved. Tap Continue to try again.</string>
     <string name="welcome_test_rate_value">%1$.1f×</string>
