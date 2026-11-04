@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.FilterQuality
 import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
 import io.github.jdreioe.wingmate.domain.obf.backgroundImage
@@ -59,6 +60,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -1271,13 +1273,23 @@ internal fun SpanningBoardGrid(
             }
             if (showHandle) {
                 key("resize-handle") {
+                    // A filled grip with a resize glyph, the size of a fingertip, so the
+                    // Supporter can see there is something to drag (also Size in the editor).
                     Box(modifier = handleModifier, contentAlignment = Alignment.Center) {
                         Box(
                             modifier = Modifier
-                                .size(20.dp)
-                                .border(2.dp, selectionColor, RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.surface)
-                        )
+                                .size(36.dp)
+                                .background(selectionColor, CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.OpenInFull,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f },
+                            )
+                        }
                     }
                 }
             }

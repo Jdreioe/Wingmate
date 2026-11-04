@@ -716,4 +716,9 @@
     <string name="typing_hide_keyboard">Hide keyboard</string>
     <string name="typing_panel_earlier">Earlier actions</string>
     <string name="typing_panel_more">More actions</string>
+    <string name="board_dialog_size">Size</string>
+    <string name="board_dialog_size_width">Width</string>
+    <string name="board_dialog_size_height">Height</string>
+    <string name="board_dialog_size_hint">Changes the space this Button takes on the Page. You can also drag the corner of a selected Button.</string>
+    <string name="board_dialog_size_no_room">To make it bigger, empty a cell to its right or below it, or add rows or columns with Resize page.</string>
 </resources>
