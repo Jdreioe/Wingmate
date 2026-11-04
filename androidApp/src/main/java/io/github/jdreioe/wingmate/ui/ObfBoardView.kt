@@ -1005,7 +1005,7 @@ internal fun SpanningBoardGrid(
             y = ((to.row - from.row) * (cellHeight + verticalGap)).roundToInt(),
         )
     }
-    val reorderModifier = if (reorder != null && reorder.gesturesEnabled && movable.isNotEmpty()) {
+    val reorderModifier = if (reorder != null && movable.isNotEmpty()) {
         Modifier.pointerInput(movable, reorder) {
             val slop = viewConfiguration.touchSlop
             awaitEachGesture {
@@ -1013,6 +1013,20 @@ internal fun SpanningBoardGrid(
                 // Button and the scroller until the press becomes a long press.
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 val from = movableIndexAt(down.position) ?: return@awaitEachGesture
+                // A right click opens the menu at once, like a long press; it never reorders.
+                // It also works when long presses are kept for hold-to-select.
+                if (isSecondaryPress()) {
+                    val pressed = movable[from].button ?: return@awaitEachGesture
+                    down.consume()
+                    menuButtonId = pressed.id
+                    liftedButtonId = pressed.id
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                    return@awaitEachGesture
+                }
+                if (!reorder.gesturesEnabled) return@awaitEachGesture
                 val interrupted = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                     while (true) {
                         val change = awaitPointerEvent(PointerEventPass.Initial).changes
@@ -1695,6 +1709,8 @@ internal fun ObfButtonContent(
                 else if (button.hidden && isEditMode) stateDescription = hiddenDescription
                 if (cellActions.isNotEmpty()) customActions = cellActions
             }
+            // Right click does what a long press does, before hold or touch-down selection sees it.
+            .onSecondaryClick(enabled && onLongClick != null) { onLongClick?.invoke() }
             .let { baseModifier ->
                 if (!enabled) baseModifier else baseModifier.pointerInput(Unit) {
                 awaitPointerEventScope {

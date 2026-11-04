@@ -336,6 +336,8 @@ private fun TypingPageNavigation(
                     else onSelectionChanged(TypingPageSelection.Category(category))
                 },
                 label = { Text(category.name ?: stringResource(R.string.category_all)) },
+                // Right click opens the menu directly, open Category or not.
+                modifier = Modifier.onSecondaryClick(enabled = true) { onOpenCategoryMenu(category) },
             )
         }
         if (showHistory) {

@@ -20,6 +20,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -101,6 +103,59 @@ class ObfBoardContentTest {
             assertEquals(listOf("yes", "food"), clicked)
             assertEquals(listOf("Yes", "Food"), activated)
         }
+    }
+
+    @Test
+    fun rightClickDoesWhatALongPressDoesWithoutActivating() {
+        val clicked = mutableListOf<String>()
+        val longClicked = mutableListOf<String>()
+        var touchDown by mutableStateOf(false)
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = ObfBoardUiState(board = board, settings = Settings(selectOnTouchDown = touchDown)),
+                    onButtonClick = { clicked += it.id },
+                    onButtonLongClick = { longClicked += it.id },
+                )
+            }
+        }
+
+        // Touch-down selection fires on contact; a right click must still open the menu instead.
+        for (mode in listOf(false, true)) {
+            composeRule.runOnIdle {
+                touchDown = mode
+                clicked.clear()
+                longClicked.clear()
+            }
+            composeRule.onNodeWithText("Yes").performMouseInput { rightClick() }
+            composeRule.runOnIdle {
+                assertEquals("touchDown=$mode", listOf("yes"), longClicked)
+                assertEquals("touchDown=$mode", emptyList<String>(), clicked)
+            }
+        }
+    }
+
+    @Test
+    fun rightClickOpensTheReorderMenuEvenWhenLongPressesSelect() {
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = ObfBoardUiState(board = board, settings = Settings(holdToSelectMillis = 800)),
+                    onButtonClick = {},
+                    reorder = BoardReorder(
+                        canMove = { true },
+                        onMove = { _, _ -> },
+                        // As the Typing Screen does: hold-to-select keeps long presses.
+                        gesturesEnabled = false,
+                        menu = { button, _ -> androidx.compose.material3.Text("Menu for ${button.id}") },
+                    ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("No").performMouseInput { rightClick() }
+
+        composeRule.onNodeWithText("Menu for no").assertIsDisplayed()
     }
 
     @Test

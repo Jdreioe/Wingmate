@@ -12,7 +12,7 @@ import androidx.compose.ui.node.ModifierNodeElement
  * Selects on first touch instead of on release (#110), once per gesture whatever the
  * fingers do next. The rest of the gesture is consumed, so a wrapped control's own
  * click never fires a second time and nothing underneath scrolls. Screen readers keep
- * using the control's click action.
+ * using the control's click action. A right click is left to [onSecondaryClick].
  */
 internal fun Modifier.selectOnTouchDown(enabled: Boolean, onSelect: () -> Unit): Modifier =
     if (enabled) this then TouchDownSelectionElement(onSelect) else this
@@ -29,7 +29,10 @@ private class TouchDownSelectionNode(var onSelect: () -> Unit) : DelegatingNode(
         delegate(SuspendingPointerInputModifierNode {
             awaitEachGesture {
                 // Initial pass: claim the touch before the wrapped control or a scroll container sees it.
-                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).consume()
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                // A right click opens the control's menu (onSecondaryClick) instead of selecting.
+                if (isSecondaryPress()) return@awaitEachGesture
+                down.consume()
                 onSelect()
                 do {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
