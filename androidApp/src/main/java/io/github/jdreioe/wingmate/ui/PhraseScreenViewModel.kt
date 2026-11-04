@@ -84,10 +84,7 @@ internal data class PhraseScreenState(
     val secondaryRanges: List<TextRange> get() = communication.activeMessage.languageSpans
         .filter { it.languageTag == settings.secondaryLanguage }
         .map { TextRange(it.range.start, it.range.endExclusive) }
-    val hasSecondaryLanguage: Boolean get() = settings.secondaryLanguage.isNotBlank() &&
-        settings.secondaryLanguage != settings.primaryLanguage &&
-        voice?.supportedLanguages.orEmpty().distinct().size > 1 &&
-        settings.secondaryLanguage in voice?.supportedLanguages.orEmpty()
+    val hasSecondaryLanguage: Boolean get() = settings.secondaryLanguageFor(voice) != null
 }
 
 internal sealed interface PhraseScreenAction {

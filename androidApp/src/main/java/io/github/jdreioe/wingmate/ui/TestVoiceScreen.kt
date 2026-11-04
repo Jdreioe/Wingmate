@@ -30,12 +30,13 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.semantics.stateDescription
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -44,8 +45,12 @@ import androidx.compose.ui.res.stringResource
 import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
-/** A speed save started when this page last left; the next instance waits for it. */
-private var pendingLeaveRateSave: Job? = null
+/**
+ * The voice with a speed this page had not confirmed saved when it last left (e.g. after a
+ * font-size change recreated it). The next instance shows that speed at once and saves it
+ * again, so a change is never silently lost and the page never waits on the old save.
+ */
+private var unsavedRateVoice: Voice? = null
 
 /**
  * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
@@ -86,25 +91,30 @@ fun TestVoiceScreen(
     val scope = rememberCoroutineScope()
 
     // Speed is saved once it settles, not per notch: each save is a full voice selection
-    // (analytics and, for cloud voices, re-caching Screens audio). Pending saves are
-    // flushed before leaving the page.
+    // (analytics and, for cloud voices, re-caching Screens audio). It stays "dirty" until a
+    // save succeeds; saves run one at a time on the app's scope, so leaving cannot cut one off.
+    val appScope = koinInject<CoroutineScope>()
+    var rateDirty by remember { mutableStateOf(false) }
     var rateSaveJob by remember { mutableStateOf<Job?>(null) }
-    /** Saves the speed now; false (with the error shown) if it could not be saved. */
+    var rateSaving by remember { mutableStateOf<Deferred<Boolean>?>(null) }
+    /** Saves the speed now, or joins a save already running; false (error shown) if it failed. */
     suspend fun saveRateNow(): Boolean {
+        rateSaving?.let { return it.await() }
         val voice = selectedVoice ?: return true
-        rateSaveFailed = false
-        return try {
-            withContext(Dispatchers.IO) { voiceUseCase.select(voice) }
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = e.loggingClassName())
-            rateSaveFailed = true
-            false
+        val save = appScope.async(Dispatchers.IO) {
+            runCatching { voiceUseCase.select(voice) }
+                .onFailure { OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = it.loggingClassName()) }
+                .isSuccess
         }
+        rateSaving = save
+        val saved = try { save.await() } finally { rateSaving = null }
+        // A newer change made while saving keeps the speed dirty.
+        if (saved && selectedVoice == voice) rateDirty = false
+        rateSaveFailed = !saved
+        return saved
     }
     fun scheduleRateSave() {
+        rateDirty = true
         rateSaveJob?.cancel()
         rateSaveJob = scope.launch {
             delay(800)
@@ -112,21 +122,15 @@ fun TestVoiceScreen(
         }
     }
     /**
-     * Saves a speed still waiting to be saved, or one whose save failed; call before leaving
-     * the page. Returns false if it still could not be saved, so the page stays and says so.
+     * Saves a speed not yet saved; call before leaving the page. Repeated calls (a double tap
+     * on Continue) wait on the same save. Returns false if it could not be saved, so the page
+     * stays and says so.
      */
     suspend fun flushRate(): Boolean {
-        val pending = rateSaveJob
-        rateSaveJob = null
-        if (pending != null && pending.isActive) {
-            pending.cancelAndJoin()
-            return saveRateNow()
-        }
-        return if (rateSaveFailed) saveRateNow() else true
+        if (!rateDirty) return true
+        rateSaveJob?.cancel()
+        return saveRateNow()
     }
-    // Leaving another way (e.g. Leave setup) cancels this page's scope; a speed still waiting,
-    // or one whose save failed, is saved on the app's scope so it is not lost.
-    val appScope = koinInject<CoroutineScope>()
     DisposableEffect(Unit) {
         onDispose {
             // Leaving (Change language, recreation) must not leave a preview talking with no Stop.
@@ -140,14 +144,17 @@ fun TestVoiceScreen(
                     }
                 }
             }
-            if (rateSaveJob?.isActive == true || rateSaveFailed) {
-                val voice = selectedVoice
+            // Leaving another way (Leave setup, recreation) with a speed not yet saved: save it
+            // on the app's scope, and leave it for the next instance in case that fails.
+            val voice = selectedVoice
+            if (rateDirty && voice != null) {
                 rateSaveJob?.cancel()
-                if (voice != null) {
-                    pendingLeaveRateSave = appScope.launch(Dispatchers.IO) {
-                        runCatching { voiceUseCase.select(voice) }
-                            .onFailure { OperationalLogger.warn("voice_rate.save", "failed_on_leave", exceptionClass = it.loggingClassName()) }
-                    }
+                unsavedRateVoice = voice
+                appScope.launch(Dispatchers.IO) {
+                    val saved = runCatching { voiceUseCase.select(voice) }
+                        .onFailure { OperationalLogger.warn("voice_rate.save", "failed_on_leave", exceptionClass = it.loggingClassName()) }
+                        .isSuccess
+                    if (saved && unsavedRateVoice === voice) unsavedRateVoice = null
                 }
             }
         }
@@ -175,14 +182,21 @@ fun TestVoiceScreen(
         loading = true
         loadFailed = false
         try {
-            // A speed saved as the previous instance of this page left (e.g. rotation) must land
-            // before the voice is read, or the page would show and build on the old speed.
-            pendingLeaveRateSave?.join()
             val (voice, savedEngine) = withContext(Dispatchers.IO) {
                 voiceUseCase.selected() to settingsUseCase.get().ttsEngine
             }
-            selectedVoice = voice
             engine = savedEngine
+            // A speed the previous instance left unsaved (e.g. after a font-size change) is
+            // shown at once and saved again; if that fails, the error shows and Continue retries.
+            val unsaved = unsavedRateVoice?.takeIf { voice != null && it.name == voice.name }
+            unsavedRateVoice = null
+            if (voice != null && unsaved != null) {
+                selectedVoice = voice.copy(rate = unsaved.rate, rateForSSML = null)
+                rateDirty = true
+                scope.launch { saveRateNow() }
+            } else {
+                selectedVoice = voice
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -242,7 +256,7 @@ fun TestVoiceScreen(
                     )
                 }
             }
-            if ((selectedVoice?.supportedLanguages?.size ?: 0) > 1) {
+            if (selectedVoice.isMultilingual()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 SetupActionButton(
                     label = stringResource(R.string.welcome_change_language),

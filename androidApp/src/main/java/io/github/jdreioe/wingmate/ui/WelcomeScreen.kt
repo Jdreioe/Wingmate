@@ -1017,9 +1017,9 @@ private fun ReviewPage(
                     null -> unknown
                     else -> engine.cloudProviderName()?.let { sentOnlineTemplate.format(it) } ?: deviceEngine
                 }
-                val multilingual = (voice?.supportedLanguages?.size ?: 0) > 1
-                // Only what this voice can speak: a second language stored for an earlier voice is not shown.
-                val languages = settings?.let { if (multilingual) listOf(it.primaryLanguage, it.secondaryLanguage) else listOf(it.primaryLanguage) }
+                val multilingual = voice.isMultilingual()
+                // The same rule as Typing: only a second language this voice can actually speak.
+                val languages = settings?.let { listOfNotNull(it.primaryLanguage, it.secondaryLanguageFor(voice)) }
                     ?.filter { it.isNotBlank() }
                     ?.joinToString(" · ") { languageName(it) }
                     ?.ifBlank { null } ?: unknown
