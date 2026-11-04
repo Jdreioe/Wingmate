@@ -268,6 +268,19 @@ class QueuedCommunicationSessionTest {
     }
 
     @Test
+    fun `an unusable offline Piper voice falls back to the device voice`() = runTest {
+        val speech = RecordingSpeechService(failingEngines = setOf(TtsEngine.PIPER))
+        val session = session(speechService = speech, ttsEngine = TtsEngine.PIPER)
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(listOf(TtsEngine.PIPER, TtsEngine.SYSTEM), speech.engines)
+        assertEquals(CommunicationFailureKind.SpeechFallback, session.state.value.lastFailure?.kind)
+    }
+
+    @Test
     fun `when cloud and device voices both fail the message stays and nothing enters history`() = runTest {
         val history = FakeSaidTextRepository()
         val speech = RecordingSpeechService(

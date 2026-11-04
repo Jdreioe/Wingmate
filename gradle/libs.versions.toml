@@ -15,6 +15,7 @@ junit = "4.13.2"
 kotlin = "2.4.21"
 kotlinx-coroutines = "1.11.0"
 okio = "3.18.2"
+sherpa-onnx = "v1.13.8"
 
 koin = "4.2.2"
 ktor = "3.6.0"
@@ -31,6 +32,9 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 androidx-lifecycle-runtimeKtx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
 androidx-window = { module = "androidx.window:window", version.ref = "androidx-window" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+# Official sherpa-onnx Android AAR (JitPack mirror of the GitHub release, same SHA-256).
+# Stay on 1.x: 2.0 removed the bundled espeak-ng phonemizer that Piper voices need.
+sherpa-onnx = { module = "com.github.k2-fsa.sherpa-onnx:sherpa-onnx", version.ref = "sherpa-onnx" }
 
 # Koin DI
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }

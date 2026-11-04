@@ -32,6 +32,7 @@ import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
 import io.github.jdreioe.wingmate.domain.loggingClassName
+import io.github.jdreioe.wingmate.domain.piperVoiceKey
 import io.github.jdreioe.wingmate.infrastructure.AzureTtsClient
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -62,13 +63,15 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
 
 /**
- * Plays cloud speech (Azure or Google) through MediaPlayer and device speech through platform
- * TextToSpeech. Communication-session requests speak exactly the requested engine and let the
- * session own fallback and History; the remaining legacy entry points fall back themselves.
+ * Plays cloud speech (Azure, Google, ElevenLabs) and downloaded Piper voices through MediaPlayer
+ * and device speech through platform TextToSpeech. Communication-session requests speak exactly
+ * the requested engine and let the session own fallback and History; the remaining legacy entry
+ * points fall back themselves.
  */
 class AndroidSpeechService(
     private val context: Context,
     private val googleApiRequestHeaders: GoogleApiRequestHeaders,
+    private val piper: AndroidPiperSynthesizer,
 ) : SpeechService {
     private companion object {
         const val DEFAULT_AZURE_VOICE_NAME = "en-US-JennyNeural"
@@ -478,7 +481,8 @@ class AndroidSpeechService(
         }
         val settings = settingsRepo?.let { runCatching { it.get() }.getOrNull() }
         val engine = settings?.ttsEngine ?: TtsEngine.SYSTEM
-        if (engine == TtsEngine.SYSTEM) return false
+        // Device and Piper speech are synthesized on demand without a network.
+        if (engine == TtsEngine.SYSTEM || engine == TtsEngine.PIPER) return false
         if (!isOnline()) {
             return false
         }
@@ -560,7 +564,11 @@ class AndroidSpeechService(
             return
         }
         val played = try {
-            playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, uiSettings)
+            if (engine == TtsEngine.PIPER) {
+                playPiper(requestId, segments, voice, rate, cacheAudio)
+            } else {
+                playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, uiSettings)
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
@@ -588,10 +596,10 @@ class AndroidSpeechService(
         engine: TtsEngine,
     ) {
         rememberPlaybackContext(segments, voice, pitch, rate)
-        if (engine == TtsEngine.SYSTEM) {
-            playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
-        } else {
-            playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, currentSettings())
+        when (engine) {
+            TtsEngine.SYSTEM -> playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
+            TtsEngine.PIPER -> playPiper(requestId, segments, voice, rate, cacheAudio)
+            else -> playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, currentSettings())
         }
     }
 
@@ -752,6 +760,45 @@ class AndroidSpeechService(
                     OperationalLogger.warn("speech.azure_synthesis", "failed", exceptionClass = t.loggingClassName())
                 }
                 throw t
+            }
+        }
+    }
+
+    /**
+     * Synthesizes [segments] with the selected downloaded Piper voice and plays the WAV.
+     * Throws when no Piper voice is selected or its files are missing or damaged, so the
+     * caller can fall back. Piper has no pitch control and reads plain text only.
+     */
+    private suspend fun playPiper(
+        requestId: Long,
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        rate: Double?,
+        cacheAudio: Boolean,
+    ): CloudPlayback {
+        val key = voice?.piperVoiceKey ?: throw PiperVoiceUnavailableException("No Piper voice is selected")
+        val spokenSegments = SpeechTextProcessor.segmentsFor(TtsEngine.PIPER, segments)
+            .map { it.copy(text = it.text.replace(Regex("<[^>]+>"), "")) }
+        return withContext(Dispatchers.IO) {
+            try {
+                val root = if (cacheAudio) context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir else context.cacheDir
+                val directory = File(root, "wingmate/audio").apply { mkdirs() }
+                // Pauses are part of the audio, so they are part of its identity.
+                val content = segments.joinToString("") { "${it.text}\u001f${it.pauseDurationMs}\u001e" }
+                val cacheKey = SpeechCacheIdentity.speech(content, TtsEngine.PIPER, voice, null, rate, emptyList())
+                val file = File(directory, if (cacheAudio) "tts_v2_$cacheKey.wav" else "tts_session_${System.nanoTime()}.wav")
+                if (!cacheAudio || file.length() == 0L) {
+                    val pending = File(directory, "${file.name}.tmp")
+                    piper.synthesize(key, spokenSegments, rate, pending)
+                    check(pending.renameTo(file)) { "Piper audio could not be stored" }
+                }
+                startPlayback(requestId, file, voice, deleteAfterPlayback = !cacheAudio)
+                CloudPlayback(voice, file.absolutePath.takeIf { cacheAudio })
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                OperationalLogger.warn("speech.piper_synthesis", "failed", exceptionClass = failure.loggingClassName())
+                throw failure
             }
         }
     }

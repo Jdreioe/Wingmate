@@ -44,6 +44,8 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 implementation("androidx.core:core-ktx:1.19.1")
                 implementation("org.apache.commons:commons-compress:1.28.0")
+                // On-device Piper speech: ONNX Runtime plus the espeak-ng phonemizer.
+                implementation(libs.sherpa.onnx)
             }
         }
 

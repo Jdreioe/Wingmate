@@ -8,6 +8,7 @@ enum class VoiceProvider {
     AZURE,
     GOOGLE,
     ELEVENLABS,
+    PIPER,
 }
 
 @Serializable
@@ -38,7 +39,7 @@ data class Voice(
     val rate: Double? = null,
     val pitchForSSML: String? = null,
     val rateForSSML: String? = null,
-    /** Cloud catalog owner. Nullable so catalogs saved by older Wingmate versions remain readable. */
+    /** Voice source. Nullable so catalogs saved by older Wingmate versions remain readable. */
     val provider: VoiceProvider? = null,
     /** Google synthesis tier, when this is a Google Cloud voice. */
     val googleModel: GoogleVoiceModel? = null,
@@ -87,6 +88,7 @@ fun Voice.resolvedGoogleModel(): GoogleVoiceModel? {
 
 fun List<Voice>.forTtsEngine(engine: TtsEngine): List<Voice> = when (engine) {
     TtsEngine.SYSTEM -> emptyList()
+    TtsEngine.PIPER -> filter { it.resolvedProvider() == VoiceProvider.PIPER }
     TtsEngine.ELEVENLABS -> filter { it.resolvedProvider() == VoiceProvider.ELEVENLABS }
     TtsEngine.GOOGLE_CLOUD -> filter { it.resolvedProvider() == VoiceProvider.GOOGLE }
     TtsEngine.AZURE_USER_RESOURCE,

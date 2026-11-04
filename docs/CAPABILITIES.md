@@ -50,7 +50,9 @@ differ by platform.
 
 Wingmate supports operating-system voices and, on Android and iOS,
 user-configured Azure Neural Voices and
-[Google Cloud Text-to-Speech](google-cloud-tts.md) voices. Communicators can
+[Google Cloud Text-to-Speech](google-cloud-tts.md) voices. Android can also
+download [Piper voices](piper-voices.md) that speak offline; iOS and desktop do
+not offer Piper yet. Communicators can
 select a voice, primary language, optional secondary language, and speech
 rate; use a pronunciation dictionary; and choose immediate speech or silent
 composition until the complete Message is activated.

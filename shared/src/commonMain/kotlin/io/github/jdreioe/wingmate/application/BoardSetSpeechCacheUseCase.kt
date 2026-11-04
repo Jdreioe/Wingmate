@@ -79,5 +79,7 @@ class BoardSetSpeechCacheUseCase(
         cacheAll()
     }
 
-    private suspend fun usesCloudTts(): Boolean = settingsRepository.get().ttsEngine != TtsEngine.SYSTEM
+    // Device and Piper voices synthesize on demand, so only cloud engines are pre-cached.
+    private suspend fun usesCloudTts(): Boolean =
+        settingsRepository.get().ttsEngine.let { it != TtsEngine.SYSTEM && it != TtsEngine.PIPER }
 }

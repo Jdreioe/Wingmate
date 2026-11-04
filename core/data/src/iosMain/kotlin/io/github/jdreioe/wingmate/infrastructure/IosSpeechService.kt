@@ -299,7 +299,8 @@ class IosSpeechService(
                 val ssml = AzureTtsClient.generateSsml(text, voice.forAzureProvider(), dict)
                 AzureTtsClient.synthesize(httpClient, ssml, config)
             }
-            TtsEngine.SYSTEM -> null
+            // Piper is Android-only for now; returning null lets the session fall back to the device voice.
+            TtsEngine.SYSTEM, TtsEngine.PIPER -> null
         }
     }
 
@@ -326,7 +327,8 @@ class IosSpeechService(
                 val ssml = AzureTtsClient.generateSsml(segments, voice.forAzureProvider(), dict)
                 AzureTtsClient.synthesize(httpClient, ssml, config)
             }
-            TtsEngine.SYSTEM -> null
+            // Piper is Android-only for now; returning null lets the session fall back to the device voice.
+            TtsEngine.SYSTEM, TtsEngine.PIPER -> null
         }
     }
 
@@ -358,7 +360,7 @@ class IosSpeechService(
             -> if (isAzureCloudVoice()) this else {
                 Voice(name = "en-US-JennyNeural", primaryLanguage = language, selectedLanguage = language)
             }
-            TtsEngine.SYSTEM -> this
+            TtsEngine.SYSTEM, TtsEngine.PIPER -> this
         }
     }
 

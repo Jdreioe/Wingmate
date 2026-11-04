@@ -179,7 +179,12 @@ internal class VoiceSelectionViewModel(
             mutableState.value = try {
                 val settings = operations.settings()
                 val engine = engineToSave ?: settings.ttsEngine
-                val voices = if (engine == TtsEngine.SYSTEM) operations.systemVoices() else cloudVoices(engine)
+                val voices = when (engine) {
+                    TtsEngine.SYSTEM -> operations.systemVoices()
+                    // Piper voices are listed by PiperVoicesPage from the downloadable catalog.
+                    TtsEngine.PIPER -> emptyList()
+                    else -> cloudVoices(engine)
+                }
                 VoiceSelectionUiState.Ready(
                     engine = engine,
                     voices = voices,

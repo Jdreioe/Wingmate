@@ -1153,6 +1153,7 @@ private fun SpeechSection(
             subtitle = stringResource(
                 when (ttsEngine) {
                     TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                    TtsEngine.PIPER -> R.string.piper_title
                     TtsEngine.ELEVENLABS -> R.string.elevenlabs_title
                     TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
                     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
@@ -1176,10 +1177,27 @@ private fun SpeechSection(
                     label = { Text(stringResource(R.string.ui_settings_google)) },
                 )
                 FilterChip(
+                    selected = ttsEngine == TtsEngine.PIPER,
+                    onClick = { onTtsEngineChange(TtsEngine.PIPER) },
+                    label = { Text(stringResource(R.string.piper_title)) },
+                )
+                FilterChip(
                     selected = ttsEngine == TtsEngine.SYSTEM,
                     onClick = { onTtsEngineChange(TtsEngine.SYSTEM) },
                     label = { Text(stringResource(R.string.ui_settings_system)) }
                 )
+            }
+        }
+        if (ttsEngine == TtsEngine.PIPER) {
+            SettingsGroupDivider()
+            Column(
+                modifier = Modifier.padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(stringResource(R.string.piper_description))
+                Button(onClick = onOpenVoiceSelection, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.piper_choose_voice))
+                }
             }
         }
         if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
@@ -1962,7 +1980,11 @@ internal fun VoiceSelectionPage(
             }
         }
     }
-    VoiceSelectionContent(state = state, onAction = viewModel::onAction, modifier = modifier)
+    if ((state as? VoiceSelectionUiState.Ready)?.engine == TtsEngine.PIPER) {
+        PiperVoicesPage(onVoiceChosen = { currentOnChosen() }, modifier = modifier)
+    } else {
+        VoiceSelectionContent(state = state, onAction = viewModel::onAction, modifier = modifier)
+    }
 }
 
 @Composable

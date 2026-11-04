@@ -30,7 +30,7 @@
     <string name="common_retry">Retry</string>
     <string name="communication_storage_failed">Your Message could not be loaded or saved. Keep Wingmate open and retry.</string>
     <string name="communication_playback_failed">Speech could not finish. Your Message is still available; try speaking again.</string>
-    <string name="communication_speech_fallback">The cloud voice was unavailable, so your device voice spoke instead.</string>
+    <string name="communication_speech_fallback">The selected voice was unavailable, so your device voice spoke instead.</string>
     <string name="startup_load_failed">Wingmate could not load your settings. Your existing configuration has not been changed.</string>
     <string name="voice_load_failed">Voices could not be loaded. Check your connection or device voice settings, then retry.</string>
     <string name="voice_save_failed">The voice could not be saved. Your current communication setup was kept; tap the voice to retry.</string>
@@ -708,4 +708,33 @@
     <string name="welcome_review_speed">Speed %1$.1f×</string>
     <string name="ui_settings_azure_setup">Set up Azure</string>
     <string name="ui_settings_google_setup">Set up Google Cloud TTS</string>
+
+    <!-- Piper offline voices -->
+    <string name="piper_title">Piper (offline)</string>
+    <string name="piper_description">Natural voices that work without internet once downloaded.</string>
+    <string name="piper_choose_voice">Choose an offline voice</string>
+    <string name="piper_on_device">On this device</string>
+    <string name="piper_available">Available to download</string>
+    <string name="piper_none_for_language">No offline voices for this language.</string>
+    <string name="piper_details">%1$s · %2$s</string>
+    <string name="piper_licence">Licence: %1$s</string>
+    <string name="piper_first_download_note">Your first voice also downloads %1$s of shared speech data.</string>
+    <string name="piper_attribution">Voices by the Piper project, run with sherpa-onnx. Each voice shows the licence of its recordings.</string>
+    <string name="piper_download">Download</string>
+    <string name="piper_download_voice">Download %1$s</string>
+    <string name="piper_resume">Resume</string>
+    <string name="piper_try_again">Try again</string>
+    <string name="piper_use">Use</string>
+    <string name="piper_use_voice">Use %1$s</string>
+    <string name="piper_loading">Loading…</string>
+    <string name="piper_progress">%1$s of %2$s</string>
+    <string name="piper_delete_voice">Delete %1$s</string>
+    <string name="piper_cancel_voice">Cancel download of %1$s</string>
+    <string name="piper_delete_title">Delete %1$s?</string>
+    <string name="piper_delete_message">It frees %1$s. You can download it again later.</string>
+    <string name="piper_interrupted">Download stopped. Tap Resume to continue.</string>
+    <string name="piper_failed_network">Download stopped. Check the connection, then tap Resume.</string>
+    <string name="piper_failed_damaged">The download was damaged and removed. Tap Try again.</string>
+    <string name="piper_failed_storage">Not enough storage. Free up space, then tap Resume.</string>
+    <string name="piper_unusable">This voice could not be loaded. Delete it and download it again.</string>
 </resources>
