@@ -154,7 +154,10 @@ fun WelcomeScreen(
         }
     }
     /** The saved voice, when it belongs to the engine being set up and so can be kept as it is. */
-    val keepableVoice = savedVoice?.takeIf { it.engine == chosenEngine }?.name
+    // The engine the Voice page is about: the one just chosen, or, when Back from Review has
+    // returned here after the choice was cleared, the saved one.
+    val voiceEngine = chosenEngine ?: savedVoice?.engine
+    val keepableVoice = savedVoice?.takeIf { it.engine == voiceEngine }?.name
 
     fun startSetup() {
         scope.launch {
@@ -301,6 +304,7 @@ fun WelcomeScreen(
                 engineCheckFailed = engineCheckFailed,
                 checkingEngine = checkingEngine,
                 keepableVoice = keepableVoice,
+                voiceEngine = voiceEngine,
                 restoredFromBackup = restoredFromBackup,
                 chosenEngine = chosenEngine,
                 onExit = onExit?.let { ::leave },
@@ -337,6 +341,7 @@ private fun WelcomeStepContent(
     engineCheckFailed: Boolean,
     checkingEngine: Boolean,
     keepableVoice: String?,
+    voiceEngine: TtsEngine?,
     restoredFromBackup: Boolean,
     chosenEngine: TtsEngine?,
     onExit: (() -> Unit)?,
@@ -383,9 +388,9 @@ private fun WelcomeStepContent(
             onBack = onBack,
             // A saved key can stop working (e.g. restored from a backup); setup is the only
             // place to replace it before Settings is reachable.
-            secondaryLabel = chosenEngine?.takeIf { it != TtsEngine.SYSTEM }
+            secondaryLabel = voiceEngine?.takeIf { it != TtsEngine.SYSTEM }
                 ?.let { stringResource(R.string.welcome_reenter_key) },
-            onSecondary = { chosenEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
+            onSecondary = { voiceEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
             // Keeping the voice already in use must not mean finding it again in a long list.
             subtitle = keepableVoice?.let { stringResource(R.string.welcome_current_voice, it) },
             primaryLabel = if (keepableVoice != null) stringResource(R.string.welcome_keep_voice) else null,
@@ -394,7 +399,7 @@ private fun WelcomeStepContent(
             VoiceSelectionPage(
                 onBack = onBack,
                 onVoiceSelected = { onAdvance(WelcomeStep.Voice, WelcomeStep.TestVoice) },
-                engineToSave = chosenEngine,
+                engineToSave = voiceEngine,
                 modifier = pageModifier,
             )
         }
@@ -988,12 +993,14 @@ private fun ReviewPage(
     val unknown = stringResource(R.string.test_voice_unknown_voice)
     val deviceEngine = stringResource(R.string.welcome_privacy_device_engine)
     val sentOnlineTemplate = stringResource(R.string.welcome_review_speech_online)
+    val speedTemplate = stringResource(R.string.welcome_review_speed)
     // Null while loading, so nothing misleading is shown or announced before the values arrive.
     val voiceAndLanguage by produceState<ReviewVoice?>(null, voiceUseCase, settingsUseCase) {
         value = try {
             withContext(Dispatchers.IO) {
                 val voice = voiceUseCase?.selected()
                 val name = voice?.let { it.displayName ?: it.name } ?: unknown
+                val speed = speedTemplate.format(voice?.rate ?: 1.0)
                 val settings = settingsUseCase?.get()
                 val speech = when (val engine = settings?.ttsEngine) {
                     null -> unknown
@@ -1003,7 +1010,7 @@ private fun ReviewPage(
                     ?.filter { it.isNotBlank() }
                     ?.joinToString(" · ") { languageName(it) }
                     ?.ifBlank { null } ?: unknown
-                ReviewVoice(name, speech, languages, multilingual = (voice?.supportedLanguages?.size ?: 0) > 1)
+                ReviewVoice(name, "$speech · $speed", languages, multilingual = (voice?.supportedLanguages?.size ?: 0) > 1)
             }
         } catch (failure: CancellationException) {
             throw failure

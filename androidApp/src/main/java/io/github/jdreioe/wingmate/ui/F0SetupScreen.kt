@@ -165,6 +165,8 @@ fun F0SetupScreen(
                 F0Step.CREDENTIALS -> stringResource(R.string.common_save)
             },
             onPrimary = { if (step == F0Step.GUIDE) step = F0Step.CREDENTIALS else saveCredentials() },
+            // Like ElevenLabs: Save waits for both fields; format errors still show after Save.
+            primaryEnabled = step == F0Step.GUIDE || (subscriptionKey.isNotBlank() && endpoint.isNotBlank()),
             primaryBusy = saving,
         )
         }

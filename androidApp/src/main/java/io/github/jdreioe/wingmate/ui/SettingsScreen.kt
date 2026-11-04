@@ -2079,16 +2079,19 @@ private fun VoiceSelectionContent(
             )
         }
 
-        Text(
-            pluralStringResource(
-                R.plurals.voice_showing_count,
-                voices.size,
-                filteredVoices.size,
-                voices.size,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Hidden while loading: "Showing 0 of 0 voices" over a spinner reads as an empty list.
+        if (ready != null) {
+            Text(
+                pluralStringResource(
+                    R.plurals.voice_showing_count,
+                    voices.size,
+                    filteredVoices.size,
+                    voices.size,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         if (ready?.saveFailed == true) {
             Text(stringResource(R.string.voice_save_failed), color = MaterialTheme.colorScheme.error)

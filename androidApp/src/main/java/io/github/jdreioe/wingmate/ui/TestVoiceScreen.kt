@@ -30,6 +30,12 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.semantics.stateDescription
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,8 +75,42 @@ fun TestVoiceScreen(
     val scope = rememberCoroutineScope()
 
     /** Stops a preview before leaving, so it does not keep playing over the previous page. */
+    // Speed is saved once it settles, not per notch: each save is a full voice selection
+    // (analytics and, for cloud voices, re-caching Screens audio). Pending saves are
+    // flushed before leaving the page.
+    var rateSaveJob by remember { mutableStateOf<Job?>(null) }
+    suspend fun saveRateNow() {
+        val voice = selectedVoice ?: return
+        rateSaveFailed = false
+        try {
+            withContext(Dispatchers.IO) { voiceUseCase.select(voice) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = e.loggingClassName())
+            rateSaveFailed = true
+        }
+    }
+    fun scheduleRateSave() {
+        rateSaveJob?.cancel()
+        rateSaveJob = scope.launch {
+            delay(800)
+            saveRateNow()
+        }
+    }
+    /** Saves a speed still waiting to be saved; call before leaving the page. */
+    suspend fun flushRate() {
+        val pending = rateSaveJob ?: return
+        rateSaveJob = null
+        if (pending.isActive) {
+            pending.cancelAndJoin()
+            saveRateNow()
+        }
+    }
+
     fun stopThenBack() {
         scope.launch {
+            flushRate()
             try {
                 speechService.stop()
             } catch (e: CancellationException) {
@@ -155,39 +195,56 @@ fun TestVoiceScreen(
             }
             if ((selectedVoice?.supportedLanguages?.size ?: 0) > 1) {
                 Spacer(modifier = Modifier.height(16.dp))
-                SetupActionButton(label = stringResource(R.string.welcome_change_language), onClick = onChangeLanguage)
+                SetupActionButton(
+                    label = stringResource(R.string.welcome_change_language),
+                    onClick = { scope.launch { flushRate(); onChangeLanguage() } },
+                )
             }
 
             // Speaking rate, set while hearing the voice; saved on the voice, as Settings does.
             selectedVoice?.let { voice ->
                 val range = if (engine == TtsEngine.ELEVENLABS) 0.7f..1.2f else 0.5f..2.0f
                 var rate by remember(voice.name) { mutableFloatStateOf((voice.rate ?: 1.0).toFloat().coerceIn(range)) }
+                fun commitRate(value: Float) {
+                    rate = (value * 10).roundToInt() / 10f
+                    selectedVoice = voice.copy(rate = rate.toDouble(), rateForSSML = null)
+                    scheduleRateSave()
+                }
                 Spacer(modifier = Modifier.height(24.dp))
-                val rateLabel = stringResource(R.string.welcome_test_rate, rate)
-                Text(rateLabel, style = MaterialTheme.typography.titleMedium)
-                Slider(
-                    value = rate,
-                    onValueChange = { rate = it },
-                    onValueChangeFinished = {
-                        val updated = voice.copy(rate = rate.toDouble(), rateForSSML = null)
-                        selectedVoice = updated
-                        scope.launch {
-                            rateSaveFailed = false
-                            try {
-                                withContext(Dispatchers.IO) { voiceUseCase.select(updated) }
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = e.loggingClassName())
-                                rateSaveFailed = true
-                            }
-                        }
-                    },
-                    valueRange = range,
-                    // 0.1 steps, so TalkBack and switch users move it one notch at a time.
-                    steps = ((range.endInclusive - range.start) * 10).roundToInt() - 1,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics { contentDescription = rateLabel },
-                )
+                val rateValue = stringResource(R.string.welcome_test_rate_value, rate)
+                Text(stringResource(R.string.welcome_test_rate, rate), style = MaterialTheme.typography.titleMedium)
+                val speedLabel = stringResource(R.string.welcome_test_speed)
+                // -/+ beside the slider: dragging a thumb is hard with tremor or dwell.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val slower = stringResource(R.string.welcome_test_slower)
+                    FilledTonalIconButton(
+                        onClick = { commitRate((rate - 0.1f).coerceIn(range)) },
+                        enabled = rate > range.start,
+                        modifier = Modifier.size(56.dp).semantics { contentDescription = slower },
+                    ) { Icon(Icons.Default.Remove, contentDescription = null) }
+                    Slider(
+                        value = rate,
+                        onValueChange = { rate = it },
+                        onValueChangeFinished = { commitRate(rate) },
+                        valueRange = range,
+                        // 0.1 steps, so TalkBack and switch users move it one notch at a time.
+                        steps = ((range.endInclusive - range.start) * 10).roundToInt() - 1,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp)
+                            .heightIn(min = 56.dp)
+                            .semantics {
+                                contentDescription = speedLabel
+                                stateDescription = rateValue
+                            },
+                    )
+                    val faster = stringResource(R.string.welcome_test_faster)
+                    FilledTonalIconButton(
+                        onClick = { commitRate((rate + 0.1f).coerceIn(range)) },
+                        enabled = rate < range.endInclusive,
+                        modifier = Modifier.size(56.dp).semantics { contentDescription = faster },
+                    ) { Icon(Icons.Default.Add, contentDescription = null) }
+                }
                 if (rateSaveFailed) {
                     Text(
                         stringResource(R.string.welcome_test_rate_failed),
@@ -241,16 +298,7 @@ fun TestVoiceScreen(
                                 // A preview: kept out of History and the audio cache, and played
                                 // with exactly the chosen engine so a failing cloud voice is not
                                 // silently replaced by the system voice.
-                                withContext(Dispatchers.IO) {
-                                    speechService.speakWithoutHistory(
-                                        text = testText,
-                                        voice = selectedVoice,
-                                        pitch = selectedVoice?.pitch,
-                                        rate = selectedVoice?.rate,
-                                        cacheAudio = false,
-                                        engine = engine,
-                                    )
-                                }
+                                speechService.speakPreview(testText, selectedVoice, engine)
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
@@ -309,6 +357,7 @@ fun TestVoiceScreen(
                     } catch (e: Exception) {
                         OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                     }
+                    flushRate()
                     onNext(testText.trim().takeIf { keepAsPhrase && it.isNotEmpty() })
                 }
             },

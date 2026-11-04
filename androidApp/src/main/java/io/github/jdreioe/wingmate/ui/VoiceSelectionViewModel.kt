@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
@@ -16,6 +17,7 @@ import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,16 +79,7 @@ internal class DefaultVoiceSelectionOperations(
     }
 
     override suspend fun previewVoice(voice: Voice, engine: TtsEngine, text: String) {
-        withContext(Dispatchers.IO) {
-            speechService.speakWithoutHistory(
-                text = text,
-                voice = voice,
-                pitch = voice.pitch,
-                rate = voice.rate,
-                cacheAudio = false,
-                engine = engine,
-            )
-        }
+        speechService.speakPreview(text, voice, engine)
     }
 
     override suspend fun stopPreview() {
@@ -305,6 +298,9 @@ internal class VoiceSelectionViewModel(
     }
 
     private fun stopPreview() {
+        val ready = state.value as? VoiceSelectionUiState.Ready
+        // Only a preview this list started is stopped, never other speech (e.g. in Settings).
+        if (ready?.preview !is VoicePreview.Playing) return
         previewJob?.cancel()
         previewJob = null
         updateReady { it.copy(preview = VoicePreview.Idle) }
@@ -322,3 +318,27 @@ private fun List<Voice>.languages(engine: TtsEngine): List<String> =
     } else {
         flatMap { voice -> listOfNotNull(voice.primaryLanguage) + voice.supportedLanguages.orEmpty() }
     }.distinct().sorted()
+
+/**
+ * Plays a preview of [voice]: kept out of History and the audio cache, on exactly [engine] (a
+ * failing cloud voice is never replaced by the system voice), and returns only when playback
+ * has finished, since the speech service returns once audio starts. Throws if it fails.
+ */
+internal suspend fun SpeechService.speakPreview(text: String, voice: Voice?, engine: TtsEngine) {
+    withContext(Dispatchers.IO) {
+        speakWithoutHistory(
+            text = text,
+            voice = voice,
+            pitch = voice?.pitch,
+            rate = voice?.rate,
+            cacheAudio = false,
+            engine = engine,
+        )
+        var waitedMillis = 0L
+        while (isPlaying() && waitedMillis < 120_000) {
+            delay(50)
+            waitedMillis += 50
+        }
+    }
+    check(playbackState().status != SpeechPlaybackStatus.FAILED) { "Preview playback failed" }
+}

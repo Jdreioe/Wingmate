@@ -709,4 +709,9 @@
     <string name="welcome_current_voice">Current voice: %1$s</string>
     <string name="welcome_test_rate">Speed: %1$.1f×</string>
     <string name="welcome_test_rate_failed">The speed could not be saved. Try again.</string>
+    <string name="welcome_test_rate_value">%1$.1f×</string>
+    <string name="welcome_test_speed">Speed</string>
+    <string name="welcome_test_slower">Slower</string>
+    <string name="welcome_test_faster">Faster</string>
+    <string name="welcome_review_speed">Speed %1$.1f×</string>
 </resources>

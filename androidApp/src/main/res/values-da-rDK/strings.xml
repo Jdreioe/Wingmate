@@ -709,4 +709,9 @@
     <string name="welcome_current_voice">Nuværende stemme: %1$s</string>
     <string name="welcome_test_rate">Hastighed: %1$.1f×</string>
     <string name="welcome_test_rate_failed">Hastigheden kunne ikke gemmes. Prøv igen.</string>
+    <string name="welcome_test_rate_value">%1$.1f×</string>
+    <string name="welcome_test_speed">Hastighed</string>
+    <string name="welcome_test_slower">Langsommere</string>
+    <string name="welcome_test_faster">Hurtigere</string>
+    <string name="welcome_review_speed">Hastighed %1$.1f×</string>
 </resources>
