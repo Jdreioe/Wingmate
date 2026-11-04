@@ -171,108 +171,109 @@ private fun WideTypingPanel(
     val controlScale = settings.playbackIconScale.coerceIn(0.75f, 1.5f)
     val actionRow = 56.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)
     BoxWithConstraints(Modifier.fillMaxSize().padding(12.dp)) {
-    // A short panel (a foldable or laptop window with the on-screen keyboard up, or large
-    // scaling) drops Speak, Stop and Keyboard to a still-large 56dp and moves the app actions
-    // (Screens, fullscreen, Settings) to the top of the scroll area, so at least one row of it
-    // and its Earlier/More buttons stay on screen and every action stays reachable.
-    val roomy = maxHeight >= 48.dp + 88.dp * controlScale + 72.dp * controlScale + actionRow + 56.dp + 8.dp * 6
-    val speakHeight = if (roomy) 88.dp * controlScale else 56.dp
-    val controlHeight = if (roomy) 72.dp * controlScale else 56.dp
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (roomy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
-        // Speak turns into Pause while speech plays and Resume while paused, in the same place.
-        val speakAction = when (speech) {
-            WideSpeechState.Idle -> onSpeak
-            WideSpeechState.Playing -> onPause
-            WideSpeechState.Paused -> onResume
-        }
-        Button(
-            onClick = speakAction,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(speakHeight)
-                // Switch, dwell and selection keys reach it like any Typing Screen Button.
-                .typingAccessTarget("typing:speak", enabled = true, shape = ButtonDefaults.shape, action = speakAction)
-                .selectOnTouchDown(settings.selectOnTouchDown, speakAction),
-        ) {
-            Icon(
-                if (speech == WideSpeechState.Playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.size(36.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                stringResource(
-                    when (speech) {
-                        WideSpeechState.Idle -> R.string.playback_play
-                        WideSpeechState.Playing -> R.string.playback_pause
-                        WideSpeechState.Paused -> R.string.playback_resume
-                    }
-                ),
-                style = MaterialTheme.typography.headlineSmall,
-            )
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Always shown, disabled while nothing plays, so Keyboard never moves.
-            OutlinedButton(
-                onClick = onStop,
-                enabled = stopEnabled,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = controlHeight)
-                    .typingAccessTarget("typing:stop", enabled = stopEnabled, shape = ButtonDefaults.outlinedShape, action = onStop)
-                    .selectOnTouchDown(stopEnabled && settings.selectOnTouchDown, onStop),
-                contentPadding = PaddingValues(horizontal = 8.dp),
-            ) {
-                StackedLabel(Icons.Filled.Stop, stringResource(R.string.playback_stop))
+        // A short panel (a foldable or laptop window with the on-screen keyboard up, or large
+        // scaling) drops Speak, Stop and Keyboard to a still-large 56dp and moves the app actions
+        // (Screens, fullscreen, Settings) to the top of the scroll area, so at least one row of it
+        // and its Earlier/More buttons stay on screen and every action stays reachable.
+        val roomy = maxHeight >= 48.dp + 88.dp * controlScale + 72.dp * controlScale + actionRow + 56.dp + 8.dp * 6
+        val speakHeight = if (roomy) 88.dp * controlScale else 56.dp
+        val controlHeight = if (roomy) 72.dp * controlScale else 56.dp
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (roomy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
+            // Speak turns into Pause while speech plays and Resume while paused, in the same place.
+            val speakAction = when (speech) {
+                WideSpeechState.Idle -> onSpeak
+                WideSpeechState.Playing -> onPause
+                WideSpeechState.Paused -> onResume
             }
-            val toggleKeyboard = if (keyboardShown) onHideKeyboard else onShowKeyboard
-            FilledTonalButton(
-                onClick = toggleKeyboard,
+            Button(
+                onClick = speakAction,
                 modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = controlHeight)
-                    .typingAccessTarget("typing:keyboard", enabled = true, shape = ButtonDefaults.filledTonalShape, action = toggleKeyboard)
-                    .selectOnTouchDown(settings.selectOnTouchDown, toggleKeyboard),
-                contentPadding = PaddingValues(horizontal = 8.dp),
+                    .fillMaxWidth()
+                    .height(speakHeight)
+                    // Switch, dwell and selection keys reach it like any Typing Screen Button.
+                    .typingAccessTarget("typing:speak", enabled = true, shape = ButtonDefaults.shape, action = speakAction)
+                    .selectOnTouchDown(settings.selectOnTouchDown, speakAction),
             ) {
-                StackedLabel(
-                    if (keyboardShown) Icons.Filled.KeyboardHide else Icons.Filled.Keyboard,
-                    stringResource(if (keyboardShown) R.string.typing_hide_keyboard else R.string.typing_show_keyboard),
+                Icon(
+                    if (speech == WideSpeechState.Playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(
+                        when (speech) {
+                            WideSpeechState.Idle -> R.string.playback_play
+                            WideSpeechState.Playing -> R.string.playback_pause
+                            WideSpeechState.Paused -> R.string.playback_resume
+                        }
+                    ),
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             }
-        }
-        // Everything below Speak, Stop and Keyboard scrolls as one, so a held Message, large
-        // scaling or the on-screen keyboard shortens this area instead of clipping it.
-        // Touch-down selection fires on contact, so a drag cannot scroll there; the buttons
-        // below page through it instead, for touch, dwell and switch alike.
-        val scroll = rememberScrollState()
-        val items = remember { PanelItems() }
-        Column(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(scroll, enabled = !settings.selectOnTouchDown)
-                .onPlaced {
-                    items.content = it
-                    items.alignEnd(scroll.viewportSize)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Always shown, disabled while nothing plays, so Keyboard never moves.
+                OutlinedButton(
+                    onClick = onStop,
+                    enabled = stopEnabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = controlHeight)
+                        .typingAccessTarget("typing:stop", enabled = stopEnabled, shape = ButtonDefaults.outlinedShape, action = onStop)
+                        .selectOnTouchDown(stopEnabled && settings.selectOnTouchDown, onStop),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    StackedLabel(Icons.Filled.Stop, stringResource(R.string.playback_stop))
                 }
-                .padding(top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (!roomy) {
-                Row(items.item("app").fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
+                val toggleKeyboard = if (keyboardShown) onHideKeyboard else onShowKeyboard
+                FilledTonalButton(
+                    onClick = toggleKeyboard,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = controlHeight)
+                        .typingAccessTarget("typing:keyboard", enabled = true, shape = ButtonDefaults.filledTonalShape, action = toggleKeyboard)
+                        .selectOnTouchDown(settings.selectOnTouchDown, toggleKeyboard),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    StackedLabel(
+                        if (keyboardShown) Icons.Filled.KeyboardHide else Icons.Filled.Keyboard,
+                        stringResource(if (keyboardShown) R.string.typing_hide_keyboard else R.string.typing_show_keyboard),
+                    )
+                }
             }
-            if (heldMessage != null) {
-                // Swap is its own stop, so a long held Message never leaves it half shown.
-                HeldMessageCard(heldMessage, onSwapHeld, settings, items.item("held"), swapModifier = items.item("swap"))
+            // Everything below Speak, Stop and Keyboard scrolls as one, so a held Message, large
+            // scaling or the on-screen keyboard shortens this area instead of clipping it.
+            // Touch-down selection fires on contact, so a drag cannot scroll there; the buttons
+            // below page through it instead, for touch, dwell and switch alike.
+            val scroll = rememberScrollState()
+            val items = remember { PanelItems() }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    // Outside the scroll, so item positions start at 0 and paging lands on them.
+                    .padding(top = 8.dp)
+                    .verticalScroll(scroll, enabled = !settings.selectOnTouchDown)
+                    .onPlaced {
+                        items.content = it
+                        items.alignEnd(scroll.viewportSize)
+                    },
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (!roomy) {
+                    Row(items.item("app").fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
+                }
+                if (heldMessage != null) {
+                    // Swap is its own stop, so a long held Message never leaves it half shown.
+                    HeldMessageCard(heldMessage, onSwapHeld, settings, items.item("held"), swapModifier = items.item("swap"))
+                }
+                actions { row -> items.item(row) }
+                // Room after the last row, so the last page also starts at a whole item.
+                Spacer(Modifier.height(with(LocalDensity.current) { items.endPadding.toDp() }))
             }
-            actions { row -> items.item(row) }
-            // Room after the last row, so the last page also starts at a whole item.
-            Spacer(Modifier.height(with(LocalDensity.current) { items.endPadding.toDp() }))
+            if (scroll.maxValue > 0) PanelPager(scroll, items, settings)
         }
-        if (scroll.maxValue > 0) PanelPager(scroll, items, settings)
-    }
     }
 }
 
