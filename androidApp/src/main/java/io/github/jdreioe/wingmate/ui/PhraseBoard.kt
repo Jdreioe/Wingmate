@@ -418,14 +418,16 @@ internal fun TypingActionGrid(
     settings: Settings,
     modifier: Modifier = Modifier,
     feedback: BoardFeedback = remember { BoardFeedback() },
+    /** Applied to each row, e.g. so a pager can stop at whole rows. */
+    rowModifier: (row: Int) -> Modifier = { Modifier },
 ) {
     val buttons = remember(template) { template.typingActionButtons() }
     val unsupportedDescription = stringResource(R.string.typing_screen_unsupported_action)
     val unavailableDescription = stringResource(R.string.typing_screen_unavailable_action)
     val cellHeight = 56.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        buttons.chunked(2).forEach { pair ->
-            Row(Modifier.fillMaxWidth().height(cellHeight), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        buttons.chunked(2).forEachIndexed { row, pair ->
+            Row(rowModifier(row).fillMaxWidth().height(cellHeight), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { button ->
                     key(button.id) {
                         val effects = remember(button) { parseObfButtonActions(button) }

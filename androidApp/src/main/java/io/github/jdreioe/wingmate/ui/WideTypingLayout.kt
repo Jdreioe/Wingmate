@@ -42,10 +42,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -103,7 +112,8 @@ internal fun WideTypingLayout(
     onHideKeyboard: () -> Unit,
     heldMessage: String?,
     onSwapHeld: () -> Unit,
-    actions: @Composable () -> Unit,
+    /** The Action grid; give each row the modifier, so Earlier and More stop at whole rows. */
+    actions: @Composable (rowModifier: (Int) -> Modifier) -> Unit,
     settings: Settings,
     modifier: Modifier = Modifier,
 ) {
@@ -154,7 +164,8 @@ private fun WideTypingPanel(
     onHideKeyboard: () -> Unit,
     heldMessage: String?,
     onSwapHeld: () -> Unit,
-    actions: @Composable () -> Unit,
+    /** The Action grid; give each row the modifier, so Earlier and More stop at whole rows. */
+    actions: @Composable (rowModifier: (Int) -> Modifier) -> Unit,
     settings: Settings,
 ) {
     val controlScale = settings.playbackIconScale.coerceIn(0.75f, 1.5f)
@@ -236,32 +247,86 @@ private fun WideTypingPanel(
         // Touch-down selection fires on contact, so a drag cannot scroll there; the buttons
         // below page through it instead, for touch, dwell and switch alike.
         val scroll = rememberScrollState()
+        val items = remember { PanelItems() }
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(scroll, enabled = !settings.selectOnTouchDown)
+                .onPlaced {
+                    items.content = it
+                    items.alignEnd(scroll.viewportSize)
+                }
                 .padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (heldMessage != null) HeldMessageCard(heldMessage, onSwapHeld, settings)
-            actions()
+            if (heldMessage != null) HeldMessageCard(heldMessage, onSwapHeld, settings, Modifier.then(items.item("held")))
+            actions { row -> items.item(row) }
+            // Room after the last row, so the last page also starts at a whole item.
+            Spacer(Modifier.height(with(LocalDensity.current) { items.endPadding.toDp() }))
         }
-        if (scroll.maxValue > 0) PanelPager(scroll, settings)
+        if (scroll.maxValue > 0) PanelPager(scroll, items, settings)
     }
     }
 }
 
-/** Earlier and More: page the panel's scroll area by most of its height. Shown while it overflows. */
+/**
+ * Where the panel's scroll area's items start, so Earlier and More stop at whole items: the
+ * first visible item always starts at the top edge, never as a clipped sliver under Stop and
+ * Keyboard that a near miss would fire on touch-down.
+ */
+private class PanelItems {
+    var content: LayoutCoordinates? = null
+    private val placed = mutableMapOf<Any, LayoutCoordinates>()
+
+    /** Space after the last item that lets the scroll end exactly at an item's top. */
+    var endPadding by mutableIntStateOf(0)
+        private set
+
+    fun item(key: Any): Modifier = Modifier.onPlaced { placed[key] = it }
+
+    private fun attached(): List<LayoutCoordinates> = placed.values.filter { it.isAttached }
+
+    /** Item tops in scroll-content pixels, top to bottom. */
+    fun tops(): List<Float> {
+        val parent = content?.takeIf { it.isAttached } ?: return emptyList()
+        return attached().map { parent.localPositionOf(it, Offset.Zero).y }.sorted()
+    }
+
+    /** Recomputes [endPadding] for a viewport this tall; called as the content is placed. */
+    fun alignEnd(viewport: Int) {
+        val parent = content?.takeIf { it.isAttached } ?: return
+        // Where the scroll would end without the padding.
+        val end = (parent.size.height - endPadding - viewport).toFloat()
+        endPadding = if (viewport <= 0 || end <= 0f) 0 else {
+            ((tops().firstOrNull { it >= end } ?: end) - end).toInt()
+        }
+    }
+}
+
+/** Earlier and More: page the panel's scroll area by whole items. Shown while it overflows. */
 @Composable
-private fun PanelPager(scroll: ScrollState, settings: Settings) {
+private fun PanelPager(scroll: ScrollState, items: PanelItems, settings: Settings) {
     val scope = rememberCoroutineScope()
-    // Never less than one action row, so a tiny viewport still moves on.
-    val minimumStep = with(LocalDensity.current) { 64.dp.toPx() }
+    val requesters = remember { listOf(FocusRequester(), FocusRequester()) }
     val page = { forward: Boolean ->
         scope.launch {
-            val step = maxOf(scroll.viewportSize * 0.8f, minimumStep)
-            scroll.animateScrollBy(if (forward) step else -step)
+            val top = scroll.value.toFloat()
+            val bottom = top + scroll.viewportSize
+            val tops = items.tops()
+            val target = if (forward) {
+                // The item cut off at the bottom (or the next one) becomes the first visible one.
+                tops.lastOrNull { it > top + 1 && it < bottom } ?: (top + scroll.viewportSize * 0.8f)
+            } else {
+                // The earliest item that still lets everything down to the current top fit.
+                tops.firstOrNull { it >= top - scroll.viewportSize && it < top - 1 }
+                    ?: tops.lastOrNull { it < top - 1 } ?: 0f
+            }
+            scroll.animateScrollTo(target.toInt())
+            // At either end the pressed button disables; keep keyboard and switch users' place
+            // by moving focus to the other one.
+            val atEnd = if (forward) !scroll.canScrollForward else !scroll.canScrollBackward
+            if (atEnd) requesters[if (forward) 0 else 1].requestFocus()
         }
         Unit
     }
@@ -275,6 +340,7 @@ private fun PanelPager(scroll: ScrollState, settings: Settings) {
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 56.dp)
+                    .focusRequester(requesters[if (forward) 1 else 0])
                     .typingAccessTarget(
                         if (forward) "typing:panel-more" else "typing:panel-earlier",
                         enabled = enabled,
@@ -303,9 +369,9 @@ private fun StackedLabel(icon: ImageVector, label: String) {
 }
 
 @Composable
-private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settings: Settings) {
+private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settings: Settings, modifier: Modifier = Modifier) {
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large)
             .padding(start = 12.dp, end = 4.dp, top = 8.dp),
@@ -326,7 +392,7 @@ private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settin
             onClick = onSwap,
             modifier = Modifier
                 .align(Alignment.End)
-                .heightIn(min = 48.dp)
+                .heightIn(min = 56.dp)
                 .typingAccessTarget("typing:swap-held", enabled = true, shape = ButtonDefaults.textShape, action = onSwap)
                 .selectOnTouchDown(settings.selectOnTouchDown, onSwap),
         ) {

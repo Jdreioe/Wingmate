@@ -708,9 +708,10 @@ internal fun PhraseScreenContent(
                             onHideKeyboard = showTray,
                             heldMessage = heldMessage?.displayText,
                             onSwapHeld = toggleThatThought,
-                            actions = {
+                            actions = { rowModifier ->
                                 if (typingTemplate != null) {
                                     TypingActionGrid(
+                                        rowModifier = rowModifier,
                                         template = typingTemplate,
                                         onAction = onTypingAction,
                                         isActionEnabled = typingActionEnabled,
