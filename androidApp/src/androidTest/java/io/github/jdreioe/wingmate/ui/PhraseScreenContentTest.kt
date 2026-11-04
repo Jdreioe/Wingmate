@@ -231,7 +231,7 @@ class PhraseScreenContentTest {
         val failed = communication.copy(lastFailure = CommunicationFailure(1, CommunicationFailureKind.Playback))
         val actions = mutableListOf<PhraseScreenAction>()
         val sessionActions = mutableListOf<CommunicationAction>()
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 Column(Modifier.fillMaxSize()) {
                     CommunicationSessionStatus(failed) { sessionActions += it }
@@ -256,7 +256,7 @@ class PhraseScreenContentTest {
 
     private fun render(state: PhraseScreenState): List<PhraseScreenAction> {
         val actions = mutableListOf<PhraseScreenAction>()
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme { PhraseScreenContent(ui = state, onAction = { actions += it }) }
         }
         return actions

@@ -59,7 +59,7 @@ class TypingKeyboardVisibilityTest {
             Settings.Global.WINDOW_ANIMATION_SCALE,
         ).associateWith { Settings.Global.getFloat(composeRule.activity.contentResolver, it, 1f) }
         setAnimationScales(previousAnimationScales.mapValues { 1f })
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) { PhraseScreen() }
             }
@@ -117,7 +117,7 @@ class TypingKeyboardVisibilityTest {
         composeRule.activityRule.scenario.onActivity { activity ->
             activity.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
         }
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) { PhraseScreen() }
             }
@@ -138,7 +138,7 @@ class TypingKeyboardVisibilityTest {
         composeRule.activityRule.scenario.onActivity { activity ->
             activity.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
         }
-        composeRule.setContent { AppTheme { PhraseScreen() } }
+        composeRule.setPhoneContent { AppTheme { PhraseScreen() } }
         applyKeyboardInsets(visible = true, bottom = 900)
         composeRule.onNodeWithContentDescription("Show Typing Screen").assertExists()
 
