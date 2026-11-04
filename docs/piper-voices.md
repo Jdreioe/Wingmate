@@ -7,8 +7,8 @@ once a voice is downloaded.
 
 In Settings → Speech, choose **Piper (offline)**, then **Choose an offline voice**.
 The list opens on voices for the primary language. Each voice shows its size.
-**Test voice** streams Piper's recorded sample of the voice before you download
-it. Downloading the first voice also downloads 9 MB of shared espeak-ng data. Tap
+The Play button on each voice streams Piper's recorded sample of it, so you can
+hear a voice before you download it. Downloading the first voice also downloads 9 MB of shared espeak-ng data. Tap
 **Use** on a downloaded voice to select it.
 
 ## Downloads

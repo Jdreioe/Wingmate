@@ -146,7 +146,7 @@ internal sealed interface PiperVoicesAction {
     data class Delete(val key: String) : PiperVoicesAction
     data class Use(val key: String) : PiperVoicesAction
 
-    /** Plays the voice's sample before download, or stops it when it is already playing. */
+    /** Plays the voice's recorded sample, or stops it when it is already playing. */
     data class Test(val key: String) : PiperVoicesAction
 }
 

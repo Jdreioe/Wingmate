@@ -7,14 +7,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -33,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -204,43 +212,50 @@ private fun PiperVoiceRowItem(
     val cancelLabel = stringResource(R.string.piper_cancel_voice, name)
     val useLabel = stringResource(R.string.piper_use_voice, name)
     val deleteLabel = stringResource(R.string.piper_delete_voice, name)
-    val testing = ready.testingKey == key
-    val testLabel = stringResource(if (testing) R.string.piper_stop_test_voice else R.string.piper_test_voice, name)
-    val testButton: @Composable () -> Unit = {
-        OutlinedButton(
-            onClick = { onAction(PiperVoicesAction.Test(key)) },
-            modifier = Modifier.semantics { contentDescription = testLabel },
-        ) { Text(stringResource(if (testing) R.string.piper_stop_test else R.string.piper_test)) }
-    }
+    val playing = ready.testingKey == key
+    val playLabel = stringResource(if (playing) R.string.piper_stop_sample else R.string.piper_play_sample, name)
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.semantics { heading() })
-        Text(
-            stringResource(R.string.piper_details, localizedLocaleDisplayName(pack.languageTag), size),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (ready.selectedKey == key) {
-            Text(stringResource(R.string.voice_selected), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
-        }
-        if (ready.unusableKey == key) {
-            Text(stringResource(R.string.piper_unusable), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        }
-        if (ready.testFailedKey == key) {
-            Text(stringResource(R.string.piper_test_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.semantics { heading() })
+                Text(
+                    stringResource(R.string.piper_details, localizedLocaleDisplayName(pack.languageTag), size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (ready.selectedKey == key) {
+                    Text(stringResource(R.string.voice_selected), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (ready.unusableKey == key) {
+                    Text(stringResource(R.string.piper_unusable), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (ready.testFailedKey == key) {
+                    Text(
+                        stringResource(R.string.piper_sample_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+            }
+            // Hear the voice's recorded sample, before or after download, like the other voice lists.
+            FilledTonalIconButton(
+                onClick = { onAction(PiperVoicesAction.Test(key)) },
+                modifier = Modifier.padding(start = 8.dp).size(56.dp).semantics { contentDescription = playLabel },
+            ) {
+                Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
+            }
         }
 
         when (val state = row.state) {
-            PiperVoiceState.NotInstalled -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { onAction(PiperVoicesAction.Download(key)) },
-                    modifier = Modifier.semantics { contentDescription = downloadLabel },
-                ) { Text(stringResource(R.string.piper_download)) }
-                testButton()
-            }
+            PiperVoiceState.NotInstalled -> Button(
+                onClick = { onAction(PiperVoicesAction.Download(key)) },
+                modifier = Modifier.semantics { contentDescription = downloadLabel },
+            ) { Text(stringResource(R.string.piper_download)) }
 
             is PiperVoiceState.Downloading -> {
                 LinearProgressIndicator(
@@ -285,7 +300,6 @@ private fun PiperVoiceRowItem(
                         onClick = { onAction(PiperVoicesAction.Cancel(key)) },
                         modifier = Modifier.semantics { contentDescription = cancelLabel },
                     ) { Text(stringResource(R.string.common_cancel)) }
-                    testButton()
                 }
             }
 
