@@ -269,15 +269,6 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Info text
-            Text(
-                stringResource(R.string.test_voice_info),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            
             Spacer(modifier = Modifier.height(24.dp))
 
             // Navigation buttons

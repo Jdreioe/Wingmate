@@ -295,7 +295,7 @@
     <string name="azure_setup_error_key">Indtast en Speech-abonnementsnøgle.</string>
     <string name="azure_setup_error_save">Azure-oplysningerne kunne ikke gemmes: %1$s</string>
     <string name="welcome_analytics_title">Hjælp med at forbedre Wingmate</string>
-    <string name="welcome_analytics_description">Del valgfrit anonyme hændelser om brugen via Aptabase. Vi sender aldrig dine sætninger, taletekst, Azure-nøgler eller skærmindhold. Du kan ændre det senere i Indstillinger.</string>
+    <string name="welcome_analytics_description">Anonym brug af funktioner. Aldrig dine ord eller nøgler.</string>
     <string name="welcome_analytics_opt_in">Del anonym analysedata</string>
 
     <string name="voice_select_title">Vælg stemme</string>
@@ -423,7 +423,6 @@
     <string name="test_voice_stop">Stop</string>
     <string name="test_voice_play">Afspil</string>
     <string name="test_voice_test_button">Test stemme</string>
-    <string name="test_voice_info">Prøv en sætning, du ofte vil bruge, fx hvordan du præsenterer dig. Gem den som en frase for at sige den igen med ét tryk.</string>
 
     <string name="dictionary_title">Udtaleordbog</string>
     <string name="dictionary_back_cd">Tilbage</string>
@@ -447,13 +446,13 @@
     <string name="dictionary_global_entries_note">Globale poster bruges for al talesyntese</string>
 
     <string name="welcome_title">Velkommen til Wingmate</string>
-    <string name="welcome_subtitle">Først vælger og hører du din stemme, derefter hvordan du kommunikerer. Det tager få minutter, og alt kan ændres senere i Indstillinger.</string>
+    <string name="welcome_subtitle">Vælg din stemme, og hvordan du kommunikerer. Du kan ændre alt senere.</string>
     <string name="welcome_start_mode_title">Hvordan vil du kommunikere?</string>
-    <string name="welcome_start_mode_subtitle">Vælg hvad Wingmate åbner først. Skrivning og Skærme er altid begge tilgængelige.</string>
+    <string name="welcome_start_mode_subtitle">Du kan skifte når som helst.</string>
     <string name="welcome_start_mode_keyboard_title">Skrivning</string>
-    <string name="welcome_start_mode_keyboard_desc">Skriv beskeder, og brug gemte fraser og kategorier.</string>
+    <string name="welcome_start_mode_keyboard_desc">Skriv beskeder, og tryk på gemte fraser.</string>
     <string name="welcome_start_mode_screens_title">Skærme</string>
-    <string name="welcome_start_mode_screens_desc">Kommuniker med forbundne sider og symboler. Du starter i dit skærmbibliotek, hvor du kan oprette eller importere en skærm.</string>
+    <string name="welcome_start_mode_screens_desc">Tryk på symboler på sider. Opret eller importér en skærm for at starte.</string>
     <string name="mode_switch_to_screens">Skift til skærme</string>
     <string name="mode_switch_to_keyboard">Skift til tastatur og fraser</string>
     <string name="board_workspace_enter_fullscreen">Åbn siden i fuld skærm</string>
@@ -601,20 +600,8 @@
     <string name="ui_settings_touch_timing">Berøring og timing</string>
     <string name="ui_settings_feedback">Feedback</string>
     <string name="fullscreen_close">Luk fuldskærm</string>
-    <string name="voice_engine_choose">Vælg talemotor</string>
-    <string name="voice_engine_azure_title">🎙️ Azure TTS</string>
-    <string name="voice_engine_google_title">☁️ Google Cloud TTS</string>
-    <string name="voice_engine_system_title">📱 System-TTS</string>
     <string name="voice_engine_pros">✅ Fordele:</string>
     <string name="voice_engine_cons">❌ Ulemper:</string>
-    <string name="voice_engine_azure_pros">• Mere end 400 neurale stemmer i høj kvalitet\n• Mere end 140 sprog og varianter\n• Naturlig udtale og intonation\n• Ensartet kvalitet på tværs af enheder\n• Avanceret stemmestyring (SSML)</string>
-    <string name="voice_engine_azure_cons">• Kræver internetforbindelse\n• Kræver opsætning af API-nøgle\n• Tekst, du siger, sendes til Microsoft Azure\n• Kan have en lille netværksforsinkelse</string>
-    <string name="voice_engine_google_pros">• Bredt udvalg af naturlige stemmer\n• Mange sprog og regionale varianter\n• Ensartet kvalitet på tværs af enheder\n• SSML-understøttelse af sprog og pauser</string>
-    <string name="voice_engine_google_cons">• Kræver internet og et Google Cloud-projekt\n• Kræver fakturering og opsætning af API-nøgle\n• Tekst, du siger, sendes til Google Cloud\n• Brug kan medføre omkostninger</string>
-    <string name="voice_engine_system_pros">• Kræver ingen opsætning eller API-nøgler\n• Bruger talemotoren på denne enhed\n• Respekterer systemets tilgængelighedsindstillinger\n• Hurtig svartid</string>
-    <string name="voice_engine_system_cons">• Begrænset udvalg af stemmer\n• Kvaliteten varierer fra enhed til enhed\n• Færre sprogmuligheder\n• Nogle talemotorer bruger internettet til visse stemmer</string>
-    <string name="voice_engine_recommendation_title">💡 Vores anbefaling:</string>
-    <string name="voice_engine_recommendation">Vælg den cloududbyder, hvis stemmer passer bedst til dig, eller System-TTS for at starte uden opsætning.</string>
     <string name="voice_settings_title">Stemmeindstillinger – %1$s</string>
     <string name="voice_settings_current_engine">Aktuel motor: %1$s</string>
     <string name="voice_settings_system_description">Bruger enhedens indbyggede tekst-til-tale</string>
@@ -665,19 +652,16 @@
     <string name="board_settings_enabled">Til</string>
     <string name="board_settings_disabled">Fra</string>
     <string name="welcome_set_up">Opsæt Wingmate</string>
-    <string name="welcome_supporter_note">Opsætter du for en anden? Tag valgene sammen, hvor det er muligt. Wingmate opretter ikke en konto eller profil.</string>
     <string name="welcome_restore_backup">Gendan en sikkerhedskopi</string>
     <string name="welcome_privacy_title">Hvor dine ord bliver af</string>
-    <string name="welcome_privacy_subtitle">Hvert punkt fortæller, om det bliver på denne enhed eller sendes online. Du kan ændre det senere i Indstillinger.</string>
     <string name="welcome_privacy_on_device">Bliver på denne enhed</string>
     <string name="welcome_privacy_device_engine">Håndteres af enhedens talemotor</string>
     <string name="welcome_privacy_online">Sendes online</string>
     <string name="welcome_privacy_speech_title">Tale</string>
-    <string name="welcome_privacy_speech_system">Wingmate giver den tekst, du siger, til talemotoren på denne enhed og sender den ikke selv online. Nogle talemotorer kan bruge internettet; se talemotorens egne indstillinger.</string>
-    <string name="welcome_privacy_speech_cloud">Tekst, du siger, sendes til %1$s for at lave lyd. Lyd for hele beskeder kan gemmes på denne enhed, så de kan afspilles igen uden at blive sendt.</string>
-    <string name="welcome_privacy_history_desc">Beskeder, du siger, vises i Historik, så du kan sige dem igen, og ordforslag lærer af dem. Mens Historik er skjult, vises nye beskeder ikke og bruges ikke til ordforslag, men de gemmes stadig på denne enhed og kommer med i de sikkerhedskopier, du laver.</string>
+    <string name="welcome_privacy_speech_system">Enhedens talemotor læser dine ord højt. Nogle talemotorer bruger internettet.</string>
+    <string name="welcome_privacy_speech_cloud">Dine ord sendes til %1$s for at blive talt.</string>
+    <string name="welcome_privacy_history_desc">Viser det, du siger, så du kan sige det igen. Skjules den, holdes nye beskeder ude af listen og ordforslag, men de gemmes stadig på denne enhed.</string>
     <string name="welcome_review_title">Klar til at kommunikere</string>
-    <string name="welcome_review_subtitle">Tjek dine valg. Du kan ændre dem nu eller senere i Indstillinger.</string>
     <string name="welcome_review_voice">Stemme</string>
     <string name="welcome_review_phrase">Gemt frase</string>
     <string name="welcome_review_workspace">Åbner med</string>
@@ -703,4 +687,13 @@
     <string name="welcome_reenter_key">Indtast nøglen igen</string>
     <string name="test_voice_failed_cloud">Stemmen kunne ikke afspilles. Tjek din internetforbindelse. Hvis nøglen er ændret, så vælg Indtast nøglen igen på stemmelisten.</string>
     <string name="welcome_review_saving">Gemmer dine valg</string>
+    <string name="welcome_engine_title">Hvad skal tale for dig?</string>
+    <string name="welcome_engine_device">Denne enhed</string>
+    <string name="welcome_engine_device_desc">Gratis, ingen opsætning.</string>
+    <string name="welcome_engine_azure">Microsoft Azure</string>
+    <string name="welcome_engine_azure_desc">Naturlige stemmer. Kræver en Azure-konto. Sender dine ord online.</string>
+    <string name="welcome_engine_google">Google Cloud</string>
+    <string name="welcome_engine_google_desc">Naturlige stemmer. Kræver en Google Cloud-nøgle. Sender dine ord online.</string>
+    <string name="welcome_engine_elevenlabs">ElevenLabs</string>
+    <string name="welcome_engine_elevenlabs_desc">Personlige og klonede stemmer. Kræver en nøgle. Sender dine ord online.</string>
 </resources>

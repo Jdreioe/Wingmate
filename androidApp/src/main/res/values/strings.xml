@@ -303,7 +303,7 @@
     <string name="azure_setup_error_key">Enter a Speech subscription key.</string>
     <string name="azure_setup_error_save">Could not save the Azure credentials: %1$s</string>
     <string name="welcome_analytics_title">Help improve Wingmate</string>
-    <string name="welcome_analytics_description">Optionally share anonymous feature-use events through Aptabase. We never send your phrases, speech text, Azure keys, or board content. You can change this later in Settings.</string>
+    <string name="welcome_analytics_description">Anonymous feature use. Never your words or keys.</string>
     <string name="welcome_analytics_opt_in">Share anonymous analytics</string>
 
     <string name="voice_select_title">Select Voice</string>
@@ -444,7 +444,6 @@
     <string name="test_voice_stop">Stop</string>
     <string name="test_voice_play">Play</string>
     <string name="test_voice_test_button">Test Voice</string>
-    <string name="test_voice_info">Try a sentence you will use often, like how you introduce yourself. Keep it as a Phrase to say it again with one tap.</string>
 
     <string name="dictionary_title">Pronunciation Dictionary</string>
     <string name="dictionary_back_cd">Back</string>
@@ -470,13 +469,13 @@
     <string name="dictionary_global_entries_note">Global entries apply to all speech synthesis</string>
 
     <string name="welcome_title">Welcome to Wingmate</string>
-    <string name="welcome_subtitle">First you choose and hear your voice, then how you communicate. It takes a few minutes, and everything can be changed later in Settings.</string>
+    <string name="welcome_subtitle">Choose your voice and how you communicate. You can change everything later.</string>
     <string name="welcome_start_mode_title">How do you want to communicate?</string>
-    <string name="welcome_start_mode_subtitle">Choose what Wingmate opens first. Typing and Screens are always both available.</string>
+    <string name="welcome_start_mode_subtitle">You can switch at any time.</string>
     <string name="welcome_start_mode_keyboard_title">Typing</string>
-    <string name="welcome_start_mode_keyboard_desc">Type messages and use saved Phrases and Categories.</string>
+    <string name="welcome_start_mode_keyboard_desc">Type messages and tap saved Phrases.</string>
     <string name="welcome_start_mode_screens_title">Screens</string>
-    <string name="welcome_start_mode_screens_desc">Communicate with linked Pages and symbols. You start in your Screens library, where you can create or import a Screen.</string>
+    <string name="welcome_start_mode_screens_desc">Tap symbols on Pages. Create or import a Screen to start.</string>
     <string name="mode_switch_to_screens">Switch to screens</string>
     <string name="mode_switch_to_keyboard">Switch to keyboard and phrases</string>
     <string name="board_workspace_enter_fullscreen">Open page full screen</string>
@@ -603,20 +602,8 @@
     <string name="ui_settings_touch_timing">Touch and timing</string>
     <string name="ui_settings_feedback">Feedback</string>
     <string name="fullscreen_close">Close full screen</string>
-    <string name="voice_engine_choose">Choose voice engine</string>
-    <string name="voice_engine_azure_title">🎙️ Azure TTS</string>
-    <string name="voice_engine_google_title">☁️ Google Cloud TTS</string>
-    <string name="voice_engine_system_title">📱 System TTS</string>
     <string name="voice_engine_pros">✅ Pros:</string>
     <string name="voice_engine_cons">❌ Cons:</string>
-    <string name="voice_engine_azure_pros">• 400+ high-quality neural voices\n• 140+ languages and variants\n• Natural pronunciation and intonation\n• Consistent quality across devices\n• Advanced voice controls (SSML)</string>
-    <string name="voice_engine_azure_cons">• Requires an internet connection\n• API key setup is needed\n• Text you speak is sent to Microsoft Azure\n• May have a slight network delay</string>
-    <string name="voice_engine_google_pros">• Broad selection of natural voices\n• Many languages and regional variants\n• Consistent quality across devices\n• SSML language and pause support</string>
-    <string name="voice_engine_google_cons">• Requires internet and a Google Cloud project\n• Billing and API key setup are required\n• Text you speak is sent to Google Cloud\n• Usage may incur charges</string>
-    <string name="voice_engine_system_pros">• No setup or API keys required\n• Uses the speech engine installed on this device\n• Respects system accessibility settings\n• Fast response time</string>
-    <string name="voice_engine_system_cons">• Limited voice selection\n• Quality varies by device\n• Fewer language options\n• Some engines use the internet for some voices</string>
-    <string name="voice_engine_recommendation_title">💡 Our recommendation:</string>
-    <string name="voice_engine_recommendation">Choose the cloud provider whose voices suit you best, or System TTS to start without setup.</string>
     <string name="voice_settings_title">Voice settings – %1$s</string>
     <string name="voice_settings_current_engine">Current engine: %1$s</string>
     <string name="voice_settings_system_description">Using the device’s built-in text-to-speech</string>
@@ -665,19 +652,16 @@
     <string name="board_settings_enabled">On</string>
     <string name="board_settings_disabled">Off</string>
     <string name="welcome_set_up">Set up Wingmate</string>
-    <string name="welcome_supporter_note">Setting this up for someone else? Make the choices together where you can. Wingmate does not create an account or profile.</string>
     <string name="welcome_restore_backup">Restore a backup</string>
     <string name="welcome_privacy_title">Where your words go</string>
-    <string name="welcome_privacy_subtitle">Each item says whether it stays on this device or is sent online. You can change these later in Settings.</string>
     <string name="welcome_privacy_on_device">Stays on this device</string>
     <string name="welcome_privacy_device_engine">Handled by this device\'s speech engine</string>
     <string name="welcome_privacy_online">Sent online</string>
     <string name="welcome_privacy_speech_title">Speech</string>
-    <string name="welcome_privacy_speech_system">Wingmate gives the text you speak to the speech engine installed on this device and does not send it online itself. Some engines can use the internet; check the engine\'s own settings.</string>
-    <string name="welcome_privacy_speech_cloud">Text you speak is sent to %1$s to create audio. Audio for whole messages may be saved on this device so they can play again without being sent.</string>
-    <string name="welcome_privacy_history_desc">Messages you speak are listed in History so you can say them again, and word predictions learn from them. While History is hidden, newly spoken messages are not listed or used for predictions, but they are still saved on this device and included in backups you make.</string>
+    <string name="welcome_privacy_speech_system">Your device\'s speech engine reads your words aloud. Some engines use the internet.</string>
+    <string name="welcome_privacy_speech_cloud">Your words are sent to %1$s to be spoken.</string>
+    <string name="welcome_privacy_history_desc">Lists what you say so you can say it again. Hiding it keeps new messages out of the list and predictions, but they are still saved on this device.</string>
     <string name="welcome_review_title">Ready to communicate</string>
-    <string name="welcome_review_subtitle">Check your choices. You can change any of them now or later in Settings.</string>
     <string name="welcome_review_voice">Voice</string>
     <string name="welcome_review_phrase">Saved Phrase</string>
     <string name="welcome_review_workspace">Opens with</string>
@@ -703,4 +687,13 @@
     <string name="welcome_reenter_key">Enter the key again</string>
     <string name="test_voice_failed_cloud">This voice could not play. Check your internet connection. If the key has changed, choose Enter the key again on the voice list.</string>
     <string name="welcome_review_saving">Saving your choices</string>
+    <string name="welcome_engine_title">What should speak for you?</string>
+    <string name="welcome_engine_device">This device</string>
+    <string name="welcome_engine_device_desc">Free, no setup.</string>
+    <string name="welcome_engine_azure">Microsoft Azure</string>
+    <string name="welcome_engine_azure_desc">Natural voices. Needs an Azure account. Sends your words online.</string>
+    <string name="welcome_engine_google">Google Cloud</string>
+    <string name="welcome_engine_google_desc">Natural voices. Needs a Google Cloud key. Sends your words online.</string>
+    <string name="welcome_engine_elevenlabs">ElevenLabs</string>
+    <string name="welcome_engine_elevenlabs_desc">Personal and cloned voices. Needs a key. Sends your words online.</string>
 </resources>

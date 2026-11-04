@@ -313,7 +313,7 @@ private fun WelcomeStepContent(
             startFailed = startFailed,
             restoredFromBackup = restoredFromBackup,
         )
-        WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(onEngineChosen = onEngineChosen, onBack = onBack)
+        WelcomeStep.VoiceEngine -> EnginePage(onEngineChosen = onEngineChosen, onBack = onBack)
         // Provider pages save credentials only; the engine is saved together with the voice.
         WelcomeStep.AzureSetup -> F0SetupScreen(
             onDone = { onUseEngine(TtsEngine.AZURE_USER_RESOURCE, WelcomeStep.AzureSetup) },
@@ -559,7 +559,6 @@ private fun StartPage(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        Text(stringResource(R.string.welcome_supporter_note), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             enabled = !isRestoring && backupManager != null && backupFilePicker != null,
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
@@ -624,6 +623,55 @@ private fun StartPage(
                 }
             }
         )
+    }
+}
+
+/**
+ * Choosing what speaks: the device's own engine or a cloud provider. Saves nothing; setup
+ * saves the engine together with the voice. Starts on the engine already in use.
+ */
+@Composable
+private fun EnginePage(onEngineChosen: (TtsEngine) -> Unit, onBack: () -> Unit) {
+    val koin = getKoin()
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    var selected by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
+    LaunchedEffect(settingsUseCase) {
+        if (selected != null) return@LaunchedEffect
+        selected = try {
+            withContext(Dispatchers.Default) { settingsUseCase?.get()?.ttsEngine }
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            OperationalLogger.warn("welcome.engine", "settings_load_failed", exceptionClass = failure.loggingClassName())
+            null
+        } ?: TtsEngine.SYSTEM
+    }
+    val current = selected ?: TtsEngine.SYSTEM
+    val options = listOf(
+        Triple(TtsEngine.SYSTEM, R.string.welcome_engine_device, R.string.welcome_engine_device_desc),
+        Triple(TtsEngine.AZURE_USER_RESOURCE, R.string.welcome_engine_azure, R.string.welcome_engine_azure_desc),
+        Triple(TtsEngine.GOOGLE_CLOUD, R.string.welcome_engine_google, R.string.welcome_engine_google_desc),
+        Triple(TtsEngine.ELEVENLABS, R.string.welcome_engine_elevenlabs, R.string.welcome_engine_elevenlabs_desc),
+    )
+    WelcomePage(
+        title = stringResource(R.string.welcome_engine_title),
+        subtitle = null,
+        primaryLabel = stringResource(R.string.common_continue),
+        onPrimary = { onEngineChosen(current) },
+        onBack = onBack,
+    ) {
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            options.forEach { (engine, title, description) ->
+                ChoiceCard(
+                    title = stringResource(title),
+                    description = stringResource(description),
+                    icon = if (engine == TtsEngine.SYSTEM) Icons.Default.PhoneAndroid else Icons.Default.Cloud,
+                    selected = current == engine ||
+                        (engine == TtsEngine.AZURE_USER_RESOURCE && current == TtsEngine.AZURE_MANAGED),
+                    onSelect = { selected = engine },
+                )
+            }
+        }
     }
 }
 
@@ -717,7 +765,7 @@ private fun PrivacyPage(
 
     WelcomePage(
         title = stringResource(R.string.welcome_privacy_title),
-        subtitle = stringResource(R.string.welcome_privacy_subtitle),
+        subtitle = null,
         primaryLabel = stringResource(R.string.common_continue),
         // Continue only once the speech card can say where words go.
         primaryEnabled = engine is EngineLoad.Ready,
@@ -873,7 +921,7 @@ private fun ReviewPage(
 
     WelcomePage(
         title = stringResource(R.string.welcome_review_title),
-        subtitle = stringResource(R.string.welcome_review_subtitle),
+        subtitle = null,
         primaryLabel = stringResource(R.string.welcome_review_finish),
         primaryEnabled = !finishing,
         primaryBusy = finishing,
