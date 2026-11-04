@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -56,6 +60,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -415,6 +421,10 @@ private fun BoardSetLibraryScreen(
     onToggleLock: (ObfBoardSet) -> Unit,
     onDelete: (ObfBoardSet) -> Unit
 ) {
+    // A large window shows the library as one readable column with its actions above it,
+    // instead of floating buttons stranded in a far corner.
+    val large = currentWindowWidth().isLarge
+    val actionsReady = !isLoading && !isCreating
     Scaffold(
         topBar = {
             TopAppBar(
@@ -453,7 +463,7 @@ private fun BoardSetLibraryScreen(
             )
         },
         floatingActionButton = {
-            if (!isLoading && !isCreating) {
+            if (actionsReady && !large) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
                     Button(onClick = onImportSpeech) { Text(stringResource(R.string.speech_import_title)) }
                     ExtendedFloatingActionButton(
@@ -465,7 +475,29 @@ private fun BoardSetLibraryScreen(
             }
         }
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(
+            Modifier.fillMaxSize().padding(innerPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (large && actionsReady && boardSets.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .widthIn(max = BoardSetLibraryMaxWidth)
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                ) {
+                    FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
+                        Text(stringResource(R.string.speech_import_title))
+                    }
+                    Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.board_sets_new))
+                    }
+                }
+            }
+        Box(Modifier.widthIn(max = if (large) BoardSetLibraryMaxWidth else Dp.Unspecified).fillMaxSize()) {
             when {
                 isCreating -> Column(
                     modifier = Modifier.align(Alignment.Center),
@@ -493,13 +525,24 @@ private fun BoardSetLibraryScreen(
                     Spacer(Modifier.height(16.dp))
                     if (statusMessage != null) {
                         Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+                    } else if (large) {
+                        // Without floating buttons, the empty library offers both ways to start here.
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
+                                Text(stringResource(R.string.board_sets_create))
+                            }
+                            FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
+                                Text(stringResource(R.string.speech_import_title))
+                            }
+                        }
                     } else {
                         Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
                     }
                 }
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 152.dp),
+                    // Room for the floating buttons, which a large window does not have.
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     statusMessage?.let {
@@ -518,8 +561,12 @@ private fun BoardSetLibraryScreen(
                 }
             }
         }
+        }
     }
 }
+
+/** How wide the Screens library grows on a large window. */
+private val BoardSetLibraryMaxWidth = 840.dp
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -551,6 +598,8 @@ private fun BoardSetLibraryCard(
                         contentDescription = if (boardSet.isLocked) stringResource(R.string.board_sets_locked) else null
                     )
                 },
+                // The card supplies the background, so the row and its actions read as one surface.
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier
                     .weight(1f)
                     .clickable(onClickLabel = openLabel, onClick = onOpen)
