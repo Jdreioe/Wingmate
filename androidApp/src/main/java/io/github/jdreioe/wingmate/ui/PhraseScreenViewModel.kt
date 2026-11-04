@@ -577,7 +577,9 @@ internal class PhraseScreenViewModel(
     private fun refreshShown() {
         val current = state.value
         if (current.phraseStatus != TypingLoadStatus.Ready || current.categoryStatus != TypingLoadStatus.Ready) return
-        viewModelScope.launch {
+        // Shares the Phrase job, so a newer load always replaces an older read.
+        phraseJob?.cancel()
+        phraseJob = viewModelScope.launch {
             try {
                 val phrases = operations.phrases()
                 _state.update { it.copy(phrases = phrases) }

@@ -102,6 +102,18 @@ class VoiceSelectionViewModelTest {
     }
 
     @Test
+    fun `saving a voice's settings in setup also saves its engine`() = runTest {
+        val voice = Voice(name = "en-US-Neural2-A", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(settings = Settings(ttsEngine = TtsEngine.SYSTEM), refreshed = listOf(voice))
+        val viewModel = VoiceSelectionViewModel(operations, engineToSave = TtsEngine.GOOGLE_CLOUD)
+        viewModel.onAction(VoiceSelectionAction.Load)
+
+        viewModel.onAction(VoiceSelectionAction.VoiceSettingsSaved(voice))
+
+        assertEquals(TtsEngine.GOOGLE_CLOUD, operations.settings.ttsEngine)
+    }
+
+    @Test
     fun `failed selection keeps the list and reports the failure`() = runTest {
         val voice = Voice(name = "system-default", primaryLanguage = "en-US")
         val operations = FakeVoiceSelectionOperations(settings = Settings(), system = listOf(voice))

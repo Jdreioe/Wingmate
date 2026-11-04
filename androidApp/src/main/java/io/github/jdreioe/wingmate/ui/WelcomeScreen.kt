@@ -74,27 +74,6 @@ data class WelcomeChoices(
     }
 }
 
-/** One page of setup. [analyticsName] is stable across R8 renaming. */
-private enum class WelcomeStep(val analyticsName: String) {
-    Start("start"),
-    VoiceEngine("voice_engine"),
-    AzureSetup("azure_setup"),
-    GoogleSetup("google_setup"),
-    ElevenLabsSetup("elevenlabs_setup"),
-    Voice("voice"),
-    Language("language"),
-    TestVoice("test_voice"),
-    Workspace("workspace"),
-    Privacy("privacy"),
-    Review("review"),
-}
-
-/** Keeps a list of steps across activity recreation. */
-private val stepListSaver = listSaver<List<WelcomeStep>, String>(
-    save = { steps -> steps.map { it.name } },
-    restore = { names -> names.map(WelcomeStep::valueOf) },
-)
-
 /** Keeps the draft answers across activity recreation. */
 private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
     save = { listOf(it.startupMode.name, it.phraseToSave, it.historyVisible, it.featureUsageReportingEnabled) },
@@ -126,7 +105,8 @@ fun WelcomeScreen(
     onComplete: suspend (WelcomeChoices) -> Boolean,
     /**
      * Non-null when setup was reopened by someone who already communicates with Wingmate.
-     * Leaving keeps voice changes already made and discards the other answers.
+     * Leaving keeps voice changes already made and discards the other answers. A Phrase
+     * already saved by a finish whose settings save failed is kept: it was asked for.
      */
     onExit: (() -> Unit)?,
     /** True when a restored backup still needs setup, so Start can confirm the restore. */
@@ -140,9 +120,7 @@ fun WelcomeScreen(
     val phraseUseCase = remember(koin) { koin.getOrNull<PhraseUseCase>() }
     val scope = rememberCoroutineScope()
 
-    var path by rememberSaveable(stateSaver = stepListSaver) { mutableStateOf(listOf(WelcomeStep.Start)) }
-    /** The path to Review while a page opened with Change is shown; empty otherwise. */
-    var reviewPath by rememberSaveable(stateSaver = stepListSaver) { mutableStateOf(emptyList<WelcomeStep>()) }
+    var nav by rememberSaveable(stateSaver = WelcomeNavigation.Saver) { mutableStateOf(WelcomeNavigation()) }
     var choices by rememberSaveable(stateSaver = welcomeChoicesSaver) { mutableStateOf(initialChoices) }
     // The Phrase this setup already added. Owned here, so leaving setup forgets it and a
     // later setup can never edit or delete a Phrase the Communicator has been using.
@@ -151,27 +129,7 @@ fun WelcomeScreen(
     /** The engine whose voices the Voice page lists; saved only together with a voice. */
     var chosenEngine by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
     var startFailed by remember { mutableStateOf(false) }
-    val step = path.last()
-
-    fun push(next: WelcomeStep) { path = path + next }
-    /** Moves forward from [from] once; a second activation (dwell, tremor) is ignored. */
-    fun advance(from: WelcomeStep, to: WelcomeStep) { if (path.last() == from) push(to) }
-    fun pop() { if (path.size > 1) path = path.dropLast(1) }
-    /** Opens an earlier page from Review; Back and finishing that page return to Review. */
-    fun change(target: WelcomeStep) {
-        reviewPath = path
-        path = path + target
-    }
-    /** Moves on from the last page of a section, or back to Review after a Change; once per page. */
-    fun finishSection(from: WelcomeStep, next: WelcomeStep) {
-        if (path.last() != from) return
-        if (reviewPath.isNotEmpty()) {
-            path = reviewPath
-            reviewPath = emptyList()
-        } else {
-            push(next)
-        }
-    }
+    val step = nav.step
 
     fun startSetup() {
         scope.launch {
@@ -192,15 +150,15 @@ fun WelcomeScreen(
                     return@launch
                 }
             }
-            if (path == listOf(WelcomeStep.Start)) push(WelcomeStep.VoiceEngine)
+            nav = nav.advance(WelcomeStep.Start, WelcomeStep.VoiceEngine)
         }
     }
 
     /** Lists [engine]'s voices next; only one activation counts if [from] is no longer shown. */
     fun useEngine(engine: TtsEngine, from: WelcomeStep) {
-        if (path.last() != from) return
+        if (nav.step != from) return
         chosenEngine = engine
-        push(WelcomeStep.Voice)
+        nav = nav.advance(from, WelcomeStep.Voice)
     }
 
     /** A cloud engine goes through its provider page unless its credentials are already saved. */
@@ -225,8 +183,8 @@ fun WelcomeScreen(
             }
             if (configured) {
                 useEngine(engine, WelcomeStep.VoiceEngine)
-            } else if (path.last() == WelcomeStep.VoiceEngine) {
-                push(providerStep)
+            } else {
+                nav = nav.advance(WelcomeStep.VoiceEngine, providerStep)
             }
         }
     }
@@ -279,10 +237,9 @@ fun WelcomeScreen(
     }
     LaunchedEffect(step) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.analyticsName)
-        if (step == WelcomeStep.Review) reviewPath = emptyList()
     }
-    BackHandler(enabled = path.size > 1 || onExit != null) {
-        if (path.size > 1) pop() else leave()
+    BackHandler(enabled = nav.canGoBack || onExit != null) {
+        if (nav.canGoBack) nav = nav.back(nav.step) else leave()
     }
 
     val pageModifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
@@ -309,18 +266,19 @@ fun WelcomeScreen(
                 onStartSetup = ::startSetup,
                 onEngineChosen = ::chooseEngine,
                 onUseEngine = ::useEngine,
-                onAdvance = ::advance,
-                onPop = ::pop,
-                onFinishSection = ::finishSection,
-                onChange = ::change,
+                onAdvance = { from, to -> nav = nav.advance(from, to) },
+                // Bound to the page shown now, so a late second tap is ignored once it has left.
+                onBack = { nav = nav.back(step) },
+                onFinishSection = { from, next -> nav = nav.finishSection(from, next) },
+                onChange = { target -> nav = nav.change(target) },
                 onFinish = { syncSetupPhrase(choices.phraseToSave) && onComplete(choices) },
                 onWorkspaceChosen = {
-                    if (path.last() == WelcomeStep.Workspace) {
+                    if (nav.step == WelcomeStep.Workspace) {
                         featureUsageReporter?.reportEvent(
                             FeatureUsageEvents.STARTUP_MODE_SELECTED,
                             "mode" to choices.startupMode.name.lowercase()
                         )
-                        finishSection(WelcomeStep.Workspace, WelcomeStep.Privacy)
+                        nav = nav.finishSection(WelcomeStep.Workspace, WelcomeStep.Privacy)
                     }
                 },
             )
@@ -342,7 +300,7 @@ private fun WelcomeStepContent(
     onEngineChosen: (TtsEngine) -> Unit,
     onUseEngine: (TtsEngine, WelcomeStep) -> Unit,
     onAdvance: (from: WelcomeStep, to: WelcomeStep) -> Unit,
-    onPop: () -> Unit,
+    onBack: () -> Unit,
     onFinishSection: (from: WelcomeStep, next: WelcomeStep) -> Unit,
     onChange: (WelcomeStep) -> Unit,
     onFinish: suspend () -> Boolean,
@@ -355,22 +313,22 @@ private fun WelcomeStepContent(
             startFailed = startFailed,
             restoredFromBackup = restoredFromBackup,
         )
-        WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(onEngineChosen = onEngineChosen, onBack = onPop)
+        WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(onEngineChosen = onEngineChosen, onBack = onBack)
         // Provider pages save credentials only; the engine is saved together with the voice.
         WelcomeStep.AzureSetup -> F0SetupScreen(
             onDone = { onUseEngine(TtsEngine.AZURE_USER_RESOURCE, WelcomeStep.AzureSetup) },
-            onBack = onPop,
+            onBack = onBack,
         )
         WelcomeStep.GoogleSetup -> GoogleTtsSetupScreen(
             onDone = { onUseEngine(TtsEngine.GOOGLE_CLOUD, WelcomeStep.GoogleSetup) },
-            onBack = onPop,
+            onBack = onBack,
         )
         WelcomeStep.ElevenLabsSetup -> ElevenLabsSetupScreen(
             onDone = { onUseEngine(TtsEngine.ELEVENLABS, WelcomeStep.ElevenLabsSetup) },
-            onBack = onPop,
+            onBack = onBack,
         )
         WelcomeStep.Voice -> PageWithBack(
-            onBack = onPop,
+            onBack = onBack,
             // A saved key can stop working (e.g. restored from a backup); setup is the only
             // place to replace it before Settings is reachable.
             secondaryLabel = chosenEngine?.takeIf { it != TtsEngine.SYSTEM }
@@ -378,15 +336,15 @@ private fun WelcomeStepContent(
             onSecondary = { chosenEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
         ) {
             VoiceSelectionPage(
-                onBack = onPop,
+                onBack = onBack,
                 onVoiceSelected = { onAdvance(WelcomeStep.Voice, WelcomeStep.Language) },
                 engineToSave = chosenEngine,
                 modifier = pageModifier,
             )
         }
-        WelcomeStep.Language -> PageWithBack(onBack = onPop) {
+        WelcomeStep.Language -> PageWithBack(onBack = onBack) {
             LanguageSelectionPage(
-                onBack = onPop,
+                onBack = onBack,
                 onContinue = { onAdvance(WelcomeStep.Language, WelcomeStep.TestVoice) },
                 modifier = pageModifier,
             )
@@ -397,18 +355,18 @@ private fun WelcomeStepContent(
                 onChoicesChange(choices.copy(phraseToSave = phraseToSave))
                 onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace)
             },
-            onBack = onPop,
+            onBack = onBack,
         )
         WelcomeStep.Workspace -> WorkspacePage(
             choices = choices,
             onChoicesChange = onChoicesChange,
-            onBack = onPop,
+            onBack = onBack,
             onContinue = onWorkspaceChosen,
         )
         WelcomeStep.Privacy -> PrivacyPage(
             choices = choices,
             onChoicesChange = onChoicesChange,
-            onBack = onPop,
+            onBack = onBack,
             onContinue = { onFinishSection(WelcomeStep.Privacy, WelcomeStep.Review) },
         )
         WelcomeStep.Review -> ReviewPage(
@@ -417,7 +375,7 @@ private fun WelcomeStepContent(
             onChangePhrase = { onChange(WelcomeStep.TestVoice) },
             onChangeWorkspace = { onChange(WelcomeStep.Workspace) },
             onChangePrivacy = { onChange(WelcomeStep.Privacy) },
-            onBack = onPop,
+            onBack = onBack,
             onFinish = onFinish,
         )
     }
@@ -463,6 +421,8 @@ private fun WelcomePage(
     onPrimary: () -> Unit,
     onBack: (() -> Unit)?,
     primaryEnabled: Boolean = true,
+    /** Shows progress in the primary button, announced as [primaryLabel] still. */
+    primaryBusy: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -493,6 +453,10 @@ private fun WelcomePage(
                     enabled = primaryEnabled,
                     modifier = Modifier.weight(if (onBack != null) 2f else 1f).heightIn(min = 56.dp),
                 ) {
+                    if (primaryBusy) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(12.dp))
+                    }
                     Text(primaryLabel)
                 }
             }
@@ -912,6 +876,7 @@ private fun ReviewPage(
         subtitle = stringResource(R.string.welcome_review_subtitle),
         primaryLabel = stringResource(R.string.welcome_review_finish),
         primaryEnabled = !finishing,
+        primaryBusy = finishing,
         onPrimary = {
             finishing = true
             saveFailed = false
@@ -925,6 +890,13 @@ private fun ReviewPage(
         },
         onBack = onBack.takeIf { !finishing },
     ) {
+        if (finishing) {
+            Text(
+                stringResource(R.string.welcome_review_saving),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         if (saveFailed) {
             Text(
                 stringResource(R.string.welcome_review_save_failed),

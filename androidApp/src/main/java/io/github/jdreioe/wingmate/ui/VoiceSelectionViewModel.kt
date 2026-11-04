@@ -137,8 +137,11 @@ internal class VoiceSelectionViewModel(
         }
     }
 
+    /** Bumped on each Load; a choice made during an earlier visit must not advance this one. */
+    private var visit = 0
+
     private fun load() {
-        // A choice still saving when the page was left must not advance the next visit.
+        visit++
         while (mutableEvents.tryReceive().isSuccess) Unit
         loadJob?.cancel()
         mutableState.value = VoiceSelectionUiState.Loading
@@ -180,28 +183,16 @@ internal class VoiceSelectionViewModel(
 
     private fun select(voice: Voice, filterLanguage: String?) {
         val ready = state.value as? VoiceSelectionUiState.Ready ?: return
+        val choiceVisit = visit
         viewModelScope.launch {
             updateReady { it.copy(saveFailed = false) }
             try {
                 val chosen = if (ready.engine == TtsEngine.SYSTEM) voice else {
                     voice.withPreferredSupportedLanguage(filterLanguage ?: ready.preferredLanguage)
                 }
-                operations.selectVoice(chosen)
-                val primary = if (ready.engine == TtsEngine.SYSTEM) {
-                    chosen.primaryLanguage.orEmpty()
-                } else {
-                    chosen.selectedLanguage.ifBlank { chosen.primaryLanguage.orEmpty() }
-                }
-                if (primary.isNotBlank() || engineToSave != null) {
-                    operations.updateSettings { current ->
-                        current.copy(
-                            ttsEngine = engineToSave ?: current.ttsEngine,
-                            primaryLanguage = primary.ifBlank { current.primaryLanguage },
-                        )
-                    }
-                }
+                saveVoice(chosen, ready.engine)
                 updateReady { it.copy(selected = chosen) }
-                mutableEvents.send(VoiceSelectionEvent.VoiceChosen)
+                if (choiceVisit == visit) mutableEvents.send(VoiceSelectionEvent.VoiceChosen)
             } catch (failure: CancellationException) {
                 throw failure
             } catch (_: Exception) {
@@ -215,9 +206,7 @@ internal class VoiceSelectionViewModel(
         viewModelScope.launch {
             updateReady { it.copy(saveFailed = false) }
             try {
-                operations.selectVoice(voice)
-                val primary = voice.selectedLanguage.ifBlank { voice.primaryLanguage.orEmpty() }
-                if (primary.isNotBlank()) operations.updateSettings { it.copy(primaryLanguage = primary) }
+                saveVoice(voice, ready.engine)
                 val voices = (operations.refreshCloudVoices(ready.engine) + operations.cachedVoices(ready.engine))
                     .distinctBy { it.name }
                 val selected = operations.selectedVoice()
@@ -226,6 +215,27 @@ internal class VoiceSelectionViewModel(
                 throw failure
             } catch (_: Exception) {
                 updateReady { it.copy(saveFailed = true) }
+            }
+        }
+    }
+
+    /**
+     * Saves [voice] with its language and, in setup, the engine it belongs to. Every way of
+     * saving a voice goes through here, so setup never pairs an engine with another's voice.
+     */
+    private suspend fun saveVoice(voice: Voice, engine: TtsEngine) {
+        operations.selectVoice(voice)
+        val primary = if (engine == TtsEngine.SYSTEM) {
+            voice.primaryLanguage.orEmpty()
+        } else {
+            voice.selectedLanguage.ifBlank { voice.primaryLanguage.orEmpty() }
+        }
+        if (primary.isNotBlank() || engineToSave != null) {
+            operations.updateSettings { current ->
+                current.copy(
+                    ttsEngine = engineToSave ?: current.ttsEngine,
+                    primaryLanguage = primary.ifBlank { current.primaryLanguage },
+                )
             }
         }
     }

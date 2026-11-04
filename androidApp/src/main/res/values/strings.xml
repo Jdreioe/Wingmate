@@ -696,10 +696,11 @@
     <string name="welcome_privacy_online_when_on">Sent online only if turned on</string>
     <string name="welcome_leave_setup">Leave setup</string>
     <string name="welcome_start_failed">Wingmate could not save that setup has started. Try again.</string>
-    <string name="welcome_restored_needs_setup">Your backup was restored. Set up a voice to start communicating.</string>
+    <string name="welcome_restored_needs_setup">Your backup was restored. Finish setup to start communicating.</string>
     <string name="welcome_review_speech">Speech</string>
     <string name="welcome_review_speech_online">Sent online to %1$s</string>
     <string name="welcome_review_loading">Loading</string>
     <string name="welcome_reenter_key">Enter the key again</string>
-    <string name="test_voice_failed_cloud">This voice could not play. Check your internet connection, or go back to the voice list and choose Enter the key again.</string>
+    <string name="test_voice_failed_cloud">This voice could not play. Check your internet connection. If the key has changed, choose Enter the key again on the voice list.</string>
+    <string name="welcome_review_saving">Saving your choices</string>
 </resources>
