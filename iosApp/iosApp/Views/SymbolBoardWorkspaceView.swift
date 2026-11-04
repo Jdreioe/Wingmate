@@ -942,7 +942,7 @@ struct SymbolBoardWorkspaceView: View {
                     .padding(4)
                     .background(.regularMaterial, in: Circle())
                     .overlay(Circle().stroke(Color(.separator), lineWidth: 1))
-                    .accessibilityLabel(Text(isHomeLink ? "boardset.cell.action.home" : String(format: NSLocalizedString("board_cell_opens_board", comment: ""), model.boardDisplayName(id: linkedBoardId))))
+                    .accessibilityLabel(Text(isHomeLink ? NSLocalizedString("boardset.cell.action.home", comment: "") : String(format: NSLocalizedString("board_cell_opens_board", comment: ""), model.boardDisplayName(id: linkedBoardId))))
             }
         }
         .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
