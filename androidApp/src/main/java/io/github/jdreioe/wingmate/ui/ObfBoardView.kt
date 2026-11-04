@@ -1,6 +1,9 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -1445,12 +1448,18 @@ fun SymbolBar(
     onTextChange: ((String) -> Unit)? = null
 ) {
     val textScrollState = rememberScrollState()
+    val large = currentWindowWidth().isLarge
     val textStyle = when (presentation) {
-        SymbolBarPresentation.Normal -> MaterialTheme.typography.titleMedium
+        SymbolBarPresentation.Normal -> if (large) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium
         SymbolBarPresentation.Fullscreen -> MaterialTheme.typography.headlineSmall
     }
-    val maximumTextHeight = with(LocalDensity.current) {
-        textStyle.lineHeight.toDp() * presentation.maxTextLines + 8.dp
+    // A fixed number of whole lines (2 on phones, 3 on larger windows; more scroll inside), so
+    // the Page below never moves while the Message grows. Fullscreen shows it to a partner and
+    // keeps growing up to its cap.
+    val lineHeight = with(LocalDensity.current) { textStyle.lineHeight.toDp() }
+    val textHeightModifier = when (presentation) {
+        SymbolBarPresentation.Normal -> Modifier.height(lineHeight * (if (large) 3 else 2) + 8.dp)
+        SymbolBarPresentation.Fullscreen -> Modifier.heightIn(max = lineHeight * presentation.maxTextLines + 8.dp)
     }
 
     LaunchedEffect(selectedButtons.size) {
@@ -1476,7 +1485,7 @@ fun SymbolBar(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = maximumTextHeight),
+                    .then(textHeightModifier),
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (canEdit) {
@@ -1524,24 +1533,71 @@ fun SymbolBar(
                 VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (showSpeak) {
-                    FilledIconButton(
-                        onClick = onSpeak,
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.board_workspace_speak_sentence))
-                    }
+            // Large targets in a fixed order (Speak, Delete word, Clear), labelled where there is
+            // room. Delete word uses Backspace: the trash can means deleting things elsewhere.
+            MessageBarControls(
+                large = large,
+                showSpeak = showSpeak,
+                showDelete = showDelete,
+                showClear = showClear,
+                onSpeak = onSpeak,
+                onDelete = onDelete,
+                onClear = onClear,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageBarControls(
+    large: Boolean,
+    showSpeak: Boolean,
+    showDelete: Boolean,
+    showClear: Boolean,
+    onSpeak: () -> Unit,
+    onDelete: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val speak = stringResource(R.string.board_workspace_speak_sentence)
+    val delete = stringResource(R.string.board_workspace_delete_last)
+    val clear = stringResource(R.string.board_workspace_clear_sentence)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (large) {
+            if (showDelete) {
+                OutlinedButton(onClick = onDelete, modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = delete }) {
+                    Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.board_message_delete_word))
                 }
-                if (showDelete) {
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.board_workspace_delete_last))
-                    }
+            }
+            if (showClear) {
+                OutlinedButton(onClick = onClear, modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = clear }) {
+                    Icon(Icons.Default.Clear, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.board_message_clear))
                 }
-                if (showClear) {
-                    IconButton(onClick = onClear) {
-                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.board_workspace_clear_sentence))
-                    }
+            }
+            if (showSpeak) {
+                Button(onClick = onSpeak, modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = speak }) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.playback_play), style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        } else {
+            if (showDelete) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = delete)
+                }
+            }
+            if (showClear) {
+                IconButton(onClick = onClear, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Default.Clear, contentDescription = clear)
+                }
+            }
+            if (showSpeak) {
+                FilledIconButton(onClick = onSpeak, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = speak, modifier = Modifier.size(32.dp))
                 }
             }
         }

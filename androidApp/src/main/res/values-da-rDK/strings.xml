@@ -728,4 +728,6 @@
     <string name="board_cell_menu_resize">Tilpas størrelse</string>
     <string name="board_cell_menu_remove">Fjern</string>
     <string name="board_selection_done">Færdig med at vælge</string>
+    <string name="board_message_delete_word">Slet ord</string>
+    <string name="board_message_clear">Ryd</string>
 </resources>

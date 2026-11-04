@@ -728,4 +728,6 @@
     <string name="board_cell_menu_resize">Resize</string>
     <string name="board_cell_menu_remove">Remove</string>
     <string name="board_selection_done">Done selecting</string>
+    <string name="board_message_delete_word">Delete word</string>
+    <string name="board_message_clear">Clear</string>
 </resources>
