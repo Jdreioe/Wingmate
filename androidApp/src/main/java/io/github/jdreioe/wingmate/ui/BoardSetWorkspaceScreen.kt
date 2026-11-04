@@ -970,6 +970,11 @@ private fun BoardSetWorkspaceRoot(
         workspaceViewModel.onAction(BoardWorkspaceAction.BackClicked)
     }
 
+    // The top bar's ← always leaves the Screen; Pages have their own Back in the Message bar.
+    fun leave() {
+        workspaceViewModel.onAction(BoardWorkspaceAction.LeaveClicked)
+    }
+
     fun exportBoardSet() {
         scope.launch {
             workspaceViewModel.onAction(BoardWorkspaceAction.ExportStarted)
@@ -1178,7 +1183,10 @@ private fun BoardSetWorkspaceRoot(
                                     activeGraph?.boardSet?.name.orEmpty()
                                 )
                             } else {
-                                activeBoard?.name ?: stringResource(R.string.board_workspace_board_fallback)
+                                // "Screen · Page", so the Communicator sees which Page of which Screen.
+                                val page = activeBoard?.name ?: stringResource(R.string.board_workspace_board_fallback)
+                                val screen = activeGraph?.boardSet?.name
+                                if (screen != null && screen != page && (activeGraph?.boards?.size ?: 0) > 1) "$screen · $page" else page
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1194,7 +1202,7 @@ private fun BoardSetWorkspaceRoot(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = ::navigateBack) {
+                    IconButton(onClick = ::leave) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
@@ -1349,20 +1357,6 @@ private fun BoardSetWorkspaceRoot(
                                             printBoardSet()
                                         }
                                     )
-                                    if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.board_workspace_home)) },
-                                            leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                            onClick = {
-                                                appBarMenuExpanded = false
-                                                activeGraph?.boardSet?.rootBoardId?.let { rootBoardId ->
-                                                    workspaceViewModel.onAction(
-                                                        BoardWorkspaceAction.GoHome(rootBoardId)
-                                                    )
-                                                }
-                                            }
-                                        )
-                                    }
                                     if (activeGraph?.boardSet?.isLocked == false) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.board_workspace_edit)) },
@@ -1478,17 +1472,6 @@ private fun BoardSetWorkspaceRoot(
                                 contentDescription = stringResource(R.string.phrase_screen_import_export_data)
                             )
                         }
-                        if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
-                            IconButton(onClick = {
-                                activeGraph?.boardSet?.rootBoardId?.let { rootBoardId ->
-                                    workspaceViewModel.onAction(
-                                        BoardWorkspaceAction.GoHome(rootBoardId)
-                                    )
-                                }
-                            }) {
-                                Icon(Icons.Default.Home, contentDescription = stringResource(R.string.board_workspace_home))
-                            }
-                        }
                         if (activeGraph?.boardSet?.isLocked == false) {
                             IconButton(onClick = ::startEditing) {
                                 Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.board_workspace_edit))
@@ -1535,6 +1518,14 @@ private fun BoardSetWorkspaceRoot(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                     ) {
                     ObfBoardView(
+                        pageNavigation = activeGraph?.takeIf { mode == BoardWorkspaceMode.Run && it.boards.size > 1 }?.let { graph ->
+                            PageNavigation(
+                                canGoBack = workspace.canNavigateBack,
+                                atStartPage = workspace.selectedBoardId == graph.boardSet.rootBoardId,
+                                onBack = { workspaceViewModel.onAction(BoardWorkspaceAction.PreviousPageClicked) },
+                                onStartPage = { workspaceViewModel.onAction(BoardWorkspaceAction.GoHome(graph.boardSet.rootBoardId)) },
+                            )
+                        },
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run &&

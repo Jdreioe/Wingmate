@@ -730,4 +730,6 @@
     <string name="board_selection_done">Færdig med at vælge</string>
     <string name="board_message_delete_word">Slet ord</string>
     <string name="board_message_clear">Ryd</string>
+    <string name="board_page_back">Forrige side</string>
+    <string name="board_page_start">Startside</string>
 </resources>

@@ -730,4 +730,6 @@
     <string name="board_selection_done">Done selecting</string>
     <string name="board_message_delete_word">Delete word</string>
     <string name="board_message_clear">Clear</string>
+    <string name="board_page_back">Previous page</string>
+    <string name="board_page_start">Start page</string>
 </resources>

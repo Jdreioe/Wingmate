@@ -77,6 +77,22 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
+    fun `the Message bar's Back returns through followed Pages but never leaves the Screen`() {
+        val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
+        viewModel.onAction(
+            BoardWorkspaceAction.Initialize(graph = graph(name = "Core words", boardIds = listOf("home", "people")), startInEditMode = false)
+        )
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("people"))
+
+        viewModel.onAction(BoardWorkspaceAction.PreviousPageClicked)
+        assertEquals("home", viewModel.state.value.selectedBoardId)
+
+        viewModel.onAction(BoardWorkspaceAction.PreviousPageClicked)
+        assertEquals("home", viewModel.state.value.selectedBoardId)
+        assertFalse(viewModel.state.value.canNavigateBack)
+    }
+
+    @Test
     fun `initialization falls back to the home board when restored board was removed`() {
         val savedState = SavedStateHandle(
             mapOf(

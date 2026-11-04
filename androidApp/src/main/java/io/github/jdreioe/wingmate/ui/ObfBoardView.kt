@@ -1,6 +1,9 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -298,6 +301,8 @@ fun ObfBoardView(
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     /** Editing: what a long press or right click on a Button offers. */
     cellMenu: BoardCellMenu? = null,
+    /** Running a Screen with several Pages: Back and Start page in the Message bar. */
+    pageNavigation: PageNavigation? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
@@ -346,6 +351,7 @@ fun ObfBoardView(
         onCellClick = onCellClick,
         onCellMove = onCellMove,
         cellMenu = cellMenu,
+        pageNavigation = pageNavigation,
         onResizeField = onResizeField,
         onGridHeightFractionChange = onGridHeightFractionChange,
         modifier = modifier,
@@ -372,6 +378,7 @@ internal fun ObfBoardContent(
     modifier: Modifier = Modifier,
     reorder: BoardReorder? = null,
     cellMenu: BoardCellMenu? = null,
+    pageNavigation: PageNavigation? = null,
     feedback: BoardFeedback = remember { BoardFeedback() },
     onFocusCell: (Pair<Int, Int>?) -> Unit = {},
 ) {
@@ -442,6 +449,7 @@ internal fun ObfBoardContent(
             presentation = symbolBarPresentation,
             editable = messageBarEditable && onSentenceChanged != null,
             onTextChange = onSentenceChanged,
+            pageNavigation = pageNavigation,
             modifier = barModifier,
         )
     }
@@ -1445,7 +1453,8 @@ fun SymbolBar(
     // When enabled (with onTextChange) the Message area becomes an editable
     // text field sharing the same bar; otherwise it renders read-only.
     editable: Boolean = false,
-    onTextChange: ((String) -> Unit)? = null
+    onTextChange: ((String) -> Unit)? = null,
+    pageNavigation: PageNavigation? = null,
 ) {
     val textScrollState = rememberScrollState()
     val large = currentWindowWidth().isLarge
@@ -1474,20 +1483,10 @@ fun SymbolBar(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val canEdit = editable && onTextChange != null
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .then(textHeightModifier),
-                contentAlignment = Alignment.CenterStart
-            ) {
+        val canEdit = editable && onTextChange != null
+        // The Message itself, read-only or editable; the same in both arrangements below.
+        val messageArea: @Composable (Modifier) -> Unit = { areaModifier ->
+            Box(modifier = areaModifier.then(textHeightModifier), contentAlignment = Alignment.CenterStart) {
                 if (canEdit) {
                     var fieldValue by remember { mutableStateOf(TextFieldValue(messageText)) }
                     LaunchedEffect(messageText) {
@@ -1528,12 +1527,9 @@ fun SymbolBar(
                     }
                 }
             }
-
-            if (showSpeak || showDelete || showClear) {
-                VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
-            }
-
-            // Large targets in a fixed order (Speak, Delete word, Clear), labelled where there is
+        }
+        val controls: @Composable () -> Unit = {
+            // Large targets in a fixed order (Delete word, Clear, Speak), labelled where there is
             // room. Delete word uses Backspace: the trash can means deleting things elsewhere.
             MessageBarControls(
                 large = large,
@@ -1544,6 +1540,71 @@ fun SymbolBar(
                 onDelete = onDelete,
                 onClear = onClear,
             )
+        }
+        if (large) {
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                pageNavigation?.let {
+                    PageNavigationControls(it, large = true)
+                    VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+                }
+                messageArea(Modifier.weight(1f))
+                if (showSpeak || showDelete || showClear) {
+                    VerticalDivider(modifier = Modifier.padding(horizontal = 8.dp).height(40.dp))
+                }
+                controls()
+            }
+        } else {
+            // A phone keeps the Message the full width, with its controls in a row below it.
+            Column(Modifier.fillMaxWidth().padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                messageArea(Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    pageNavigation?.let { PageNavigationControls(it, large = false) }
+                    Spacer(Modifier.weight(1f))
+                    controls()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Back (the previous Page followed) and Start page for a Screen with several Pages. Always in
+ * the same place at the start of the Message bar, disabled rather than hidden when there is
+ * nowhere to go, so nothing shifts as the Communicator moves between Pages.
+ */
+class PageNavigation(
+    val canGoBack: Boolean,
+    val atStartPage: Boolean,
+    val onBack: () -> Unit,
+    val onStartPage: () -> Unit,
+)
+
+@Composable
+private fun PageNavigationControls(navigation: PageNavigation, large: Boolean) {
+    val back = stringResource(R.string.board_page_back)
+    val start = stringResource(R.string.board_page_start)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (large) {
+            FilledTonalButton(onClick = navigation.onBack, enabled = navigation.canGoBack, modifier = Modifier.heightIn(min = 56.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(back)
+            }
+            FilledTonalButton(onClick = navigation.onStartPage, enabled = !navigation.atStartPage, modifier = Modifier.heightIn(min = 56.dp)) {
+                Icon(Icons.Default.Home, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(start)
+            }
+        } else {
+            FilledTonalIconButton(onClick = navigation.onBack, enabled = navigation.canGoBack, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = back)
+            }
+            FilledTonalIconButton(onClick = navigation.onStartPage, enabled = !navigation.atStartPage, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Default.Home, contentDescription = start)
+            }
         }
     }
 }

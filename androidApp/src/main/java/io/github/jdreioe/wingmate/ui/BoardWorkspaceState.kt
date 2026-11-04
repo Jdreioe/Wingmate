@@ -93,7 +93,12 @@ internal sealed interface BoardWorkspaceAction {
     data class SelectBoard(val boardId: String) : BoardWorkspaceAction
     data class OpenBoard(val boardId: String) : BoardWorkspaceAction
     data class SwipePage(val step: Int) : BoardWorkspaceAction
+    /** System Back: steps back through the Pages followed, then leaves the Screen. */
     data object BackClicked : BoardWorkspaceAction
+    /** The top bar's ←: always leaves the Screen (finishing editing first). */
+    data object LeaveClicked : BoardWorkspaceAction
+    /** The Message bar's Back: the previous Page followed; never leaves the Screen. */
+    data object PreviousPageClicked : BoardWorkspaceAction
     data class GoHome(val rootBoardId: String) : BoardWorkspaceAction
     data class RestorePosition(
         val selectedBoardId: String?,
@@ -185,6 +190,8 @@ internal class BoardWorkspaceViewModel(
             is BoardWorkspaceAction.OpenBoard -> _state.value.openBoard(action.boardId)
             is BoardWorkspaceAction.SwipePage -> _state.value.swipePage(action.step)
             BoardWorkspaceAction.BackClicked -> handleBack()
+            BoardWorkspaceAction.LeaveClicked -> handleLeave()
+            BoardWorkspaceAction.PreviousPageClicked -> _state.value.let { if (it.canNavigateBack) it.navigateBack() else it }
             is BoardWorkspaceAction.GoHome -> _state.value.goHome(action.rootBoardId)
             is BoardWorkspaceAction.RestorePosition -> _state.value.withPosition(
                 selectedBoardId = action.selectedBoardId,
@@ -278,6 +285,13 @@ internal class BoardWorkspaceViewModel(
                 current
             }
         }
+    }
+
+    private fun handleLeave(): BoardWorkspaceState {
+        val current = _state.value
+        if (current.mode == BoardWorkspaceMode.Edit) return finishEditing()
+        viewModelScope.launch { _events.send(BoardWorkspaceEvent.NavigateToLibrary) }
+        return current
     }
 
     private fun finishEditing(): BoardWorkspaceState {
