@@ -33,7 +33,7 @@ class BoardSetManagerScreenTest {
                         ),
                         isLoading = false,
                     ),
-                    statusMessage = null,
+                    status = null,
                     importAvailable = true,
                     onAction = { receivedAction = it },
                 )

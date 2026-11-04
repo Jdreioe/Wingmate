@@ -63,7 +63,13 @@ object SpeechScreenImport {
         previousLabel: String,
         nextLabel: String,
         now: Long,
+        /**
+         * Paragraphs side by side on each Page row: 1 (full-width paragraphs, phones) or 2 (a
+         * tablet's width). Fixed in the saved Screen, so a Page never reflows with the window.
+         */
+        columns: Int = 1,
     ): BoardSetGraph {
+        require(columns in 1..2) { "Lay paragraphs out in 1 or 2 columns." }
         require(name.isNotBlank()) { "Give the speech a name." }
         val pages = preview(name, text, paragraphsPerPage)
         require(pages.isNotEmpty()) { "Add at least one paragraph." }
@@ -89,11 +95,18 @@ object SpeechScreenImport {
                 id = pageIds[index],
                 name = page.name,
                 buttons = buttons + listOfNotNull(previous, next),
+                // Two grid columns either way: a single paragraph spans both, and Previous and
+                // Next always share the last row.
                 grid = ObfGrid(
-                    rows = paragraphsPerPage + 1,
+                    rows = (paragraphsPerPage + columns - 1) / columns + 1,
                     columns = 2,
-                    order = List(paragraphsPerPage) { row -> List(2) { buttons.getOrNull(row)?.id } } +
-                        listOf(listOf(previous?.id, next?.id)),
+                    order = List((paragraphsPerPage + columns - 1) / columns) { row ->
+                        if (columns == 1) {
+                            List(2) { buttons.getOrNull(row)?.id }
+                        } else {
+                            List(2) { column -> buttons.getOrNull(row * 2 + column)?.id }
+                        }
+                    } + listOf(listOf(previous?.id, next?.id)),
                 ),
             )
         }

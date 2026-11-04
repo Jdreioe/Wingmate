@@ -1,0 +1,4 @@
+• Ny guidet opsætning: Vælg din stemme, hør den, indstil hastigheden, og vælg Skrivning eller Skærme.
+• Tablets, foldbare og bærbare får rigtige layouts til store skærme. Skrivning holder dine fraser fremme, også med tastaturet oppe.
+• Skærme: tydeligere beskedlinje, knapper til forrige side og startside, og redigering som på startskærmen: Hold en knap nede for at redigere, ændre eller fjerne den, eller træk den.
+• Forhåndsindlæsning af tale er nu slået fra som standard.

@@ -205,11 +205,12 @@ class BoardSetUseCase(
         paragraphsPerPage: Int,
         previousLabel: String,
         nextLabel: String,
+        columns: Int = 1,
     ): ObfBoardSet {
         val graph = io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport.createGraph(
             id = generateId("speech"), name = name, text = text,
             paragraphsPerPage = paragraphsPerPage, previousLabel = previousLabel, nextLabel = nextLabel,
-            now = Clock.System.now().toEpochMilliseconds(),
+            now = Clock.System.now().toEpochMilliseconds(), columns = columns,
         )
         return saveBoardSetGraph(graph).getOrThrow().boardSet
     }

@@ -2,6 +2,8 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -13,6 +15,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -207,25 +210,43 @@ internal fun SettingsContent(
     onAction: (SettingsAction) -> Unit,
     onGuessPronunciation: suspend (String) -> String?,
 ) {
-    BackHandler(enabled = true, onBack = { onAction(SettingsAction.BackClicked) })
+    // Wide windows keep the categories beside the open page. A category is then one level
+    // deep, so Back from it leaves Settings rather than showing the list that is already there.
+    val twoPane = currentWindowWidth() == WindowWidth.Expanded
+    val onBack = {
+        val route = state.route
+        val topLevel = route == SettingsRoute.Home || route is SettingsRoute.Category ||
+            route == SettingsRoute.PronunciationDictionary
+        onAction(if (twoPane && topLevel) SettingsAction.CloseClicked else SettingsAction.BackClicked)
+    }
+    BackHandler(enabled = true, onBack = onBack)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(settingsRouteTitle(state.route))
-                },
-                navigationIcon = {
-                    IconButton(onClick = { onAction(SettingsAction.BackClicked) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                )
+            val navigationIcon: @Composable () -> Unit = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
+                }
+            }
+            val barColors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
             )
+            // Two panes: the title belongs to the list, so it starts above it; each page has its own heading.
+            if (twoPane) {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.ui_settings_title)) },
+                    navigationIcon = navigationIcon,
+                    colors = barColors,
+                )
+            } else {
+                CenterAlignedTopAppBar(
+                    title = { Text(settingsRouteTitle(state.route)) },
+                    navigationIcon = navigationIcon,
+                    colors = barColors,
+                )
+            }
         }
         ) { contentPadding ->
                 Box(
@@ -259,16 +280,28 @@ internal fun SettingsContent(
                                     onAction(SettingsAction.RetrySave)
                                 })
                             }
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                SettingsRouteContent(
+                            if (twoPane) {
+                                SettingsTwoPane(
                                     state = state,
                                     editingAccessState = editingAccessState,
                                     editingAccessAvailable = editingAccessAvailable,
                                     onBackToWelcome = onBackToWelcome,
                                     onAction = onAction,
                                     onGuessPronunciation = onGuessPronunciation,
-                                    modifier = Modifier.fillMaxSize()
                                 )
+                            } else {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                    SettingsRouteContent(
+                                        state = state,
+                                        editingAccessState = editingAccessState,
+                                        editingAccessAvailable = editingAccessAvailable,
+                                        onBackToWelcome = onBackToWelcome,
+                                        onAction = onAction,
+                                        onGuessPronunciation = onGuessPronunciation,
+                                        // A medium window centres one readable column.
+                                        modifier = Modifier.widthIn(max = SettingsDetailMaxWidth).fillMaxSize()
+                                    )
+                                }
                             }
                         }
                     }
@@ -334,6 +367,59 @@ private fun SaveFailureBanner(onRetry: () -> Unit) {
             )
             TextButton(onClick = onRetry) {
                 Text(stringResource(R.string.common_retry))
+            }
+        }
+    }
+}
+
+/** How wide a Settings page grows: past this, a switch drifts too far from its label. */
+private val SettingsDetailMaxWidth = 760.dp
+
+/**
+ * Settings on a wide window: the category list stays on the left and the open page fills
+ * the right. Opening Settings shows Speech, so the right side is never empty. Speech's own
+ * pages (voice, language, providers) open in the right pane with their own Back.
+ */
+@Composable
+private fun SettingsTwoPane(
+    state: SettingsUiState,
+    editingAccessState: EditingAccessState,
+    editingAccessAvailable: Boolean,
+    onBackToWelcome: (() -> Unit)?,
+    onAction: (SettingsAction) -> Unit,
+    onGuessPronunciation: suspend (String) -> String?,
+) {
+    val detailRoute = state.route.takeUnless { it == SettingsRoute.Home } ?: SettingsRoute.Category(SettingsTab.Speech)
+    val selectedTab = when (detailRoute) {
+        is SettingsRoute.Category -> detailRoute.tab
+        SettingsRoute.PronunciationDictionary -> null
+        // The voice, language and provider pages belong to Speech.
+        else -> SettingsTab.Speech
+    }
+    Row(Modifier.fillMaxSize()) {
+        SettingsHomePage(
+            onSelectCategory = { onAction(SettingsAction.CategorySelected(it)) },
+            onOpenPronunciation = { onAction(SettingsAction.PronunciationOpened) },
+            selectedTab = selectedTab,
+            pronunciationSelected = detailRoute == SettingsRoute.PronunciationDictionary,
+            modifier = Modifier.width(380.dp).fillMaxHeight(),
+        )
+        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = SettingsDetailMaxWidth).fillMaxSize()) {
+                Text(
+                    settingsRouteTitle(detailRoute),
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 4.dp).semantics { heading() },
+                )
+                SettingsRouteContent(
+                    state = state.copy(route = detailRoute),
+                    editingAccessState = editingAccessState,
+                    editingAccessAvailable = editingAccessAvailable,
+                    onBackToWelcome = onBackToWelcome,
+                    onAction = onAction,
+                    onGuessPronunciation = onGuessPronunciation,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
             }
         }
     }
@@ -634,7 +720,10 @@ private data class SettingsCategoryItem(
 private fun SettingsHomePage(
     onSelectCategory: (SettingsTab) -> Unit,
     onOpenPronunciation: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** On a two-pane layout, the category open beside the list. */
+    selectedTab: SettingsTab? = null,
+    pronunciationSelected: Boolean = false,
 ) {
     var query by remember { mutableStateOf("") }
     val speechTitle = stringResource(R.string.ui_settings_speech_title)
@@ -1068,6 +1157,7 @@ private fun SettingsHomePage(
                 results.forEachIndexed { index, item ->
                     SettingsCategoryRow(
                         item = item,
+                        selected = !showingSearch && if (item.openPronunciation) pronunciationSelected else item.tab == selectedTab,
                         onClick = {
                             when {
                                 item.openPronunciation -> onOpenPronunciation()
@@ -1091,12 +1181,17 @@ private fun SettingsHomePage(
 @Composable
 private fun SettingsCategoryRow(
     item: SettingsCategoryItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /** Open beside the list: shown by a filled background and announced as selected. */
+    selected: Boolean = false,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
             .clickable(onClick = onClick)
+            // Only the open category is marked: a plain list (phones) announces no selection state.
+            .then(if (selected) Modifier.semantics { this.selected = true } else Modifier)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

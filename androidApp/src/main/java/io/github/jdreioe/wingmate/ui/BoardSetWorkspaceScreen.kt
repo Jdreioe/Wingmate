@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,6 +28,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -52,10 +59,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -81,12 +90,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
@@ -242,7 +253,7 @@ fun BoardSetManagerRoot(
     when (val route = state.route) {
         BoardSetManagerRoute.Library -> BoardSetManagerScreen(
             state = state,
-            statusMessage = state.statusMessage?.resolve(),
+            status = state.status,
             importAvailable = boardImportService != null,
             onAction = viewModel::onAction,
         )
@@ -335,7 +346,7 @@ private fun BoardSetManagerMessage.resolve(): String = when (this) {
 @Composable
 internal fun BoardSetManagerScreen(
     state: BoardSetManagerState,
-    statusMessage: String?,
+    status: LibraryStatus?,
     importAvailable: Boolean,
     onAction: (BoardSetManagerAction) -> Unit,
 ) {
@@ -343,7 +354,7 @@ internal fun BoardSetManagerScreen(
         boardSets = state.boardSets,
         isLoading = state.isLoading,
         isCreating = state.isCreating,
-        statusMessage = statusMessage,
+        status = status,
         onBack = { onAction(BoardSetManagerAction.BackClicked) },
         onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
         onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
@@ -389,7 +400,7 @@ private fun BoardSetManagerScreenPreview() {
                 ),
                 isLoading = false,
             ),
-            statusMessage = null,
+            status = null,
             importAvailable = true,
             onAction = {},
         )
@@ -402,7 +413,7 @@ private fun BoardSetLibraryScreen(
     boardSets: List<ObfBoardSet>,
     isLoading: Boolean,
     isCreating: Boolean,
-    statusMessage: String?,
+    status: LibraryStatus?,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
@@ -415,6 +426,10 @@ private fun BoardSetLibraryScreen(
     onToggleLock: (ObfBoardSet) -> Unit,
     onDelete: (ObfBoardSet) -> Unit
 ) {
+    // A large window shows the library as one readable column with its actions above it,
+    // instead of floating buttons stranded in a far corner.
+    val large = currentWindowWidth().isLarge
+    val actionsReady = !isLoading && !isCreating
     Scaffold(
         topBar = {
             TopAppBar(
@@ -453,7 +468,7 @@ private fun BoardSetLibraryScreen(
             )
         },
         floatingActionButton = {
-            if (!isLoading && !isCreating) {
+            if (actionsReady && !large) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
                     Button(onClick = onImportSpeech) { Text(stringResource(R.string.speech_import_title)) }
                     ExtendedFloatingActionButton(
@@ -465,61 +480,160 @@ private fun BoardSetLibraryScreen(
             }
         }
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            when {
-                isCreating -> Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+        Column(
+            Modifier.fillMaxSize().padding(innerPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (large && actionsReady && boardSets.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .widthIn(max = BoardSetLibraryMaxWidth)
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                 ) {
-                    CircularProgressIndicator()
-                    Text(stringResource(R.string.board_sets_creating))
+                    BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
                 }
-                isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                boardSets.isEmpty() -> Column(
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(stringResource(R.string.board_sets_empty_title), style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.board_sets_empty_body),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    statusMessage?.let {
-                        Spacer(Modifier.height(12.dp))
-                        Text(it, color = MaterialTheme.colorScheme.error)
+            }
+            Box(Modifier.widthIn(max = if (large) BoardSetLibraryMaxWidth else Dp.Unspecified).fillMaxSize()) {
+                when {
+                    isCreating -> Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator()
+                        Text(stringResource(R.string.board_sets_creating))
                     }
-                    Spacer(Modifier.height(16.dp))
-                    if (statusMessage != null) {
-                        Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
-                    } else {
-                        Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
-                    }
-                }
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 152.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    statusMessage?.let {
-                        item { Text(it, color = MaterialTheme.colorScheme.primary) }
-                    }
-                    items(boardSets, key = { it.id }) { boardSet ->
-                        BoardSetLibraryCard(
-                            boardSet = boardSet,
-                            onOpen = { onOpen(boardSet) },
-                            onEdit = { onEdit(boardSet) },
-                            onDuplicate = { onDuplicate(boardSet) },
-                            onToggleLock = { onToggleLock(boardSet) },
-                            onDelete = { onDelete(boardSet) }
+                    isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    boardSets.isEmpty() -> Column(
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(stringResource(R.string.board_sets_empty_title), style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.board_sets_empty_body),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        status?.let {
+                            Spacer(Modifier.height(12.dp))
+                            LibraryStatusBanner(it)
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        if (large) {
+                            // Without floating buttons, the empty library always offers both ways to
+                            // start, also after a failure (e.g. a failed import or the last delete).
+                            // The same buttons, in the same order, as above a list.
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if ((status as? LibraryStatus.Failed)?.canRetry == true) {
+                                    TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 56.dp)) {
+                                        Text(stringResource(R.string.common_retry))
+                                    }
+                                }
+                                BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
+                            }
+                        } else if ((status as? LibraryStatus.Failed)?.canRetry == true) {
+                            Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+                        } else {
+                            Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
+                        }
+                    }
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        // Room for the floating buttons, which a large window does not have.
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        status?.let {
+                            item(key = "status") { LibraryStatusBanner(it) }
+                        }
+                        items(boardSets, key = { it.id }) { boardSet ->
+                            BoardSetLibraryCard(
+                                boardSet = boardSet,
+                                onOpen = { onOpen(boardSet) },
+                                onEdit = { onEdit(boardSet) },
+                                onDuplicate = { onDuplicate(boardSet) },
+                                onToggleLock = { onToggleLock(boardSet) },
+                                onDelete = { onDelete(boardSet) }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/**
+ * The library's last result. A failure is an error container with an icon, so it does not rely
+ * on colour alone; both are announced politely.
+ */
+@Composable
+private fun LibraryStatusBanner(status: LibraryStatus) {
+    val failed = status is LibraryStatus.Failed
+    Surface(
+        color = if (failed) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = if (failed) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (failed) Icons.Default.ErrorOutline else Icons.Default.CheckCircle, contentDescription = null)
+            Text(status.message.resolve(), style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+/** Import speech and New screen, as a large window shows them in both library states. */
+@Composable
+private fun BoardSetLibraryActions(onImportSpeech: () -> Unit, onCreate: () -> Unit) {
+    FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
+        Text(stringResource(R.string.speech_import_title))
+    }
+    Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
+        Icon(Icons.Default.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.board_sets_new))
+    }
+}
+
+/**
+ * The edit top bar while a Button is selected, as Android shows a selection: what is selected,
+ * and labelled actions for it. The non-gesture way to edit or remove a Button.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectedButtonTopBar(label: String, onEdit: () -> Unit, onRemove: () -> Unit, onDeselect: () -> Unit) {
+    TopAppBar(
+        title = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        navigationIcon = {
+            IconButton(onClick = onDeselect) {
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.board_selection_done))
+            }
+        },
+        actions = {
+            TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.board_cell_menu_edit))
+            }
+            TextButton(onClick = onRemove, modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.board_cell_menu_remove), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    )
+}
+
+/** How wide the Screens library grows on a large window. */
+private val BoardSetLibraryMaxWidth = 840.dp
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -551,6 +665,8 @@ private fun BoardSetLibraryCard(
                         contentDescription = if (boardSet.isLocked) stringResource(R.string.board_sets_locked) else null
                     )
                 },
+                // The card supplies the background, so the row and its actions read as one surface.
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier
                     .weight(1f)
                     .clickable(onClickLabel = openLabel, onClick = onOpen)
@@ -854,6 +970,11 @@ private fun BoardSetWorkspaceRoot(
         workspaceViewModel.onAction(BoardWorkspaceAction.BackClicked)
     }
 
+    // The top bar's ← always leaves the Screen; Pages have their own Back in the Message bar.
+    fun leave() {
+        workspaceViewModel.onAction(BoardWorkspaceAction.LeaveClicked)
+    }
+
     fun exportBoardSet() {
         scope.launch {
             workspaceViewModel.onAction(BoardWorkspaceAction.ExportStarted)
@@ -1022,10 +1143,35 @@ private fun BoardSetWorkspaceRoot(
 
     BackHandler(enabled = true, onBack = ::navigateBack)
     PlatformBackgroundEffect { editingAccessController?.lock() }
+    // The selected Button while editing, if any; Back deselects it before leaving.
+    val selectedButton = if (mode == BoardWorkspaceMode.Edit) {
+        selectedField?.let { (row, column) ->
+            activeBoard?.grid?.normalizedOrder()?.getOrNull(row)?.getOrNull(column)
+                ?.let { id -> activeBoard.buttons.firstOrNull { it.id == id } }
+        }
+    } else null
+    BackHandler(enabled = selectedButton != null) { selectedField = null }
 
     Scaffold(
         topBar = {
-            if (!isFullscreen) BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val selection = selectedField
+            if (!isFullscreen && selectedButton != null && selection != null) {
+                SelectedButtonTopBar(
+                    label = selectedButton.label ?: selectedButton.vocalization.orEmpty(),
+                    onEdit = { editingCell = WorkspaceCellTarget(selection.first, selection.second, selectedButton) },
+                    onRemove = {
+                        val session = editSession
+                        val boardId = activeBoard?.id
+                        if (session != null && boardId != null) {
+                            selectedField = null
+                            workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
+                                clearDraftCell(session.draft, boardId, selection.first, selection.second)
+                            ))
+                        }
+                    },
+                    onDeselect = { selectedField = null },
+                )
+            } else if (!isFullscreen) BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val useOverflowMenu = maxWidth < if (mode == BoardWorkspaceMode.Edit) 720.dp else 560.dp
                 TopAppBar(
                 title = {
@@ -1037,7 +1183,10 @@ private fun BoardSetWorkspaceRoot(
                                     activeGraph?.boardSet?.name.orEmpty()
                                 )
                             } else {
-                                activeBoard?.name ?: stringResource(R.string.board_workspace_board_fallback)
+                                // "Screen · Page", so the Communicator sees which Page of which Screen.
+                                val page = activeBoard?.name ?: stringResource(R.string.board_workspace_board_fallback)
+                                val screen = activeGraph?.boardSet?.name
+                                if (screen != null && screen != page && (activeGraph?.boards?.size ?: 0) > 1) "$screen · $page" else page
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1053,11 +1202,24 @@ private fun BoardSetWorkspaceRoot(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = ::navigateBack) {
+                    IconButton(onClick = ::leave) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
+                    if (useOverflowMenu && mode == BoardWorkspaceMode.Edit) {
+                        // Undo is the safety net and Finish the way out, so a phone keeps both
+                        // visible; the rest of the editing tools are in the menu.
+                        IconButton(
+                            onClick = { workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit) },
+                            enabled = editSession?.undoStack?.isNotEmpty() == true
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.board_workspace_undo))
+                        }
+                        TextButton(onClick = ::requestFinishEditing) {
+                            Text(stringResource(R.string.board_workspace_finish))
+                        }
+                    }
                     if (useOverflowMenu) {
                         Box {
                             IconButton(onClick = { appBarMenuExpanded = true }) {
@@ -1077,22 +1239,6 @@ private fun BoardSetWorkspaceRoot(
                                         onClick = {
                                             appBarMenuExpanded = false
                                             showAddBoardDialog = true
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.board_workspace_undo)) },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
-                                        enabled = editSession?.undoStack?.isNotEmpty() == true,
-                                        onClick = {
-                                            appBarMenuExpanded = false
-                                            workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.board_workspace_finish)) },
-                                        onClick = {
-                                            appBarMenuExpanded = false
-                                            requestFinishEditing()
                                         }
                                     )
                                     DropdownMenuItem(
@@ -1208,20 +1354,6 @@ private fun BoardSetWorkspaceRoot(
                                             printBoardSet()
                                         }
                                     )
-                                    if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.board_workspace_home)) },
-                                            leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                            onClick = {
-                                                appBarMenuExpanded = false
-                                                activeGraph?.boardSet?.rootBoardId?.let { rootBoardId ->
-                                                    workspaceViewModel.onAction(
-                                                        BoardWorkspaceAction.GoHome(rootBoardId)
-                                                    )
-                                                }
-                                            }
-                                        )
-                                    }
                                     if (activeGraph?.boardSet?.isLocked == false) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.board_workspace_edit)) },
@@ -1337,17 +1469,6 @@ private fun BoardSetWorkspaceRoot(
                                 contentDescription = stringResource(R.string.phrase_screen_import_export_data)
                             )
                         }
-                        if (workspace.selectedBoardId != activeGraph?.boardSet?.rootBoardId) {
-                            IconButton(onClick = {
-                                activeGraph?.boardSet?.rootBoardId?.let { rootBoardId ->
-                                    workspaceViewModel.onAction(
-                                        BoardWorkspaceAction.GoHome(rootBoardId)
-                                    )
-                                }
-                            }) {
-                                Icon(Icons.Default.Home, contentDescription = stringResource(R.string.board_workspace_home))
-                            }
-                        }
                         if (activeGraph?.boardSet?.isLocked == false) {
                             IconButton(onClick = ::startEditing) {
                                 Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.board_workspace_edit))
@@ -1394,6 +1515,14 @@ private fun BoardSetWorkspaceRoot(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                     ) {
                     ObfBoardView(
+                        pageNavigation = activeGraph?.takeIf { mode == BoardWorkspaceMode.Run && it.boards.size > 1 }?.let { graph ->
+                            PageNavigation(
+                                canGoBack = workspace.canNavigateBack,
+                                atStartPage = workspace.selectedBoardId == graph.boardSet.rootBoardId,
+                                onBack = { workspaceViewModel.onAction(BoardWorkspaceAction.PreviousPageClicked) },
+                                onStartPage = { workspaceViewModel.onAction(BoardWorkspaceAction.GoHome(graph.boardSet.rootBoardId)) },
+                            )
+                        },
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
                         showMessageBar = mode == BoardWorkspaceMode.Run &&
@@ -1613,10 +1742,16 @@ private fun BoardSetWorkspaceRoot(
                                     )
                                 ) {
                                     is CellTapResult.OpenDialog -> {
-                                        selectedField = result.button?.let {
-                                            activeBoard.grid?.fieldAnchorAt(result.row, result.column)
+                                        // Like a launcher: a tap selects a Button (Edit and Remove in the
+                                        // top bar, resize handles on it); tapping it again deselects. An
+                                        // empty cell has nothing to select, so a tap adds a Button there.
+                                        if (result.button != null) {
+                                            val anchor = activeBoard.grid?.fieldAnchorAt(result.row, result.column)
+                                            selectedField = anchor.takeUnless { it == selectedField }
+                                        } else {
+                                            selectedField = null
+                                            editingCell = WorkspaceCellTarget(result.row, result.column, null)
                                         }
-                                        editingCell = WorkspaceCellTarget(result.row, result.column, result.button)
                                     }
                                 }
                             }
@@ -1639,6 +1774,27 @@ private fun BoardSetWorkspaceRoot(
                                     ))
                                 }
                             }
+                        } else null,
+                        // Launcher-style: hold a Button for Edit, Resize or Remove.
+                        cellMenu = if (mode == BoardWorkspaceMode.Edit) {
+                            BoardCellMenu(
+                                onEdit = { row, column, button ->
+                                    selectedField = activeBoard.grid?.fieldAnchorAt(row, column)
+                                    editingCell = WorkspaceCellTarget(row, column, button)
+                                },
+                                // Selecting the Button shows its resize handles.
+                                onResize = { row, column -> selectedField = activeBoard.grid?.fieldAnchorAt(row, column) },
+                                // One edit, so Undo brings it back.
+                                onRemove = { row, column ->
+                                    val session = editSession
+                                    if (session != null) {
+                                        selectedField = null
+                                        workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
+                                            clearDraftCell(session.draft, activeBoard.id, row, column)
+                                        ))
+                                    }
+                                },
+                            )
                         } else null,
                         selectedFieldAnchor = selectedField,
                         selectedFieldSpans = remember(activeBoard.grid, selectedField) {

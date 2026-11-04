@@ -65,7 +65,7 @@ class LikelyNextKeyboardRowTest {
             // Supply deterministic IME insets instead of depending on Gboard timing.
             it.window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
         }
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                     PhraseScreenContent(ui = state, onAction = { actions += it })

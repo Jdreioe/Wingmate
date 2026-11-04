@@ -21,7 +21,7 @@ class SettingsContentTest {
 
     @Test
     fun readyContentShowsRouteTitleAndCategoryRows() {
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 SettingsContent(
                     state = SettingsUiState(
@@ -44,7 +44,7 @@ class SettingsContentTest {
     @Test
     fun loadFailureOffersRetry() {
         var retried = false
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 SettingsContent(
                     state = SettingsUiState(isLoading = false, loadFailed = true),
@@ -68,7 +68,7 @@ class SettingsContentTest {
     @Test
     fun saveFailureBannerRetriesWithoutLosingShownValues() {
         var retried = false
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 SettingsContent(
                     state = SettingsUiState(
@@ -101,7 +101,7 @@ class SettingsContentTest {
     @Test
     fun pendingRestoreDialogConfirmsThroughAction() {
         var confirmed = false
-        composeRule.setContent {
+        composeRule.setPhoneContent {
             AppTheme {
                 SettingsContent(
                     state = SettingsUiState(

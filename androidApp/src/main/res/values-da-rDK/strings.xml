@@ -69,7 +69,6 @@
     <string name="board_sets_delete_error">Skærmen kunne ikke slettes</string>
     <string name="board_sets_import">Importer skærm</string>
     <string name="board_sets_imported">Skærmen blev importeret</string>
-    <string name="board_sets_import_error">Skærmen kunne ikke importeres</string>
     <string name="common_more_actions">Flere handlinger</string>
     <string name="board_workspace_editing">Redigerer: %1$s</string>
     <string name="board_workspace_unlock_to_edit">Lås skærmen op før redigering</string>
@@ -708,4 +707,29 @@
     <string name="welcome_review_speed">Hastighed %1$.1f×</string>
     <string name="ui_settings_azure_setup">Opsæt Azure</string>
     <string name="ui_settings_google_setup">Opsæt Google Cloud TTS</string>
+    <string name="setup_section_voice">Din stemme</string>
+    <string name="setup_section_communicate">Sådan kommunikerer du</string>
+    <string name="setup_section_privacy">Privatliv</string>
+    <string name="setup_section_review">Gennemse</string>
+    <string name="setup_progress_description">Trin %1$d af %2$d: %3$s</string>
+    <string name="typing_hide_keyboard">Skjul tastatur</string>
+    <string name="typing_panel_earlier">Tidligere handlinger</string>
+    <string name="typing_panel_more">Flere handlinger</string>
+    <string name="board_import_error_unreadable">Filen kunne ikke åbnes. Vælg den igen, eller tjek at det er en .obf- eller .obz-fil.</string>
+    <string name="board_import_error_not_a_board">Filen er ikke en tavle, Wingmate kan læse. Vælg en .obf- eller .obz-fil.</string>
+    <string name="board_import_error_damaged">Denne .obz-fil er beskadiget eller er ikke et tavlearkiv.</string>
+    <string name="board_import_error_incomplete">Tavlefilen er ufuldstændig: Dens manifest eller links mellem siderne mangler eller er forkerte.</string>
+    <string name="board_import_error_unsafe">Filen indeholder usikre eller dobbelte elementer, så den blev ikke importeret.</string>
+    <string name="board_import_error_encrypted">Filen er beskyttet med adgangskode. Eksportér den igen uden adgangskode.</string>
+    <string name="board_import_error_too_large">Filen er for stor til at blive importeret.</string>
+    <string name="board_import_error_media">Nogle billeder eller lyde i filen kunne ikke findes, så den blev ikke importeret.</string>
+    <string name="board_import_error_not_saved">Skærmen kunne ikke gemmes på denne enhed. Prøv igen.</string>
+    <string name="board_cell_menu_edit">Rediger</string>
+    <string name="board_cell_menu_resize">Tilpas størrelse</string>
+    <string name="board_cell_menu_remove">Fjern</string>
+    <string name="board_selection_done">Færdig med at vælge</string>
+    <string name="board_message_delete_word">Slet ord</string>
+    <string name="board_message_clear">Ryd</string>
+    <string name="board_page_back">Forrige side</string>
+    <string name="board_page_start">Startside</string>
 </resources>

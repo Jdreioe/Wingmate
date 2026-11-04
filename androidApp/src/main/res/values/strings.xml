@@ -69,7 +69,6 @@
     <string name="board_sets_delete_error">Unable to delete screen</string>
     <string name="board_sets_import">Import screen</string>
     <string name="board_sets_imported">Screen imported</string>
-    <string name="board_sets_import_error">Unable to import screen</string>
     <string name="common_more_actions">More actions</string>
     <string name="board_workspace_editing">Editing: %1$s</string>
     <string name="board_workspace_unlock_to_edit">Unlock this screen before editing</string>
@@ -708,4 +707,29 @@
     <string name="welcome_review_speed">Speed %1$.1f×</string>
     <string name="ui_settings_azure_setup">Set up Azure</string>
     <string name="ui_settings_google_setup">Set up Google Cloud TTS</string>
+    <string name="setup_section_voice">Your voice</string>
+    <string name="setup_section_communicate">How you communicate</string>
+    <string name="setup_section_privacy">Privacy</string>
+    <string name="setup_section_review">Review</string>
+    <string name="setup_progress_description">Step %1$d of %2$d: %3$s</string>
+    <string name="typing_hide_keyboard">Hide keyboard</string>
+    <string name="typing_panel_earlier">Earlier actions</string>
+    <string name="typing_panel_more">More actions</string>
+    <string name="board_import_error_unreadable">The file could not be opened. Pick it again, or check that it is an .obf or .obz file.</string>
+    <string name="board_import_error_not_a_board">This file is not a board Wingmate can read. Pick an .obf or .obz file.</string>
+    <string name="board_import_error_damaged">This .obz file is damaged or is not a board archive.</string>
+    <string name="board_import_error_incomplete">This board file is incomplete: its manifest or its links between pages are missing or wrong.</string>
+    <string name="board_import_error_unsafe">This file contains unsafe or duplicate entries, so it was not imported.</string>
+    <string name="board_import_error_encrypted">This file is password-protected. Export it again without a password.</string>
+    <string name="board_import_error_too_large">This file is too large to import.</string>
+    <string name="board_import_error_media">Some pictures or sounds in this file could not be found, so it was not imported.</string>
+    <string name="board_import_error_not_saved">The Screen could not be saved on this device. Try again.</string>
+    <string name="board_cell_menu_edit">Edit</string>
+    <string name="board_cell_menu_resize">Resize</string>
+    <string name="board_cell_menu_remove">Remove</string>
+    <string name="board_selection_done">Done selecting</string>
+    <string name="board_message_delete_word">Delete word</string>
+    <string name="board_message_clear">Clear</string>
+    <string name="board_page_back">Previous page</string>
+    <string name="board_page_start">Start page</string>
 </resources>

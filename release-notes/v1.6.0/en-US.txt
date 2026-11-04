@@ -1,0 +1,4 @@
+• A new guided setup: choose your voice, hear it, set its speed, then pick Typing or Screens.
+• Tablets, foldables and laptops get real large-screen layouts. Typing keeps your Phrases in view, even with the keyboard up.
+• Screens: a clearer Message bar, Previous page and Start page buttons, and editing like your home screen: hold a Button to edit, resize or remove it, or drag it.
+• Speech preloading is now off by default, to avoid unexpected cloud use.

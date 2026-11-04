@@ -94,6 +94,8 @@ internal sealed interface SettingsAction {
     data object RetryLoad : SettingsAction
     data object RetrySave : SettingsAction
     data object BackClicked : SettingsAction
+    /** Leaves Settings from any page, e.g. Back on a two-pane layout, where the categories stay in view. */
+    data object CloseClicked : SettingsAction
 
     data class CategorySelected(val tab: SettingsTab) : SettingsAction
     data object PronunciationOpened : SettingsAction
@@ -382,6 +384,7 @@ internal class SettingsViewModel(
             SettingsAction.RetryLoad -> load()
             SettingsAction.RetrySave -> retrySave()
             SettingsAction.BackClicked -> handleBack()
+            SettingsAction.CloseClicked -> sendEvent(SettingsEvent.Close)
 
             is SettingsAction.CategorySelected -> selectCategory(action.tab)
             SettingsAction.PronunciationOpened -> openDictionary()
