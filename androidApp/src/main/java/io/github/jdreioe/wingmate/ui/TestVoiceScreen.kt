@@ -11,7 +11,13 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.domain.TtsEngine
+import kotlinx.coroutines.CancellationException
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.SpeechService
@@ -29,15 +35,18 @@ import com.hojmoseit.wingmate.R
 /**
  * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
  * tested (for example how they introduce themselves) as a Phrase; [onNext] receives that
- * text, or null when it should not be saved. Nothing is saved here.
+ * text, or null when it should not be saved. Previews are not recorded in History or cached.
  */
 @Composable
 fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?) -> Unit, onBack: () -> Unit) {
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val settingsUseCase = koinInject<SettingsUseCase>()
     val defaultTestText = stringResource(R.string.test_voice_default_text)
     
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
+    var engine by remember { mutableStateOf(TtsEngine.SYSTEM) }
+    var playbackFailed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var testText by remember(defaultTestText) { mutableStateOf(initialPhraseToSave ?: defaultTestText) }
     var keepAsPhrase by remember { mutableStateOf(initialPhraseToSave != null) }
@@ -47,9 +56,13 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
     // Load selected voice
     LaunchedEffect(voiceUseCase) {
         try {
-            selectedVoice = withContext(Dispatchers.IO) {
-                voiceUseCase.selected()
+            val (voice, savedEngine) = withContext(Dispatchers.IO) {
+                voiceUseCase.selected() to settingsUseCase.get().ttsEngine
             }
+            selectedVoice = voice
+            engine = savedEngine
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             OperationalLogger.warn("voice_selection.load", "failed", exceptionClass = e.loggingClassName())
         } finally {
@@ -139,15 +152,24 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                         scope.launch {
                             try {
                                 isPlaying = true
+                                playbackFailed = false
+                                // A preview: kept out of History and the audio cache, and played
+                                // with exactly the chosen engine so a failing cloud voice is not
+                                // silently replaced by the system voice.
                                 withContext(Dispatchers.IO) {
-                                        speechService.speak(
+                                    speechService.speakWithoutHistory(
                                         text = testText,
                                         voice = selectedVoice,
                                         pitch = selectedVoice?.pitch,
-                                        rate = selectedVoice?.rate
+                                        rate = selectedVoice?.rate,
+                                        cacheAudio = false,
+                                        engine = engine,
                                     )
                                 }
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
+                                playbackFailed = true
                                 OperationalLogger.warn("speech.test", "failed", exceptionClass = e.loggingClassName())
                             } finally {
                                 isPlaying = false
@@ -178,6 +200,16 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 )
             }
             
+            if (playbackFailed) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.test_voice_failed),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(

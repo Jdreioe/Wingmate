@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,7 +22,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.hojmoseit.wingmate.R
@@ -45,19 +48,25 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.getKoin
 
 /**
- * The answers collected during first-run setup. Voice and language choices are saved
- * by their own pages as before; everything here is saved only when the Communicator
- * presses "Start communicating", so abandoning setup leaves no partial workspace choices.
+ * The answers collected during setup. Voice and language choices are saved by their own
+ * pages as before; everything here is saved only when the Communicator presses
+ * "Start communicating". Start from [fromSettings] so re-running setup keeps current choices.
  */
 data class WelcomeChoices(
     val startupMode: StartupMode = StartupMode.Keyboard,
-    /** Only meaningful for [StartupMode.Screens]: open a new blank Screen on arrival. */
-    val createBlankScreen: Boolean = true,
     /** A test sentence the Communicator chose to keep as a Phrase, or null. */
     val phraseToSave: String? = null,
     val historyVisible: Boolean = true,
     val featureUsageReportingEnabled: Boolean = false,
-)
+) {
+    companion object {
+        fun fromSettings(settings: Settings) = WelcomeChoices(
+            startupMode = settings.startupMode,
+            historyVisible = settings.historyVisible,
+            featureUsageReportingEnabled = settings.featureUsageReportingEnabled,
+        )
+    }
+}
 
 /** One page of setup. [analyticsName] is stable across R8 renaming. */
 private sealed class WelcomeStep(val analyticsName: String) {
@@ -82,15 +91,37 @@ private sealed class WelcomeStep(val analyticsName: String) {
  */
 @Composable
 fun WelcomeScreen(
-    onComplete: (WelcomeChoices) -> Unit,
-    onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit
+    initialChoices: WelcomeChoices,
+    /** Saves [WelcomeChoices] and opens the workspace; returns false if saving failed. */
+    onComplete: suspend (WelcomeChoices) -> Boolean,
+    onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit,
+    /** Leaves setup without saving; only offered when setup was finished before. */
+    onExit: (() -> Unit)?,
 ) {
     val koin = getKoin()
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    val scope = rememberCoroutineScope()
 
     var path by remember { mutableStateOf(listOf<WelcomeStep>(WelcomeStep.Start)) }
-    var choices by remember { mutableStateOf(WelcomeChoices()) }
+    var choices by remember { mutableStateOf(initialChoices) }
     val step = path.last()
+
+    /** Remember that setup began, so an interrupted setup resumes on next launch (see needsWelcome). */
+    fun markStarted() {
+        scope.launch {
+            try {
+                withContext(Dispatchers.Default) {
+                    settingsUseCase?.let { it.update(it.get().copy(welcomeFlowStarted = true)) }
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                // Only resumption after an interruption is lost; setup itself can continue.
+                OperationalLogger.warn("welcome.start", "mark_started_failed", exceptionClass = failure.loggingClassName())
+            }
+        }
+    }
 
     fun push(next: WelcomeStep) { path = path + next }
     fun pop() { if (path.size > 1) path = path.dropLast(1) }
@@ -103,14 +134,20 @@ fun WelcomeScreen(
     LaunchedEffect(step) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.analyticsName)
     }
-    BackHandler(enabled = path.size > 1) { pop() }
+    BackHandler(enabled = path.size > 1 || onExit != null) {
+        if (path.size > 1) pop() else onExit?.invoke()
+    }
 
     val pageModifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)
 
     when (step) {
         WelcomeStep.Start -> StartPage(
-            onSetUp = { push(WelcomeStep.VoiceEngine) },
+            onSetUp = {
+                markStarted()
+                push(WelcomeStep.VoiceEngine)
+            },
             onBackupRestored = onBackupRestored,
+            onExit = onExit,
         )
         WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(
             onNext = {
@@ -295,6 +332,7 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 private fun StartPage(
     onSetUp: () -> Unit,
     onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit,
+    onExit: (() -> Unit)?,
 ) {
     val koin = getKoin()
     val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
@@ -311,8 +349,10 @@ private fun StartPage(
         title = stringResource(R.string.welcome_title),
         subtitle = stringResource(R.string.welcome_subtitle),
         primaryLabel = stringResource(R.string.welcome_set_up),
+        // Leaving the page would cancel a restore in progress.
+        primaryEnabled = !isRestoring,
         onPrimary = onSetUp,
-        onBack = null,
+        onBack = onExit?.takeIf { !isRestoring },
     ) {
         Text(stringResource(R.string.welcome_supporter_note), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
@@ -392,25 +432,20 @@ private fun WorkspacePage(
         onPrimary = onContinue,
         onBack = onBack,
     ) {
-        ChoiceCard(
-            title = stringResource(R.string.welcome_start_mode_keyboard_title),
-            description = stringResource(R.string.welcome_start_mode_keyboard_desc),
-            icon = Icons.Default.Keyboard,
-            selected = choices.startupMode == StartupMode.Keyboard,
-            onSelect = { onChoicesChange(choices.copy(startupMode = StartupMode.Keyboard)) },
-        )
-        ChoiceCard(
-            title = stringResource(R.string.welcome_start_mode_screens_title),
-            description = stringResource(R.string.welcome_start_mode_screens_desc),
-            icon = Icons.Default.GridView,
-            selected = choices.startupMode == StartupMode.Screens,
-            onSelect = { onChoicesChange(choices.copy(startupMode = StartupMode.Screens)) },
-        )
-        if (choices.startupMode == StartupMode.Screens) {
-            SwitchRow(
-                label = stringResource(R.string.welcome_create_blank_screen),
-                checked = choices.createBlankScreen,
-                onCheckedChange = { onChoicesChange(choices.copy(createBlankScreen = it)) },
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            ChoiceCard(
+                title = stringResource(R.string.welcome_start_mode_keyboard_title),
+                description = stringResource(R.string.welcome_start_mode_keyboard_desc),
+                icon = Icons.Default.Keyboard,
+                selected = choices.startupMode == StartupMode.Keyboard,
+                onSelect = { onChoicesChange(choices.copy(startupMode = StartupMode.Keyboard)) },
+            )
+            ChoiceCard(
+                title = stringResource(R.string.welcome_start_mode_screens_title),
+                description = stringResource(R.string.welcome_start_mode_screens_desc),
+                icon = Icons.Default.GridView,
+                selected = choices.startupMode == StartupMode.Screens,
+                onSelect = { onChoicesChange(choices.copy(startupMode = StartupMode.Screens)) },
             )
         }
     }
@@ -452,7 +487,8 @@ private fun PrivacyPage(
     onBack: () -> Unit,
     onContinue: () -> Unit,
 ) {
-    val settingsUseCase = getKoin().getOrNull<SettingsUseCase>()
+    val koin = getKoin()
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     // The voice engine was saved by the voice pages; read it so the speech card names
     // the provider that actually receives text.
     val engine by produceState<TtsEngine?>(null, settingsUseCase) {
@@ -547,9 +583,10 @@ private fun ReviewPage(
     onChangeWorkspace: () -> Unit,
     onChangePrivacy: () -> Unit,
     onBack: () -> Unit,
-    onFinish: () -> Unit,
+    onFinish: suspend () -> Boolean,
 ) {
-    val voiceUseCase = getKoin().getOrNull<VoiceUseCase>()
+    val koin = getKoin()
+    val voiceUseCase = remember(koin) { koin.getOrNull<VoiceUseCase>() }
     val unknownVoice = stringResource(R.string.test_voice_unknown_voice)
     val voiceName by produceState(unknownVoice, voiceUseCase) {
         value = try {
@@ -564,14 +601,12 @@ private fun ReviewPage(
         }
     }
     var finishing by remember { mutableStateOf(false) }
+    var saveFailed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val workspace = when (choices.startupMode) {
         StartupMode.Keyboard -> stringResource(R.string.welcome_start_mode_keyboard_title)
-        StartupMode.Screens -> if (choices.createBlankScreen) {
-            stringResource(R.string.welcome_review_screens_blank)
-        } else {
-            stringResource(R.string.welcome_start_mode_screens_title)
-        }
+        StartupMode.Screens -> stringResource(R.string.welcome_start_mode_screens_title)
     }
     val on = stringResource(R.string.welcome_review_on)
     val off = stringResource(R.string.welcome_review_off)
@@ -588,10 +623,25 @@ private fun ReviewPage(
         primaryEnabled = !finishing,
         onPrimary = {
             finishing = true
-            onFinish()
+            saveFailed = false
+            scope.launch {
+                // On success this page leaves composition; on failure the choices stay for a retry.
+                if (!onFinish()) {
+                    saveFailed = true
+                    finishing = false
+                }
+            }
         },
-        onBack = onBack,
+        onBack = onBack.takeIf { !finishing },
     ) {
+        if (saveFailed) {
+            Text(
+                stringResource(R.string.welcome_review_save_failed),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         ReviewRow(stringResource(R.string.welcome_review_voice), voiceName, onChangeVoice)
         HorizontalDivider()
         ReviewRow(

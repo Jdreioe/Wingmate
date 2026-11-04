@@ -25,9 +25,9 @@ internal suspend fun loadStartupState(
 }
 
 /**
- * Setup is shown only to people who have never finished it. Installs from before
- * [Settings.welcomeFlowCompleted] decided routing are recognised by their selected voice,
- * so an existing Communicator is never sent back through setup.
+ * Setup is shown until it is finished. Voice pages save the voice immediately, so a
+ * selected voice alone only marks an install from before setup was tracked
+ * ([Settings.welcomeFlowStarted] unset); those Communicators are never sent back through setup.
  */
 internal fun needsWelcome(settings: Settings, hasSelectedVoice: Boolean): Boolean =
-    !settings.welcomeFlowCompleted && !hasSelectedVoice
+    !settings.welcomeFlowCompleted && (settings.welcomeFlowStarted || !hasSelectedVoice)

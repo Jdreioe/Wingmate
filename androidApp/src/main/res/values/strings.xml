@@ -476,7 +476,7 @@
     <string name="welcome_start_mode_keyboard_title">Typing</string>
     <string name="welcome_start_mode_keyboard_desc">Type messages and use saved Phrases and Categories.</string>
     <string name="welcome_start_mode_screens_title">Screens</string>
-    <string name="welcome_start_mode_screens_desc">Communicate with linked pages, fields, and symbols.</string>
+    <string name="welcome_start_mode_screens_desc">Communicate with linked Pages and symbols. You start in your Screens library, where you can create or import a Screen.</string>
     <string name="mode_switch_to_screens">Switch to screens</string>
     <string name="mode_switch_to_keyboard">Switch to keyboard and phrases</string>
     <string name="board_workspace_enter_fullscreen">Open page full screen</string>
@@ -610,13 +610,13 @@
     <string name="voice_engine_pros">✅ Pros:</string>
     <string name="voice_engine_cons">❌ Cons:</string>
     <string name="voice_engine_azure_pros">• 400+ high-quality neural voices\n• 140+ languages and variants\n• Natural pronunciation and intonation\n• Consistent quality across devices\n• Advanced voice controls (SSML)</string>
-    <string name="voice_engine_azure_cons">• Requires an internet connection\n• API key setup is needed\n• Uses a cloud service\n• May have a slight network delay</string>
+    <string name="voice_engine_azure_cons">• Requires an internet connection\n• API key setup is needed\n• Text you speak is sent to Microsoft Azure\n• May have a slight network delay</string>
     <string name="voice_engine_google_pros">• Broad selection of natural voices\n• Many languages and regional variants\n• Consistent quality across devices\n• SSML language and pause support</string>
-    <string name="voice_engine_google_cons">• Requires internet and a Google Cloud project\n• Billing and API key setup are required\n• Uses a cloud service\n• Usage may incur charges</string>
-    <string name="voice_engine_system_pros">• Works completely offline\n• No setup or API keys required\n• Respects system accessibility settings\n• Fast response time\n• Complete privacy (no cloud)</string>
-    <string name="voice_engine_system_cons">• Limited voice selection\n• Quality varies by device\n• Fewer language options\n• Less natural-sounding speech</string>
+    <string name="voice_engine_google_cons">• Requires internet and a Google Cloud project\n• Billing and API key setup are required\n• Text you speak is sent to Google Cloud\n• Usage may incur charges</string>
+    <string name="voice_engine_system_pros">• No setup or API keys required\n• Uses the speech engine installed on this device\n• Respects system accessibility settings\n• Fast response time</string>
+    <string name="voice_engine_system_cons">• Limited voice selection\n• Quality varies by device\n• Fewer language options\n• Some engines use the internet for some voices</string>
     <string name="voice_engine_recommendation_title">💡 Our recommendation:</string>
-    <string name="voice_engine_recommendation">Choose the cloud provider whose voices suit you best, or System TTS for offline use and privacy.</string>
+    <string name="voice_engine_recommendation">Choose the cloud provider whose voices suit you best, or System TTS to start without setup.</string>
     <string name="voice_settings_title">Voice settings – %1$s</string>
     <string name="voice_settings_current_engine">Current engine: %1$s</string>
     <string name="voice_settings_system_description">Using the device’s built-in text-to-speech</string>
@@ -667,7 +667,6 @@
     <string name="welcome_set_up">Set up Wingmate</string>
     <string name="welcome_supporter_note">Setting this up for someone else? Make the choices together where you can. Wingmate does not create an account or profile.</string>
     <string name="welcome_restore_backup">Restore a backup</string>
-    <string name="welcome_create_blank_screen">Start with a new blank Screen</string>
     <string name="welcome_privacy_title">Where your words go</string>
     <string name="welcome_privacy_subtitle">Each item says whether it stays on this device or is sent online. You can change these later in Settings.</string>
     <string name="welcome_privacy_on_device">Stays on this device</string>
@@ -675,8 +674,8 @@
     <string name="welcome_privacy_online">Sent online</string>
     <string name="welcome_privacy_speech_title">Speech</string>
     <string name="welcome_privacy_speech_system">Wingmate gives the text you speak to the speech engine installed on this device and does not send it online itself. Some engines can use the internet; check the engine\'s own settings.</string>
-    <string name="welcome_privacy_speech_cloud">Text you speak is sent to %1$s to create audio. The audio is saved on this device so repeated messages can play without sending them again.</string>
-    <string name="welcome_privacy_history_desc">Messages you speak are listed in History so you can say them again. When History is hidden, new messages are not listed, but their audio is still cached on this device for faster playback.</string>
+    <string name="welcome_privacy_speech_cloud">Text you speak is sent to %1$s to create audio. Audio for whole messages may be saved on this device so they can play again without being sent.</string>
+    <string name="welcome_privacy_history_desc">Messages you speak are listed in History so you can say them again. Hiding History only hides them: the messages are still saved on this device and included in backups you make.</string>
     <string name="welcome_review_title">Ready to communicate</string>
     <string name="welcome_review_subtitle">Check your choices. You can change any of them now or later in Settings.</string>
     <string name="welcome_review_voice">Voice</string>
@@ -688,8 +687,9 @@
     <string name="welcome_review_change_label">Change %1$s</string>
     <string name="welcome_review_on">on</string>
     <string name="welcome_review_off">off</string>
-    <string name="welcome_review_privacy_value">History %1$s · Anonymous reporting %2$s</string>
-    <string name="welcome_review_screens_blank">Screens, with a new blank Screen</string>
+    <string name="welcome_review_privacy_value">Show History %1$s · Anonymous reporting %2$s</string>
     <string name="welcome_review_finish">Start communicating</string>
     <string name="test_voice_keep_as_phrase">Keep this sentence as a Phrase</string>
+    <string name="welcome_review_save_failed">Your choices could not be saved. They are still here, so you can try again.</string>
+    <string name="test_voice_failed">This voice could not play. Check your internet connection or choose another voice.</string>
 </resources>

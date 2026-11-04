@@ -33,7 +33,6 @@ import org.koin.compose.koinInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
 
 enum class Screen { Welcome, Phrases, BoardSets }
 
@@ -60,79 +59,78 @@ fun App() {
             var currentScreen by remember { mutableStateOf<Screen?>(null) }
             var startupLoadState by remember { mutableStateOf<StartupLoadState>(StartupLoadState.Loading) }
             var startupRetryKey by remember { mutableIntStateOf(0) }
-            var createBoardSetOnLaunch by remember { mutableStateOf(false) }
             var startupBoardSetId by remember { mutableStateOf<String?>(null) }
-            val scope = rememberCoroutineScope()
 
             fun routeFor(mode: StartupMode): Screen = when (mode) {
                 StartupMode.Keyboard -> Screen.Phrases
                 StartupMode.Screens -> Screen.BoardSets
             }
 
-            fun completeWelcomeAndNavigate(choices: WelcomeChoices) {
-                scope.launch {
-                    val mode = choices.startupMode
-                    val savedSettings = try {
-                        withContext(Dispatchers.Default) {
-                            settingsRepository.update(
-                                settingsStateManager.getCurrentSettings().copy(
-                                    welcomeFlowCompleted = true,
-                                    startupMode = mode,
-                                    historyVisible = choices.historyVisible,
-                                    featureUsageReportingEnabled = choices.featureUsageReportingEnabled,
-                                )
+            /**
+             * Saves setup choices and opens the chosen workspace. Returns false, leaving the
+             * Communicator on Review with their choices intact, if anything could not be saved.
+             * Retrying is safe: the settings write is idempotent and the Phrase is added last.
+             */
+            suspend fun completeWelcomeAndNavigate(choices: WelcomeChoices): Boolean {
+                val mode = choices.startupMode
+                val savedSettings = try {
+                    withContext(Dispatchers.Default) {
+                        // Read fresh: the voice pages saved engine and language during setup.
+                        settingsRepository.update(
+                            settingsRepository.get().copy(
+                                welcomeFlowCompleted = true,
+                                startupMode = mode,
+                                historyVisible = choices.historyVisible,
+                                featureUsageReportingEnabled = choices.featureUsageReportingEnabled,
                             )
+                        )
+                    }
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (failure: Exception) {
+                    OperationalLogger.warn("welcome.complete", "settings_save_failed", exceptionClass = failure.loggingClassName())
+                    return false
+                }
+                settingsStateManager.applyLoadedSettings(savedSettings)
+                welcomeCompleted = true
+                choices.phraseToSave?.let { text ->
+                    try {
+                        withContext(Dispatchers.Default) {
+                            phraseUseCase.add(Phrase(id = "", text = text, createdAt = 0))
                         }
                     } catch (failure: CancellationException) {
                         throw failure
-                    } catch (_: Exception) {
-                        startupLoadState = StartupLoadState.Failed
-                        return@launch
+                    } catch (failure: Exception) {
+                        OperationalLogger.warn("welcome.complete", "phrase_save_failed", exceptionClass = failure.loggingClassName())
+                        return false
                     }
-                    settingsStateManager.applyLoadedSettings(savedSettings)
-                    // Saved after settings so a failed save cannot leave a duplicate Phrase
-                    // behind when setup is retried. A failure only loses this convenience
-                    // Phrase; the Communicator can still type it, so setup continues.
-                    choices.phraseToSave?.let { text ->
-                        try {
-                            withContext(Dispatchers.Default) {
-                                phraseUseCase.add(Phrase(id = "", text = text, createdAt = 0))
-                            }
-                        } catch (failure: CancellationException) {
-                            throw failure
-                        } catch (failure: Exception) {
-                            OperationalLogger.warn("welcome.phrase", "save_failed", exceptionClass = failure.loggingClassName())
-                        }
-                    }
-                    createBoardSetOnLaunch = mode == StartupMode.Screens && choices.createBlankScreen
-                    startupBoardSetId = null
-                    featureUsageReporter.setEnabled(choices.featureUsageReportingEnabled)
-                    if (choices.featureUsageReportingEnabled) {
-                        featureUsageReporter.reportEvent(
-                            FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
-                            "enabled" to "true",
-                            "source" to "welcome_flow"
-                        )
-                    }
-                    val target = routeFor(mode)
-                    currentScreen = target
+                }
+                startupBoardSetId = null
+                featureUsageReporter.setEnabled(choices.featureUsageReportingEnabled)
+                if (choices.featureUsageReportingEnabled) {
                     featureUsageReporter.reportEvent(
-                        FeatureUsageEvents.WELCOME_COMPLETED,
-                        "target" to target.name,
-                        "startup_mode" to mode.name.lowercase()
+                        FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
+                        "enabled" to "true",
+                        "source" to "welcome_flow"
                     )
                 }
+                val target = routeFor(mode)
+                currentScreen = target
+                featureUsageReporter.reportEvent(
+                    FeatureUsageEvents.WELCOME_COMPLETED,
+                    "target" to target.name,
+                    "startup_mode" to mode.name.lowercase()
+                )
+                return true
             }
 
             fun showWelcomeFlow() {
-                createBoardSetOnLaunch = false
                 startupBoardSetId = null
                 currentScreen = Screen.Welcome
                 featureUsageReporter.reportEvent(FeatureUsageEvents.WELCOME_REOPENED)
             }
 
             fun navigateAfterBackupRestore(settings: Settings, hasSelectedVoice: Boolean) {
-                createBoardSetOnLaunch = false
                 startupBoardSetId = settings.startupBoardSetId
                 welcomeCompleted = settings.welcomeFlowCompleted
                 featureUsageReporter.setEnabled(settings.featureUsageReportingEnabled)
@@ -172,7 +170,6 @@ fun App() {
                 startupLoadState = loaded
                 if (loaded is StartupLoadState.Ready) {
                     settingsStateManager.applyLoadedSettings(loaded.settings)
-                    createBoardSetOnLaunch = false
                     startupBoardSetId = loaded.settings.startupBoardSetId
                     welcomeCompleted = loaded.settings.welcomeFlowCompleted
                     featureUsageReporter.setEnabled(loaded.settings.featureUsageReportingEnabled)
@@ -193,7 +190,6 @@ fun App() {
             }
 
             BackHandler(enabled = currentScreen == Screen.BoardSets) {
-                createBoardSetOnLaunch = false
                 startupBoardSetId = null
                 currentScreen = Screen.Phrases
             }
@@ -235,15 +231,20 @@ fun App() {
                                 else -> when (currentScreen) {
                                 Screen.Welcome -> {
                                     WelcomeScreen(
+                                        initialChoices = remember { WelcomeChoices.fromSettings(settingsStateManager.getCurrentSettings()) },
                                         onComplete = ::completeWelcomeAndNavigate,
-                                        onBackupRestored = ::navigateAfterBackupRestore
+                                        onBackupRestored = ::navigateAfterBackupRestore,
+                                        onExit = if (welcomeCompleted == true) {
+                                            { currentScreen = routeFor(settingsStateManager.getCurrentSettings().startupMode) }
+                                        } else {
+                                            null
+                                        },
                                     )
                                 }
                                 Screen.Phrases -> {
                                     PhraseScreen(
                                         onBackToWelcome = ::showWelcomeFlow,
                                         onOpenBoardSetManager = {
-                                            createBoardSetOnLaunch = false
                                             startupBoardSetId = null
                                             currentScreen = Screen.BoardSets
                                         },
@@ -253,10 +254,8 @@ fun App() {
                                     BoardSetManagerRoot(
                                         onBackToWelcome = ::showWelcomeFlow,
                                         onBack = {
-                                            createBoardSetOnLaunch = false
                                             currentScreen = Screen.Phrases
                                         },
-                                        createOnLaunch = createBoardSetOnLaunch,
                                         initialBoardSetId = startupBoardSetId,
                                     )
                                 }
