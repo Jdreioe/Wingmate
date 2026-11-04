@@ -559,3 +559,28 @@
 "elevenlabs.error" = "Kunne ikke fuldføre anmodningen. Kontrollér forbindelsen, nøglens rettigheder og tilgængelige stemmer, og prøv igen.";
 "elevenlabs.save" = "Gem sikkert og bekræft";
 "elevenlabs.clear" = "Fjern nøgle";
+
+/* Interaction, Screens, and settings */
+"board_cell_opens_board" = "Åbner side: %@";
+"boardset.cell.merge" = "Størrelse";
+"boardset.cell.merge_1x1" = "1 × 1";
+"boardset.cell.merge_footer" = "Udvid en knap, så den fylder flere felter. Kun ledige felter kan flettes.";
+"boardset.cell.merge_size" = "Flettet størrelse";
+"boardset.export_obz" = "Eksportér";
+"common.off" = "Fra";
+"interaction.paused_status" = "Hviletilstand: valg ved at holde markøren stille og valgtasten er sat på pause";
+"interaction.rest_mode" = "Hviletilstand";
+"interaction.resume" = "Genoptag input";
+"settings.display.message_bar" = "Vis beskedlinje";
+"settings.display.speak_button" = "Vis taleknap i beskedlinjen";
+"settings.interaction.description" = "Vælg, hvordan du peger, vælger og holder pause. Genveje virker kun på et kommunikationsmål.";
+"settings.interaction.rest_key" = "Tast til hviletilstand";
+"settings.interaction.select_key" = "Tast til valg";
+"settings.interaction.title" = "Betjening";
+"settings.pointer_emphasis.ios_note" = "Wingmate bevarer iOS-systemmarkøren og fremhæver det aktuelle mål.";
+"settings.pointer_emphasis.outline" = "Omrids";
+"settings.pointer_emphasis.ring" = "Ring";
+"settings.pointer_emphasis.size" = "Markørstørrelse";
+"settings.pointer_emphasis.style" = "Markørstil";
+"settings.pointer_emphasis.system" = "System";
+"settings.pointer_emphasis.title" = "Markørfremhævning";

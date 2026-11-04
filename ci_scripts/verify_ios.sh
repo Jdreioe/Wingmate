@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+python3 ci_scripts/check_ios_localizations.py
+
 simulator_id="$(
   xcrun simctl list devices available \
     | sed -nE '/iPhone/ { s/.*\(([0-9A-Fa-f-]{36})\).*/\1/p; q; }'

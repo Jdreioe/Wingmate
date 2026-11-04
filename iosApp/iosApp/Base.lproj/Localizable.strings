@@ -443,7 +443,7 @@
 "board_workspace.show_hidden" = "Show hidden buttons temporarily";
 "board_workspace.hide_hidden" = "Hide temporarily revealed buttons";
 "board_workspace.temporarily_revealed" = "Temporarily revealed hidden button";
-"board_cell_opens_board" = "Opens page: %1$s";
+"board_cell_opens_board" = "Opens page: %@";
 "boardset.cell.merge" = "Size";
 "boardset.cell.merge_size" = "Merged size";
 "boardset.cell.merge_1x1" = "1 × 1";
