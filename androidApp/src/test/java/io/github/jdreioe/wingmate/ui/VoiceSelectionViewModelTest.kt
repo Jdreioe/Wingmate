@@ -114,6 +114,23 @@ class VoiceSelectionViewModelTest {
     }
 
     @Test
+    fun `a failed preview is shown on that voice and does not choose it`() = runTest {
+        val voice = Voice(name = "en-US-Jenny", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(
+            settings = Settings(ttsEngine = TtsEngine.AZURE_USER_RESOURCE),
+            refreshed = listOf(voice),
+        ).apply { previewFails = true }
+        val viewModel = VoiceSelectionViewModel(operations)
+        viewModel.onAction(VoiceSelectionAction.Load)
+
+        viewModel.onAction(VoiceSelectionAction.PreviewToggled(voice, "Hello"))
+
+        val ready = viewModel.state.value as VoiceSelectionUiState.Ready
+        assertEquals(VoicePreview.Failed("en-US-Jenny"), ready.preview)
+        assertEquals(null, operations.selected)
+    }
+
+    @Test
     fun `failed selection keeps the list and reports the failure`() = runTest {
         val voice = Voice(name = "system-default", primaryLanguage = "en-US")
         val operations = FakeVoiceSelectionOperations(settings = Settings(), system = listOf(voice))
@@ -156,5 +173,10 @@ internal class FakeVoiceSelectionOperations(
         check(!selectFails) { "write failed" }
         selected = voice
     }
+    var previewFails = false
+    override suspend fun previewVoice(voice: Voice, engine: TtsEngine, text: String) {
+        check(!previewFails) { "offline" }
+    }
+    override suspend fun stopPreview() = Unit
     override fun reportEvent(event: String, vararg metadata: Pair<String, String>) = Unit
 }

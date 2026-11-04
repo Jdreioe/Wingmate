@@ -703,4 +703,7 @@
     <string name="welcome_change_language">Skift sprog</string>
     <string name="welcome_privacy_policy">Privatlivspolitik</string>
     <string name="welcome_test_play">Afspil</string>
+    <string name="voice_preview_play">Afspil %1$s</string>
+    <string name="voice_preview_stop">Stop %1$s</string>
+    <string name="voice_preview_failed">Stemmen kunne ikke afspilles.</string>
 </resources>

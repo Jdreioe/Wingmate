@@ -1,5 +1,13 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -1939,6 +1947,7 @@ private fun rememberVoiceSelectionOperations(): VoiceSelectionOperations {
             settingsUseCase = koin.get(),
             systemVoiceProvider = koin.getOrNull(),
             featureUsageReporter = koin.get(),
+            speechService = koin.get(),
         )
     }
 }
@@ -1964,6 +1973,8 @@ internal fun VoiceSelectionPage(
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.onAction(VoiceSelectionAction.Load) }
+    // The view model outlives this page; a preview must stop when the page leaves.
+    DisposableEffect(viewModel) { onDispose { viewModel.onAction(VoiceSelectionAction.PreviewStopped) } }
     val currentOnChosen by rememberUpdatedState(onVoiceSelected ?: onBack)
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -2115,12 +2126,15 @@ private fun VoiceSelectionContent(
                             modifier = Modifier.padding(16.dp)
                         )
                     } else {
+                        val sampleText = stringResource(R.string.test_voice_default_text)
                         filteredVoices.forEachIndexed { index, v ->
                             VoiceRow(
                                 voice = v,
                                 isSelected = state.selected?.name == v.name,
                                 showSettings = ttsEngine != TtsEngine.SYSTEM,
+                                preview = state.preview,
                                 onSelect = { onAction(VoiceSelectionAction.VoiceSelected(v, selectedLanguage)) },
+                                onPreview = { onAction(VoiceSelectionAction.PreviewToggled(v, sampleText)) },
                                 onSettings = { editingVoice = v }
                             )
                             if (index < filteredVoices.lastIndex) {
@@ -2151,9 +2165,14 @@ private fun VoiceRow(
     voice: Voice,
     isSelected: Boolean,
     showSettings: Boolean,
+    preview: VoicePreview,
     onSelect: () -> Unit,
+    onPreview: () -> Unit,
     onSettings: () -> Unit
 ) {
+    val playing = preview is VoicePreview.Playing && preview.voiceName == voice.name
+    val failed = preview is VoicePreview.Failed && preview.voiceName == voice.name
+    val name = voice.displayName ?: voice.name ?: stringResource(R.string.common_unknown)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2162,7 +2181,7 @@ private fun VoiceRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = voice.displayName ?: voice.name ?: stringResource(R.string.common_unknown), style = MaterialTheme.typography.bodyLarge)
+            Text(text = name, style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = voice.primaryLanguage?.let(::localizedLocaleDisplayName).orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
@@ -2175,6 +2194,23 @@ private fun VoiceRow(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            if (failed) {
+                Text(
+                    stringResource(R.string.voice_preview_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        // Hear a voice without choosing it; a large target, labelled with the voice for TalkBack.
+        val previewLabel = stringResource(if (playing) R.string.voice_preview_stop else R.string.voice_preview_play, name)
+        FilledTonalIconButton(
+            onClick = onPreview,
+            modifier = Modifier.size(56.dp).semantics { contentDescription = previewLabel },
+        ) {
+            Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
         }
         if (showSettings) {
             Spacer(Modifier.width(8.dp))

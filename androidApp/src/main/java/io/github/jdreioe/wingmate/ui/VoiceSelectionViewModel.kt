@@ -9,6 +9,7 @@ import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.withPreferredSupportedLanguage
 import io.github.jdreioe.wingmate.infrastructure.SystemVoiceProvider
@@ -34,6 +35,9 @@ internal interface VoiceSelectionOperations {
     suspend fun cachedVoices(engine: TtsEngine): List<Voice>
     suspend fun selectedVoice(): Voice?
     suspend fun selectVoice(voice: Voice)
+    /** Plays [text] with [voice] on exactly [engine], without History or caching; throws on failure. */
+    suspend fun previewVoice(voice: Voice, engine: TtsEngine, text: String)
+    suspend fun stopPreview()
     fun reportEvent(event: String, vararg metadata: Pair<String, String>)
 }
 
@@ -42,6 +46,7 @@ internal class DefaultVoiceSelectionOperations(
     private val settingsUseCase: SettingsUseCase,
     private val systemVoiceProvider: SystemVoiceProvider?,
     private val featureUsageReporter: FeatureUsageReporter,
+    private val speechService: SpeechService,
 ) : VoiceSelectionOperations {
     override suspend fun settings(): Settings = withContext(Dispatchers.Default) { settingsUseCase.get() }
 
@@ -71,6 +76,23 @@ internal class DefaultVoiceSelectionOperations(
         withContext(Dispatchers.Default) { voiceUseCase.select(voice) }
     }
 
+    override suspend fun previewVoice(voice: Voice, engine: TtsEngine, text: String) {
+        withContext(Dispatchers.IO) {
+            speechService.speakWithoutHistory(
+                text = text,
+                voice = voice,
+                pitch = voice.pitch,
+                rate = voice.rate,
+                cacheAudio = false,
+                engine = engine,
+            )
+        }
+    }
+
+    override suspend fun stopPreview() {
+        withContext(Dispatchers.IO) { speechService.stop() }
+    }
+
     override fun reportEvent(event: String, vararg metadata: Pair<String, String>) {
         featureUsageReporter.reportEvent(event, *metadata)
     }
@@ -88,7 +110,15 @@ internal sealed interface VoiceSelectionUiState {
         val selected: Voice?,
         val preferredLanguage: String,
         val saveFailed: Boolean = false,
+        val preview: VoicePreview = VoicePreview.Idle,
     ) : VoiceSelectionUiState
+}
+
+/** Hearing a voice from the list before choosing it. Keyed by voice name. */
+internal sealed interface VoicePreview {
+    data object Idle : VoicePreview
+    data class Playing(val voiceName: String) : VoicePreview
+    data class Failed(val voiceName: String) : VoicePreview
 }
 
 internal sealed interface VoiceSelectionAction {
@@ -98,6 +128,11 @@ internal sealed interface VoiceSelectionAction {
     /** [filterLanguage] is the language chip in use, preferred when the voice supports several. */
     data class VoiceSelected(val voice: Voice, val filterLanguage: String?) : VoiceSelectionAction
     data class VoiceSettingsSaved(val voice: Voice) : VoiceSelectionAction
+
+    /** Plays [text] with [voice], or stops it if that voice is already playing. */
+    data class PreviewToggled(val voice: Voice, val text: String) : VoiceSelectionAction
+    /** The page left the screen; a preview must not keep playing over the next one. */
+    data object PreviewStopped : VoiceSelectionAction
 
     /** Usage reporting only; filtering itself is local UI state. */
     data class FilterApplied(val filter: String, val cleared: Boolean) : VoiceSelectionAction
@@ -129,6 +164,8 @@ internal class VoiceSelectionViewModel(
             VoiceSelectionAction.Load -> load()
             is VoiceSelectionAction.VoiceSelected -> select(action.voice, action.filterLanguage)
             is VoiceSelectionAction.VoiceSettingsSaved -> saveVoiceSettings(action.voice)
+            is VoiceSelectionAction.PreviewToggled -> togglePreview(action.voice, action.text)
+            VoiceSelectionAction.PreviewStopped -> stopPreview()
             is VoiceSelectionAction.FilterApplied -> operations.reportEvent(
                 FeatureUsageEvents.VOICE_FILTER_APPLIED,
                 "filter" to action.filter,
@@ -239,6 +276,39 @@ internal class VoiceSelectionViewModel(
                 )
             }
         }
+    }
+
+    private var previewJob: Job? = null
+
+    private fun togglePreview(voice: Voice, text: String) {
+        val ready = state.value as? VoiceSelectionUiState.Ready ?: return
+        val name = voice.name ?: return
+        val wasPlaying = (ready.preview as? VoicePreview.Playing)?.voiceName == name
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            runCatching { operations.stopPreview() }.onFailure { if (it is CancellationException) throw it }
+            if (wasPlaying) {
+                updateReady { it.copy(preview = VoicePreview.Idle) }
+                return@launch
+            }
+            updateReady { it.copy(preview = VoicePreview.Playing(name)) }
+            val outcome = try {
+                operations.previewVoice(voice, ready.engine, text)
+                VoicePreview.Idle
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                VoicePreview.Failed(name)
+            }
+            updateReady { it.copy(preview = outcome) }
+        }
+    }
+
+    private fun stopPreview() {
+        previewJob?.cancel()
+        previewJob = null
+        updateReady { it.copy(preview = VoicePreview.Idle) }
+        viewModelScope.launch { runCatching { operations.stopPreview() } }
     }
 
     private fun updateReady(transform: (VoiceSelectionUiState.Ready) -> VoiceSelectionUiState.Ready) {

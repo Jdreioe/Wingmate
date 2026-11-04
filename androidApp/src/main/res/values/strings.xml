@@ -703,4 +703,7 @@
     <string name="welcome_change_language">Change language</string>
     <string name="welcome_privacy_policy">Privacy policy</string>
     <string name="welcome_test_play">Play</string>
+    <string name="voice_preview_play">Play %1$s</string>
+    <string name="voice_preview_stop">Stop %1$s</string>
+    <string name="voice_preview_failed">This voice could not play.</string>
 </resources>
