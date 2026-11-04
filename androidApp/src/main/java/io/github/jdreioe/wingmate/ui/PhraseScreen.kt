@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -618,6 +619,15 @@ internal fun PhraseScreenContent(
                     }
                     if (wideTyping) {
                         val heldMessage = communicationState.heldMessage
+                        // While the on-screen keyboard is up, the Message is one line (it scrolls)
+                        // so more Phrase rows fit above the keyboard; it follows the keyboard's
+                        // animation, and the rows keep their size and order.
+                        val inputScale = settings.inputFieldScale.coerceIn(0.75f, 2f)
+                        val messageHeight by animateDpAsState(
+                            targetValue = if (isImeVisible) 64.dp * inputScale else 128.dp * inputScale,
+                            animationSpec = tween(250),
+                            label = "wide-message-height",
+                        )
                         WideTypingLayout(
                             panelWidth = if (WindowWidth.of(windowSize.width) == WindowWidth.Expanded) 304.dp else 248.dp,
                             message = {
@@ -628,7 +638,7 @@ internal fun PhraseScreenContent(
                                     // Typing Screen below never moves while typing.
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(128.dp * settings.inputFieldScale.coerceIn(0.75f, 2f))
+                                        .height(messageHeight)
                                         // As on phones: focusing the Message means typing, so
                                         // speech actions hand focus back to it afterwards.
                                         .onFocusChanged { focus ->
@@ -656,10 +666,11 @@ internal fun PhraseScreenContent(
                                     },
                                 )
                             },
-                            // Wingmate's predictions are for a hardware keyboard; the slot keeps
-                            // its height either way, so the Typing Screen does not move.
-                            predictions = if (predictionsEnabled) ({
-                                if (!isImeVisible && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
+                            // Wingmate's predictions are for a hardware keyboard; their slot keeps its
+                            // height while empty, so the Typing Screen does not move. An on-screen
+                            // keyboard shows its own suggestions, so the slot gives its room to Phrases.
+                            predictions = if (predictionsEnabled && !isImeVisible) ({
+                                if (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty()) {
                                     PredictionBar(
                                         predictions = predictions,
                                         onWordSelected = { word -> onAction(PhraseScreenAction.CompleteWord(word)) },

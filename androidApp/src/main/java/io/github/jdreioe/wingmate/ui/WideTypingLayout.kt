@@ -85,7 +85,7 @@ internal enum class WideSpeechState { Idle, Playing, Paused }
  *
  * ```
  * ┌───────────────────────────────┬──────────────┐
- * │ Message (fixed height)        │ app actions  │
+ * │ Message                       │ app actions  │
  * │ predictions (fixed, optional) │ Speak        │
  * │ Typing Screen: Pages, Phrases │ Stop | Kbd   │
  * │   rows of fixed height,       │ Held message │
@@ -93,9 +93,9 @@ internal enum class WideSpeechState { Idle, Playing, Paused }
  * └───────────────────────────────┴──────────────┘
  * ```
  *
- * The on-screen keyboard only takes space from the bottom (the app root pads for it), so the
- * Message, the first Phrase rows and Speak stay where they were; lower rows scroll. There is
- * no tray to show or hide, so a hardware keyboard and an on-screen one behave the same.
+ * The on-screen keyboard only takes space from the bottom (the app root pads for it). The caller
+ * shortens the Message to one line while it is up, so more Phrase rows fit above it; rows keep
+ * their size and order, and lower rows scroll. There is no tray to show or hide.
  */
 @Composable
 internal fun WideTypingLayout(
