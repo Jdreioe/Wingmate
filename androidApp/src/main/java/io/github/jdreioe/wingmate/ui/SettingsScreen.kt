@@ -1188,18 +1188,6 @@ private fun SpeechSection(
                 )
             }
         }
-        if (ttsEngine == TtsEngine.PIPER) {
-            SettingsGroupDivider()
-            Column(
-                modifier = Modifier.padding(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(stringResource(R.string.piper_description))
-                Button(onClick = onOpenVoiceSelection, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.piper_choose_voice))
-                }
-            }
-        }
         if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
             SettingsGroupDivider()
             Button(onClick = onOpenF0Setup, modifier = Modifier.fillMaxWidth()) {

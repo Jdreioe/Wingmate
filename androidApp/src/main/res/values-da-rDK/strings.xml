@@ -715,7 +715,6 @@
     <!-- Piper offline voices -->
     <string name="piper_title">Piper (offline)</string>
     <string name="piper_description">Naturlige stemmer, der virker uden internet, når de er hentet.</string>
-    <string name="piper_choose_voice">Vælg en offline stemme</string>
     <string name="piper_on_device">På denne enhed</string>
     <string name="piper_available">Kan hentes</string>
     <string name="piper_none_for_language">Ingen offline stemmer til dette sprog.</string>

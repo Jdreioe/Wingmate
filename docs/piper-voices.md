@@ -6,7 +6,7 @@ voices. They run on the device through [sherpa-onnx](https://github.com/k2-fsa/s
 once a voice is downloaded.
 
 In setup, choose **Offline voice** on "What should speak for you?". In Settings →
-Speech, choose **Piper (offline)**, then **Choose an offline voice**. Either way,
+Speech, choose **Piper (offline)**, then **Select Voice**. Either way,
 choosing a voice also makes Piper the speech engine.
 The list opens on voices for the primary language. Each voice shows its size.
 The Play button on each voice streams Piper's recorded sample of it, so you can

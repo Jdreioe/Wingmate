@@ -715,7 +715,6 @@
     <!-- Piper offline voices -->
     <string name="piper_title">Piper (offline)</string>
     <string name="piper_description">Natural voices that work without internet once downloaded.</string>
-    <string name="piper_choose_voice">Choose an offline voice</string>
     <string name="piper_on_device">On this device</string>
     <string name="piper_available">Available to download</string>
     <string name="piper_none_for_language">No offline voices for this language.</string>
