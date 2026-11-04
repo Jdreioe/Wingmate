@@ -30,14 +30,10 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.semantics.stateDescription
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -75,7 +71,6 @@ fun TestVoiceScreen(
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
     var engine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var playbackFailed by remember { mutableStateOf(false) }
-    var rateSaveFailed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     val testText = sentence ?: defaultTestText
     /** The speech request of a preview this page started, so leaving stops only that one. */
@@ -86,53 +81,22 @@ fun TestVoiceScreen(
     var loadAttempt by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    // Speed is saved once it settles, not per notch: each save is a full voice selection
-    // (analytics and, for cloud voices, re-caching Screens audio). Setup holds the unsaved
-    // speed until a save of exactly that speed succeeds. Each save has one owner on the app's
-    // scope, so leaving cannot cut it off; callers join it only while it is still running.
+    // Speed is saved once it settles; SpeedSaver owns the saves (one at a time, on the app's
+    // scope on the main thread) and tells setup which speed is not yet confirmed saved.
     val appScope = koinInject<CoroutineScope>()
-    val currentUnsaved by rememberUpdatedState(unsavedSpeed)
     val setUnsaved by rememberUpdatedState(onUnsavedSpeedChange)
-    var rateSaveJob by remember { mutableStateOf<Job?>(null) }
-    var rateSaving by remember { mutableStateOf<Pair<Voice, Deferred<Boolean>>?>(null) }
-    /** Saves the speed now, or joins a save still running; false (error shown) if it failed. */
-    suspend fun saveRateNow(): Boolean {
-        val (voice, save) = rateSaving?.takeIf { it.second.isActive }
-            ?: (selectedVoice ?: return true).let { v ->
-                v to appScope.async(Dispatchers.IO) {
-                    runCatching { voiceUseCase.select(v) }
+    val speedSaver = remember {
+        SpeedSaver(
+            scope = CoroutineScope(appScope.coroutineContext + Dispatchers.Main.immediate),
+            save = { voice ->
+                withContext(Dispatchers.IO) {
+                    runCatching { voiceUseCase.select(voice) }
                         .onFailure { OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = it.loggingClassName()) }
                         .isSuccess
                 }
-            }.also { rateSaving = it }
-        val saved = save.await()
-        if (rateSaving?.second === save) rateSaving = null
-        val unsaved = currentUnsaved
-        if (saved && unsaved != null && unsaved.voiceName == voice.name.orEmpty() && unsaved.rate == voice.rate) setUnsaved(null)
-        rateSaveFailed = !saved
-        return saved
-    }
-    fun scheduleRateSave() {
-        val voice = selectedVoice ?: return
-        setUnsaved(UnsavedSpeed(voice.name.orEmpty(), voice.rate ?: 1.0))
-        rateSaveJob?.cancel()
-        rateSaveJob = scope.launch {
-            delay(800)
-            saveRateNow()
-        }
-    }
-    /**
-     * Saves a speed not yet saved; call before leaving the page. A save already running for an
-     * older speed is joined, then the current speed is saved. Returns false if it could not
-     * be saved, so the page stays and says so.
-     */
-    suspend fun flushRate(): Boolean {
-        repeat(2) {
-            if (currentUnsaved == null) return true
-            rateSaveJob?.cancel()
-            if (!saveRateNow()) return false
-        }
-        return currentUnsaved == null
+            },
+            onUnsavedChange = { setUnsaved(it) },
+        )
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -150,17 +114,14 @@ fun TestVoiceScreen(
             // Leaving another way (Leave setup, recreation) with a speed not yet saved: finish
             // saving it on the app's scope. Setup still holds it if that fails, so the next
             // Hear your voice shows it and saves again; leaving setup forgets it with setup.
-            if (currentUnsaved != null && selectedVoice != null) {
-                rateSaveJob?.cancel()
-                appScope.launch { saveRateNow() }
-            }
+            speedSaver.leaving()
         }
     }
 
     /** Stops a preview before leaving, so it does not keep playing over the previous page. */
     fun stopThenBack() {
         scope.launch {
-            if (!flushRate()) return@launch
+            if (!speedSaver.flush()) return@launch
             try {
                 speechService.stop()
             } catch (e: CancellationException) {
@@ -185,12 +146,11 @@ fun TestVoiceScreen(
             engine = savedEngine
             // A speed setup still holds as unsaved (e.g. after a font-size change recreated this
             // page) is shown at once and saved again; on failure the error shows and Continue retries.
-            val unsaved = currentUnsaved?.takeIf { voice != null && it.voiceName == voice.name.orEmpty() }
+            val unsaved = unsavedSpeed?.takeIf { voice != null && it.voiceName == voice.name.orEmpty() }
+            selectedVoice = voice
+            if (voice != null) speedSaver.loaded(voice)
             if (voice != null && unsaved != null) {
-                selectedVoice = voice.copy(rate = unsaved.rate, rateForSSML = null)
-                scope.launch { saveRateNow() }
-            } else {
-                selectedVoice = voice
+                selectedVoice = voice.copy(rate = unsaved.rate, rateForSSML = null).also(speedSaver::restored)
             }
         } catch (e: CancellationException) {
             throw e
@@ -255,7 +215,7 @@ fun TestVoiceScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 SetupActionButton(
                     label = stringResource(R.string.welcome_change_language),
-                    onClick = { scope.launch { if (flushRate()) onChangeLanguage() } },
+                    onClick = { scope.launch { if (speedSaver.flush()) onChangeLanguage() } },
                 )
             }
 
@@ -337,7 +297,7 @@ fun TestVoiceScreen(
                     rate = tenths / 10f
                     // From whole tenths, so 1.1 is stored as 1.1 rather than float noise.
                     selectedVoice = voice.copy(rate = tenths / 10.0, rateForSSML = null)
-                    scheduleRateSave()
+                    selectedVoice?.let(speedSaver::changed)
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 val rateValue = stringResource(R.string.welcome_test_rate_value, rate)
@@ -380,7 +340,7 @@ fun TestVoiceScreen(
                         },
                     ) { Icon(Icons.Default.Add, contentDescription = null) }
                 }
-                if (rateSaveFailed) {
+                if (speedSaver.failed) {
                     Text(
                         stringResource(R.string.welcome_test_rate_failed),
                         style = MaterialTheme.typography.bodyLarge,
@@ -413,6 +373,8 @@ fun TestVoiceScreen(
             onBack = ::stopThenBack,
             primaryLabel = stringResource(R.string.common_continue),
             primaryEnabled = !loading && !loadFailed,
+            // Waiting on a speed save before moving on: show it, so the tap is not silent.
+            primaryBusy = speedSaver.flushing,
             onPrimary = {
                 // Stop any ongoing speech before proceeding
                 scope.launch {
@@ -424,7 +386,7 @@ fun TestVoiceScreen(
                     } catch (e: Exception) {
                         OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                     }
-                    if (!flushRate()) return@launch
+                    if (!speedSaver.flush()) return@launch
                     onNext()
                 }
             },
