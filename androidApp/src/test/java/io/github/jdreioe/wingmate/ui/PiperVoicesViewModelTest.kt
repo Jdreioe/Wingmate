@@ -5,6 +5,7 @@ import io.github.jdreioe.wingmate.domain.PiperVoicePack
 import io.github.jdreioe.wingmate.domain.PiperVoiceState
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.piperVoiceKey
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -65,6 +67,20 @@ class PiperVoicesViewModelTest {
         assertEquals("en_US-lessac-medium", operations.selected?.piperVoiceKey)
         assertEquals("en_US-lessac-medium", (viewModel.state.value as PiperVoicesUiState.Ready).selectedKey)
     }
+
+    @Test
+    fun `testing a voice plays its sample until tapped again`() = runTest {
+        val operations = FakePiperVoiceOperations()
+        val viewModel = PiperVoicesViewModel(operations)
+
+        viewModel.onAction(PiperVoicesAction.Test("en_US-lessac-medium"))
+        assertEquals(listOf("https://example.test/en_US-lessac-medium.mp3"), operations.playedSamples)
+        assertEquals("en_US-lessac-medium", (viewModel.state.value as PiperVoicesUiState.Ready).testingKey)
+
+        viewModel.onAction(PiperVoicesAction.Test("en_US-lessac-medium"))
+        assertNull((viewModel.state.value as PiperVoicesUiState.Ready).testingKey)
+        assertTrue(operations.sampleStopped)
+    }
 }
 
 private class FakePiperVoiceOperations(
@@ -94,6 +110,17 @@ private class FakePiperVoiceOperations(
     }
     override suspend fun primaryLanguage(): String = primaryLanguage
 
+    val playedSamples = mutableListOf<String>()
+    var sampleStopped = false
+    override suspend fun playSample(url: String) {
+        playedSamples += url
+        try {
+            CompletableDeferred<Unit>().await()
+        } finally {
+            sampleStopped = true
+        }
+    }
+
     private fun pack(key: String, language: String) = PiperVoicePack(
         key = key,
         languageTag = language,
@@ -101,6 +128,7 @@ private class FakePiperVoiceOperations(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://example.test/$key.mp3",
         files = listOf(PiperFile("$key.onnx", "https://example.test/$key.onnx", 1L, "00")),
     )
 }

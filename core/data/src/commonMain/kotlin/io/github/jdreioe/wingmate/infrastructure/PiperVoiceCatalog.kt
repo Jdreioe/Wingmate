@@ -21,6 +21,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://github.com/AliMokhammad/arabicttstrain/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ar/ar_JO/kareem/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ar_JO-kareem-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-ar_JO-kareem-low/resolve/4311138f760365c98e8041eb69c89077188fc772/ar_JO-kareem-low.onnx", 63201421L, "cfa37bbd322cb74bc1b26cf97791d248ca0bce70b0a23da0b7c2ea7dba068cd6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ar_JO-kareem-low/resolve/4311138f760365c98e8041eb69c89077188fc772/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -33,6 +34,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://github.com/AliMokhammad/arabicttstrain/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ar/ar_JO/kareem/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ar_JO-kareem-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ar_JO-kareem-medium/resolve/d05103ccf42f2b625d36c406da2646edd95ea353/ar_JO-kareem-medium.onnx", 63201421L, "f942091e1fdb7221b289256cc2238295b5472d326029532f79bb84836380fe53"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ar_JO-kareem-medium/resolve/d05103ccf42f2b625d36c406da2646edd95ea353/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -45,6 +47,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC BY-SA 3.0 ES",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ca/ca_ES/upc_ona/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ca_ES-upc_ona-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ca_ES-upc_ona-medium/resolve/814326c793214a358024edcf2d17e6de1acf0280/ca_ES-upc_ona-medium.onnx", 63201422L, "94d4f83d80dcbb145004731d4da4335c3e250d6826f6ccf77e125d7cbc2e74cb"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ca_ES-upc_ona-medium/resolve/814326c793214a358024edcf2d17e6de1acf0280/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -57,6 +60,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "CC BY-SA 3.0 ES",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ca/ca_ES/upc_ona/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ca_ES-upc_ona-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-ca_ES-upc_ona-x_low/resolve/fe1ca3d43a0fde3b3969dbbd3678dc741ed86840/ca_ES-upc_ona-x_low.onnx", 20628941L, "92b9eeefadf8e0dcbc475a5dc65d898a04464cca843534c9846e57fc2109ca22"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ca_ES-upc_ona-x_low/resolve/fe1ca3d43a0fde3b3969dbbd3678dc741ed86840/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -69,6 +73,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "CC BY-SA 3.0 ES",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ca/ca_ES/upc_pau/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ca_ES-upc_pau-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-ca_ES-upc_pau-x_low/resolve/bf70919f4cf4ee9c56c8894295d5377c99114471/ca_ES-upc_pau-x_low.onnx", 28130919L, "8d1971e52e4dcacff40efe3aa758738c4658f7b52f56239d6bd9c41e9871d801"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ca_ES-upc_pau-x_low/resolve/bf70919f4cf4ee9c56c8894295d5377c99114471/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -81,6 +86,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/cs/cs_CZ/jirka/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("cs_CZ-jirka-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-cs_CZ-jirka-low/resolve/6e2ed0a9d58d532a675ee46cb852767569af287a/cs_CZ-jirka-low.onnx", 63201422L, "528b46b0d4ac24c685c856dd683ab1610c5b81ca034021d7708cb12fc99f2d4b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-cs_CZ-jirka-low/resolve/6e2ed0a9d58d532a675ee46cb852767569af287a/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -93,6 +99,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/cs/cs_CZ/jirka/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("cs_CZ-jirka-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-cs_CZ-jirka-medium/resolve/14061e2f0c1b212be50bc32445e77b490c041ef4/cs_CZ-jirka-medium.onnx", 63201422L, "d41a2b0a0d488c5796b8eed3403155ee0556b7642268111f655334df97e918b8"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-cs_CZ-jirka-medium/resolve/14061e2f0c1b212be50bc32445e77b490c041ef4/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -105,6 +112,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 7,
         licence = "CC-BY",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/cy/cy_GB/bu_tts/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("cy_GB-bu_tts-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-cy_GB-bu_tts-medium/resolve/fdce9ac46da6cb39311fb5d9b2fd9ae2cdcff729/cy_GB-bu_tts-medium.onnx", 77061481L, "226f08a5ffb56a3cd820fee2c0b32ea4e89e27a980926e9bd6529a972976fa1b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-cy_GB-bu_tts-medium/resolve/fdce9ac46da6cb39311fb5d9b2fd9ae2cdcff729/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -117,6 +125,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://git.techiaith.bangor.ac.uk/data-porth-technolegau-iaith/corpws-talentau-llais",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/cy/cy_GB/gwryw_gogleddol/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("cy_GB-gwryw_gogleddol-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-cy_GB-gwryw_gogleddol-medium/resolve/33ce1a5f9b8c5dd06eb7d11a061710929c8dd72e/cy_GB-gwryw_gogleddol-medium.onnx", 63511164L, "111e6eaabb0152e5a31065bd159ecd91d656b90eec6fee01b7c72440ec674717"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-cy_GB-gwryw_gogleddol-medium/resolve/33ce1a5f9b8c5dd06eb7d11a061710929c8dd72e/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -129,6 +138,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/da/da_DK/talesyntese/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("da_DK-talesyntese-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-da_DK-talesyntese-medium/resolve/f2c1614417beec702b8cb3d28b10ae0bf7a1af1c/da_DK-talesyntese-medium.onnx", 63201421L, "516ef8c4b8104610598bef078114437092d482c36f00e72b0b9b358d8db0916e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-da_DK-talesyntese-medium/resolve/f2c1614417beec702b8cb3d28b10ae0bf7a1af1c/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -141,6 +151,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "https://www.caito.de/2019/01/03/the-m-ailabs-speech-dataset/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/eva_k/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-eva_k-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-eva_k-x_low/resolve/68cc6eb8e4fa1ff7c4673677684bab01952f5e0d/de_DE-eva_k-x_low.onnx", 20628940L, "824655adb0a6b77a3e290ccbf9a5a84618625586402579bbda98d914c3f56ae7"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-eva_k-x_low/resolve/68cc6eb8e4fa1ff7c4673677684bab01952f5e0d/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -153,6 +164,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://www.caito.de/2019/01/03/the-m-ailabs-speech-dataset/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/karlsson/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-karlsson-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-karlsson-low/resolve/5a5607f0093e2ac69958ec056d523b43cab144ec/de_DE-karlsson-low.onnx", 63104653L, "8839435e5e51db084a479a2b78440227589e0aa3a87027ebc3b37c49826bb831"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-karlsson-low/resolve/5a5607f0093e2ac69958ec056d523b43cab144ec/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -165,6 +177,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/kerstin/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-kerstin-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-kerstin-low/resolve/7bc6590b34162daac7af36a49817c5ac9799eced/de_DE-kerstin-low.onnx", 63104653L, "c68bd25ba1cf1a0e92844a72615a5739b94eb176220dd4b229e05a2187c65789"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-kerstin-low/resolve/7bc6590b34162daac7af36a49817c5ac9799eced/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -177,6 +190,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 236,
         licence = "CC-BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/mls/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-mls-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-mls-medium/resolve/ed64b2784a880436f78c238b2c8f97d4da43a092/de_DE-mls-medium.onnx", 76961208L, "e9ff11a6c83dfc362e88246d7e7923abbb73d39c40394d8e26c6f489ad927e9c"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-mls-medium/resolve/ed64b2784a880436f78c238b2c8f97d4da43a092/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -189,6 +203,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/pavoque/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-pavoque-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-pavoque-low/resolve/c8d57396d9edefa2a40dd8c7303e35bf6fc75cff/de_DE-pavoque-low.onnx", 63104653L, "bf23048ce3ebace924ac68a281a79919ae904978ee7f4aa957ad6e3ffdb179d6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-pavoque-low/resolve/c8d57396d9edefa2a40dd8c7303e35bf6fc75cff/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -201,6 +216,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://www.caito.de/2019/01/03/the-m-ailabs-speech-dataset/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/ramona/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-ramona-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-ramona-low/resolve/b08510c20c7a09936ff72399031034dce8c65e46/de_DE-ramona-low.onnx", 63104653L, "80c84ca1829bea263930133f7b495c6de2b79fd689df82532cb1fc1974860b54"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-ramona-low/resolve/b08510c20c7a09936ff72399031034dce8c65e46/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -213,6 +229,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/thorsten/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-thorsten-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten-high/resolve/d0d70c92994440adabb10804fdbe9f075f066c7b/de_DE-thorsten-high.onnx", 113895328L, "d3d0f8fc180fd28b64a286452572e4ea0716e45ac068ee6ee678f89777034e39"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten-high/resolve/d0d70c92994440adabb10804fdbe9f075f066c7b/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -225,6 +242,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/thorsten/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-thorsten-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten-low/resolve/1a9ef57726e4d4bb98d4cf3864528f4648e35650/de_DE-thorsten-low.onnx", 63104653L, "4f11143425275494083771094721a28c818dba9b5b6b148554a44f733cb4b53f"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten-low/resolve/1a9ef57726e4d4bb98d4cf3864528f4648e35650/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -237,6 +255,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/thorsten/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-thorsten-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten-medium/resolve/da8bed7888b27d17e1aa8fbd53e6703ab939583a/de_DE-thorsten-medium.onnx", 63201421L, "1c305abe13dda2f50a9783da3e7645396833cdf2d09f24fa9a823c91293d65a6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten-medium/resolve/da8bed7888b27d17e1aa8fbd53e6703ab939583a/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -249,6 +268,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 8,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/de/de_DE/thorsten_emotional/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("de_DE-thorsten_emotional-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten_emotional-medium/resolve/38681150803d0ade0cdcd0d7e36876f047772fa8/de_DE-thorsten_emotional-medium.onnx", 76746032L, "f8b4cdda9488c19f17700e61dce9ff01f765693ae63accb1b2ca7fb602d201fe"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-de_DE-thorsten_emotional-medium/resolve/38681150803d0ade0cdcd0d7e36876f047772fa8/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -261,6 +281,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/el/el_GR/rapunzelina/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("el_GR-rapunzelina-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-el_GR-rapunzelina-low/resolve/b16a9198ecb66e5361f3d0c01a181afa0ea28fff/el_GR-rapunzelina-low.onnx", 63104667L, "5aaa1b1ea2c94e90eed2f0f7f12989df22fa2e1c3b2d781b15e93c210943c20a"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-el_GR-rapunzelina-low/resolve/b16a9198ecb66e5361f3d0c01a181afa0ea28fff/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -273,6 +294,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://github.com/MycroftAI/mimic3-voices/blob/master/voices/en_UK/apope_low",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/alan/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-alan-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-alan-low/resolve/bc61b710b40c046aa784c09a4c1880ee4ec8bf58/en_GB-alan-low.onnx", 63104662L, "1e49226821b889e41ee3ebc189df6f24914057a9d3481c7b7291c611033a049e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-alan-low/resolve/bc61b710b40c046aa784c09a4c1880ee4ec8bf58/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -285,6 +307,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://github.com/MycroftAI/mimic3-voices/blob/master/voices/en_UK/apope_low",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/alan/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-alan-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-alan-medium/resolve/a449faf03a5e8e2eed012793ce95441d0738b605/en_GB-alan-medium.onnx", 63201430L, "d907c48857000940104a9ad3248a94617df917d1a525c9495490fdbf87fd54b2"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-alan-medium/resolve/a449faf03a5e8e2eed012793ce95441d0738b605/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -297,6 +320,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/alba/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-alba-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-alba-medium/resolve/7e469a54c7a4f5bd191cae788e197266e2c9c5ac/en_GB-alba-medium.onnx", 63201430L, "c904d007a8047ab13628b021351b983d0a2627c0d7a81c64a6fe9ad661adb1cf"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-alba-medium/resolve/7e469a54c7a4f5bd191cae788e197266e2c9c5ac/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -309,6 +333,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 12,
         licence = "https://creativecommons.org/licenses/by/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-aru-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-aru-medium/resolve/1e83c2780cb516460a540d3a007fba3b17654cd3/en_GB-aru-medium.onnx", 76754234L, "809f360a8248600dafb53867c63008f51acaf7dd36009fcec65ec19c47188c25"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-aru-medium/resolve/1e83c2780cb516460a540d3a007fba3b17654cd3/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -321,6 +346,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-cori-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-cori-high/resolve/37f6efb503f5dc22de01bad04c9a118a99111096/en_GB-cori-high.onnx", 114219480L, "006bb4db48e066f7f1be91d218db3b76617a707196271694ca6455d7bbd13842"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-cori-high/resolve/37f6efb503f5dc22de01bad04c9a118a99111096/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -333,6 +359,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-cori-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-cori-medium/resolve/e304c95c578725ba9cab0cff451c4e5d9aaf889e/en_GB-cori-medium.onnx", 63531507L, "8b0d3cdd77f2878e0aa2048103eabb4d01b334783f99629f042bcf703aeba487"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-cori-medium/resolve/e304c95c578725ba9cab0cff451c4e5d9aaf889e/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -345,6 +372,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://github.com/dioco-group/jenny-tts-dataset",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/jenny_dioco/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-jenny_dioco-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-jenny_dioco-medium/resolve/00bac9d2e32e93b1e60237d26b85971bba95092d/en_GB-jenny_dioco-medium.onnx", 63201430L, "bd5207a2752d8766a8b771437776fd7575031a9f9876eaf13b8db778b150993a"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-jenny_dioco-medium/resolve/00bac9d2e32e93b1e60237d26b85971bba95092d/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -357,6 +385,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC-BY-SA 4.0 International",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/northern_english_male/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-northern_english_male-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-northern_english_male-medium/resolve/1d9a616e1cdeb91d8bc0b921a8b31296e2c9ff75/en_GB-northern_english_male-medium.onnx", 63201430L, "d23e7891af7062eb188283dba94866e25ffd5b01a0d9fb9a23c71a39b75b2308"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-northern_english_male-medium/resolve/1d9a616e1cdeb91d8bc0b921a8b31296e2c9ff75/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -369,6 +398,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 4,
         licence = "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/semaine/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-semaine-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-semaine-medium/resolve/b6e43c4f2272f7d24c680d7c7d8f245d9b5d2235/en_GB-semaine-medium.onnx", 76737847L, "9e4578375a86fd6354c03f4994f5d9494e57642ed2b60a91b71981e4fcc7abe0"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-semaine-medium/resolve/b6e43c4f2272f7d24c680d7c7d8f245d9b5d2235/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -381,6 +411,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC-BY-SA 4.0 International",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/southern_english_female/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-southern_english_female-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-southern_english_female-low/resolve/551c43d74ca3961a296b831ce2723dd074a396fd/en_GB-southern_english_female-low.onnx", 63104662L, "cf7f487689da2ec115cb5e9b5fb5ff4450f24e0c45565e0b72dd1eb4ed4caf65"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-southern_english_female-low/resolve/551c43d74ca3961a296b831ce2723dd074a396fd/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -393,6 +424,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 109,
         licence = "https://creativecommons.org/licenses/by/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/vctk/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_GB-vctk-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_GB-vctk-medium/resolve/808fe9a67d183147d0fdae38fdde60018660d138/en_GB-vctk-medium.onnx", 76952891L, "589b35f4acb05410179f0e46f34c2749634dde801b1e2883717782b100b6e9d5"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_GB-vctk-medium/resolve/808fe9a67d183147d0fdae38fdde60018660d138/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -405,6 +437,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://github.com/MycroftAI/mimic3-voices",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/amy/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-amy-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/76da6ca287517a49f58b943c4c4fdb0c1e94d61f/en_US-amy-low.onnx", 63104657L, "8275b02c37c4ce6483b26a91704807e6de0c3f0bf8068e5d3b3598ab0da4253e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/76da6ca287517a49f58b943c4c4fdb0c1e94d61f/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -417,6 +450,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://github.com/MycroftAI/mimic3-voices",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/amy/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-amy-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-amy-medium/resolve/79936839cc9409b1a752a45c629fe21639e1c1b2/en_US-amy-medium.onnx", 63201425L, "fbaa8e36d8f26fe6f3ebb65cab461e629d8b37a5b7c5fb78fb64317db73e1c25"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-amy-medium/resolve/79936839cc9409b1a752a45c629fe21639e1c1b2/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -429,6 +463,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 18,
         licence = "http://www.festvox.org/cmu_arctic/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/arctic/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-arctic-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-arctic-medium/resolve/ac25cd91991e9ef8529d6fc40fa45cee314d596d/en_US-arctic-medium.onnx", 76766517L, "aa9c402e72df169d32cecbefaf65f628b4028189cf1fa6384ebcd15778241d79"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-arctic-medium/resolve/ac25cd91991e9ef8529d6fc40fa45cee314d596d/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -441,6 +476,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/bryce/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-bryce-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-bryce-medium/resolve/b7f24892d9291522cf27e7cbfe34f17fa1cf4b17/en_US-bryce-medium.onnx", 63531507L, "f9ad3c773102fc27b13f48e5a743bbc75de6036b07dfb8a5c84ec2cc24153a28"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-bryce-medium/resolve/b7f24892d9291522cf27e7cbfe34f17fa1cf4b17/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -453,6 +489,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://github.com/MycroftAI/mimic3-voices",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/danny/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-danny-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-danny-low/resolve/9b9d4d57bb63c5fd0b17b4ef002bbf43b05c0d7f/en_US-danny-low.onnx", 63104657L, "7261b828effcef958a1c9cd430ed62b9762e1c5d0a267d0358a465775a0c706a"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-danny-low/resolve/9b9d4d57bb63c5fd0b17b4ef002bbf43b05c0d7f/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -465,6 +502,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/hfc_female/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-hfc_female-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_female-medium/resolve/127829225a73a7f87cb0f07be5aef40895b87abd/en_US-hfc_female-medium.onnx", 63201425L, "6d8b3711715f17f29b9f0ded97571924ead9a06e300bfdf3680b014a51ddc9e5"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_female-medium/resolve/127829225a73a7f87cb0f07be5aef40895b87abd/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -477,6 +515,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/hfc_male/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-hfc_male-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_male-medium/resolve/fa0e01a13f2076da2ddaa7fbce30d64f319b4d25/en_US-hfc_male-medium.onnx", 63201425L, "2dba095f50970dddc4f6da704b25a9767f334011b369df2ef496690ab71ea23c"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_male-medium/resolve/fa0e01a13f2076da2ddaa7fbce30d64f319b4d25/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -489,6 +528,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/joe/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-joe-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-joe-medium/resolve/cda0697165d154bb152754dcdf4ea4ad13650e37/en_US-joe-medium.onnx", 63201425L, "c9dc0dd883bd662937e8986af97efb25636c557469bde904dc4fcc9344cd2918"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-joe-medium/resolve/cda0697165d154bb152754dcdf4ea4ad13650e37/tokens.txt", 899L, "da19d3f9a439574f66c072baafced1d1c79f42d8c5981619ea9274a7ab0dbba5"),
@@ -501,6 +541,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/john/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-john-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-john-medium/resolve/adfff0e2951b85fafe20b582a8961a956ba926bd/en_US-john-medium.onnx", 63531507L, "7ab60237f77e06c8f32b811080b7ad82d23bc5bacc4bba2c35e58aeae6833364"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-john-medium/resolve/adfff0e2951b85fafe20b582a8961a956ba926bd/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -513,6 +554,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/kathleen/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-kathleen-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-kathleen-low/resolve/c9ce301f50529b1cdb4b6802b4317aa96d49dd07/en_US-kathleen-low.onnx", 63104657L, "fb7131b65c3d9c89ca06f6000f9c995291829dc8d4b8d72433914dcfd4315665"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-kathleen-low/resolve/c9ce301f50529b1cdb4b6802b4317aa96d49dd07/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -525,6 +567,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/kristin/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-kristin-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-kristin-medium/resolve/6fdc68249ba2b1b41c1c42ec74341d1599e2c96e/en_US-kristin-medium.onnx", 63531507L, "f9a5c375c70ddc33ccdb3969c76a4d7cc5255ac08119a312b0034a1d07041be6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-kristin-medium/resolve/6fdc68249ba2b1b41c1c42ec74341d1599e2c96e/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -537,6 +580,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://github.com/MycroftAI/mimic2",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/kusal/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-kusal-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-kusal-medium/resolve/54090df5c0e0dfa85b00953aeaadad7dd1aec948/en_US-kusal-medium.onnx", 63201425L, "d7b0e39e4e73fecff92e53221a63008f28e44d98993a94e549470130eae2ccee"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-kusal-medium/resolve/54090df5c0e0dfa85b00953aeaadad7dd1aec948/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -549,6 +593,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 24,
         licence = "https://creativecommons.org/licenses/by-nc/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/l2arctic/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-l2arctic-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-l2arctic-medium/resolve/52aad8378f31a0b9bbfa1980aefdc6c0295b3433/en_US-l2arctic-medium.onnx", 76778805L, "61cca1b9929397bfaa448195dd585fe4cbed471d7d22bdb2e1cd0606ba60e38f"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-l2arctic-medium/resolve/52aad8378f31a0b9bbfa1980aefdc6c0295b3433/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -561,6 +606,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/lessac/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-lessac-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-high/resolve/a3cffbe82b4df3b9edefa73189f4443ed638d9a1/en_US-lessac-high.onnx", 113895332L, "1315b0b3746e9ff52f8ccc88d3d9eaa6c289001fc58951ed88c0fb3a0befe635"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-high/resolve/a3cffbe82b4df3b9edefa73189f4443ed638d9a1/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -573,6 +619,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/lessac/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-lessac-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-low/resolve/7f5edb341cadf35daab356f857ed5ae8545d22bf/en_US-lessac-low.onnx", 63201425L, "7552bd58d49baaee47628e945f5045b6876a6af0aa3bb5605efcaa755ea9640f"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-low/resolve/7f5edb341cadf35daab356f857ed5ae8545d22bf/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -585,6 +632,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/lessac/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-lessac-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/83f7470750b36549037551ef7007fa3b4b8697e0/en_US-lessac-medium.onnx", 63201425L, "ea793a648ce0370665f99fbf891eae3b3a973565c72b08534bb5b2c04e8f2332"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-lessac-medium/resolve/83f7470750b36549037551ef7007fa3b4b8697e0/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -597,6 +645,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 904,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/libritts/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-libritts-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-libritts-high/resolve/b436d2684d7de5ded1112f173a742f5d47a40e89/en_US-libritts-high.onnx", 136673944L, "c6c0eeb0bf6aa67875dd1d2b37d014357dee2aba96f5481686da522dc6b0b93a"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-libritts-high/resolve/b436d2684d7de5ded1112f173a742f5d47a40e89/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -609,6 +658,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 2306,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/libritts_r/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-libritts_r-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-libritts_r-medium/resolve/fe872db7e697e9f2a45d09328953f1fd2a9df630/en_US-libritts_r-medium.onnx", 78581047L, "acd9425049d887a4d04681010c3b2ed143898b824e5bc1f2ef6ddaee4b11ad0e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-libritts_r-medium/resolve/fe872db7e697e9f2a45d09328953f1fd2a9df630/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -621,6 +671,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/ljspeech/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-ljspeech-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-ljspeech-high/resolve/6356d891ee71f4bed94a2b44ec29c010c39c0733/en_US-ljspeech-high.onnx", 114199139L, "fea8faae21240174e972568a004f1d7afb01a93dbc7b3a58c36ecdc1bae82e33"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-ljspeech-high/resolve/6356d891ee71f4bed94a2b44ec29c010c39c0733/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -633,6 +684,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/ljspeech/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-ljspeech-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-ljspeech-medium/resolve/34f390d13b9edbaa30c339127de0f9c4c5948c90/en_US-ljspeech-medium.onnx", 63531507L, "8ceba58a4b540d4e7e7e24ad079cf0d92762a4fd334e059f12940787c6c37b3d"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-ljspeech-medium/resolve/34f390d13b9edbaa30c339127de0f9c4c5948c90/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -645,6 +697,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/norman/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-norman-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-norman-medium/resolve/96632d35050997005e69857cbdf5352ed329bb45/en_US-norman-medium.onnx", 63531507L, "fa06b6b8b280e176b17f8424e05ca12d0223eeac9a31c87230937fe7120fbe2a"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-norman-medium/resolve/96632d35050997005e69857cbdf5352ed329bb45/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -657,6 +710,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "CC BY-NC-SA 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/ryan/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-ryan-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-ryan-high/resolve/8454dfc37b2e296399b4429eef62f9c74230309c/en_US-ryan-high.onnx", 120786923L, "4343c10fd88301574d2012b3d006fa5fc8fdf18d04ca9564ef399eed180d8788"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-ryan-high/resolve/8454dfc37b2e296399b4429eef62f9c74230309c/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -669,6 +723,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY-NC-SA 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/ryan/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-ryan-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-ryan-low/resolve/abe831a9c18fda101bc36a376347e4aaa9ee44af/en_US-ryan-low.onnx", 63104657L, "2ad52f13bf0cbfa3bf0cc9afbab91e71485a6a3f6aee507cbc6c2c753b30d0d1"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-ryan-low/resolve/abe831a9c18fda101bc36a376347e4aaa9ee44af/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -681,6 +736,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC BY-NC-SA 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_US/ryan/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("en_US-ryan-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-en_US-ryan-medium/resolve/2784cf0f7510312ed567a5d227bcbec28dcd661e/en_US-ryan-medium.onnx", 63201425L, "8a4063318faeda9bf67f89d25b29cc4bd5fde8832422aa451a5d5d2647553081"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-en_US-ryan-medium/resolve/2784cf0f7510312ed567a5d227bcbec28dcd661e/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -693,6 +749,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "Attribution-ShareAlike 4.0 International",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_AR/daniela/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_AR-daniela-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_AR-daniela-high/resolve/b95fc6d7ff65e5da79796531cb4e760931b89888/es_AR-daniela-high.onnx", 113851893L, "a9606e518795605fedc1d424154ddde1550eeee9df97786cb3efba3dabe971e7"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_AR-daniela-high/resolve/b95fc6d7ff65e5da79796531cb4e760931b89888/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -705,6 +762,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "Public domain",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_ES/carlfm/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_ES-carlfm-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_ES-carlfm-x_low/resolve/a7024f49a9cccef629614c1b41e47fd15723a24a/es_ES-carlfm-x_low.onnx", 28130919L, "8a68b21d6133886129f057d0c568d342db4890113495f84d2e25bbcb7b1a37ce"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_ES-carlfm-x_low/resolve/a7024f49a9cccef629614c1b41e47fd15723a24a/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -717,6 +775,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_ES/davefx/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_ES-davefx-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_ES-davefx-medium/resolve/d5cddb304d484989611c1684db8878d4ef2fc506/es_ES-davefx-medium.onnx", 63201422L, "329fc723ef304f8688df9ef819eea169a4181f60a77f53e087b19dbca07b09f8"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_ES-davefx-medium/resolve/d5cddb304d484989611c1684db8878d4ef2fc506/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -729,6 +788,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_ES/mls_10246/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_ES-mls_10246-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_ES-mls_10246-low/resolve/308471a6fae64f9ba25d53241cede306c2a917f1/es_ES-mls_10246-low.onnx", 63104654L, "4ca269892c94a61bcce7fe58c2444059b96b76e74427c36538d0d3611f5644bc"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_ES-mls_10246-low/resolve/308471a6fae64f9ba25d53241cede306c2a917f1/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -741,6 +801,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_ES/mls_9972/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_ES-mls_9972-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_ES-mls_9972-low/resolve/5440d32fb5870a035eea1e03b833f29724803378/es_ES-mls_9972-low.onnx", 63104654L, "29cd34f8c8c7f176efd2e438e563847e8e7f37c33de994e0746fe839de432cc8"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_ES-mls_9972-low/resolve/5440d32fb5870a035eea1e03b833f29724803378/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -753,6 +814,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 2,
         licence = "http://creativecommons.org/licenses/by/3.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_ES/sharvard/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_ES-sharvard-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_ES-sharvard-medium/resolve/2306b73bae558eddfdaee0a7ef3048a966a291d4/es_ES-sharvard-medium.onnx", 76733743L, "f26006cd03e2d558966fa3c49cfa9361dfa22d72197d74b6b50437cb02b8faaf"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_ES-sharvard-medium/resolve/2306b73bae558eddfdaee0a7ef3048a966a291d4/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -765,6 +827,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://unlicense.org",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_MX/ald/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_MX-ald-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_MX-ald-medium/resolve/7e97a71dada30e05c6bdb069f64c9e021401bfef/es_MX-ald-medium.onnx", 63201426L, "b5e77074846d97651421244167a11d53c762fa41f953de98ab21957a6036eab4"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_MX-ald-medium/resolve/7e97a71dada30e05c6bdb069f64c9e021401bfef/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -777,6 +840,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 1,
         licence = "apache-2.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/es/es_MX/claude/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("es_MX-claude-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-es_MX-claude-high/resolve/802b53b82c60d3de4f8b965314ac99bbec2499b0/es_MX-claude-high.onnx", 63122441L, "f5eceb904655a60141037d957f21e6257efa93b8c8b7b818c0c57396217bcb1c"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-es_MX-claude-high/resolve/802b53b82c60d3de4f8b965314ac99bbec2499b0/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -789,6 +853,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fa/fa_IR/amir/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fa_IR-amir-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-amir-medium/resolve/e852208889c7cb924b8b43eace4e8bff847b13a1/fa_IR-amir-medium.onnx", 63531507L, "5a832803df099857d92cf7ec1e340c7ef6910433f089d9aca9ff1ebf9b7fa6c5"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-amir-medium/resolve/e852208889c7cb924b8b43eace4e8bff847b13a1/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -801,6 +866,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fa/fa_IR/ganji/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fa_IR-ganji-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-ganji-medium/resolve/0730082919d3f7a4440f685ac5bcf6da7081cc71/fa_IR-ganji-medium.onnx", 63145182L, "28e66a8dfe4fb5662598d41b855c098ef844a81286956956b77eb121b3d63116"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-ganji-medium/resolve/0730082919d3f7a4440f685ac5bcf6da7081cc71/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -813,6 +879,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fa/fa_IR/ganji_adabi/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fa_IR-ganji_adabi-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-ganji_adabi-medium/resolve/3c8cad1f6ecca355701231cc4b083a8318e827da/fa_IR-ganji_adabi-medium.onnx", 63145182L, "39eea519cc6fd580541edb86e33c7d049495c4fe2db0c61b86bf4e2e2f3bd39e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-ganji_adabi-medium/resolve/3c8cad1f6ecca355701231cc4b083a8318e827da/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -825,6 +892,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://github.com/gyroing",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fa/fa_IR/gyro/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fa_IR-gyro-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-gyro-medium/resolve/1ebba162a6721b2b497ed2d80b6b498b0087a79e/fa_IR-gyro-medium.onnx", 63122437L, "79646f0a1942d8be05562f4103da6470bcf69337e65bd8a1ec95afe1c6a89e6b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-gyro-medium/resolve/1ebba162a6721b2b497ed2d80b6b498b0087a79e/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -837,6 +905,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fa/fa_IR/reza_ibrahim/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fa_IR-reza_ibrahim-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-reza_ibrahim-medium/resolve/22b1f3c9422040bb938a193a6d7ca960a8d69596/fa_IR-reza_ibrahim-medium.onnx", 63153775L, "c3e12eae4c435d39bee2dc0b870cbace6eb0e7b7c5d34c34521f9a12b1cdade4"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fa_IR-reza_ibrahim-medium/resolve/22b1f3c9422040bb938a193a6d7ca960a8d69596/tokens.txt", 940L, "a150821b57f584b5b76219e3d26441d85b857a4ea55675eafa9168c79bdfa54c"),
@@ -849,6 +918,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fi/fi_FI/harri/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fi_FI-harri-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-fi_FI-harri-low/resolve/fd4cd58fc6897d91dce5bcd162e9652fc9921bde/fi_FI-harri-low.onnx", 69795319L, "e5f2455ed8b806cb96eaa6b221e82ff6ec8bc804e3759f8a1b5a2aa41ddc7a4b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fi_FI-harri-low/resolve/fd4cd58fc6897d91dce5bcd162e9652fc9921bde/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -861,6 +931,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fi/fi_FI/harri/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fi_FI-harri-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fi_FI-harri-medium/resolve/6c1264e0997582ccdd6c54de1e22698d460c40ea/fi_FI-harri-medium.onnx", 63201422L, "0f57368660befcb6a1c2d25547cff9fcd1fdc2edb3241676f0117c09ecb8e9b6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fi_FI-harri-medium/resolve/6c1264e0997582ccdd6c54de1e22698d460c40ea/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -873,6 +944,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/gilles/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-gilles-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-gilles-low/resolve/860981089a59d31d521c89c6625e588e4a54a72c/fr_FR-gilles-low.onnx", 63104653L, "f5759ae5495cf6aa55bd87f30274a13b346f30935b21aeca54c1f66faac69e21"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-gilles-low/resolve/860981089a59d31d521c89c6625e588e4a54a72c/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -885,6 +957,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 125,
         licence = "CC-BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/mls/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-mls-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-mls-medium/resolve/06ef1f996a72d027ce9a42e3eeac7cd21fc351ec/fr_FR-mls-medium.onnx", 76733879L, "cb02104afedb7d38252ec3a6efb1343451926652d07f4e2d1f033c9e65753bcd"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-mls-medium/resolve/06ef1f996a72d027ce9a42e3eeac7cd21fc351ec/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -897,6 +970,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/mls_1840/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-mls_1840-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-mls_1840-low/resolve/025b557b841ab99d8f2f18eca122b32b4fe5899a/fr_FR-mls_1840-low.onnx", 63104653L, "d2a21a581b0ced17aa447522ee3872bbcd6a117ce7086d78433cc41429a043e8"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-mls_1840-low/resolve/025b557b841ab99d8f2f18eca122b32b4fe5899a/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -909,6 +983,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC-BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/siwis/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-siwis-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-siwis-low/resolve/7dd35e5a199507bd6da305649f83a04d188223a8/fr_FR-siwis-low.onnx", 28130918L, "e737174e9a371b60c717f1080ee21717972b8f46621d3da5cb874cec48be97c4"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-siwis-low/resolve/7dd35e5a199507bd6da305649f83a04d188223a8/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -921,6 +996,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC-BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/siwis/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-siwis-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-siwis-medium/resolve/6b956227093bc8f9c05e5549508c4a510e97ef26/fr_FR-siwis-medium.onnx", 63201421L, "830f55d861ce7c8a442fd5593890ff5ee50c9d5efd4c4f42d24d537fe46d2d52"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-siwis-medium/resolve/6b956227093bc8f9c05e5549508c4a510e97ef26/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -933,6 +1009,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "AGPLv3",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/tom/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-tom-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-tom-medium/resolve/b06801cef7edce85e3a23acb9cc3526560e7075d/fr_FR-tom-medium.onnx", 63511165L, "68a48123f8b532974b75cd2bebaaaed190916ee00d00e809ea74b45ea3efabc7"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-tom-medium/resolve/b06801cef7edce85e3a23acb9cc3526560e7075d/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -945,6 +1022,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 2,
         licence = "http://creativecommons.org/licenses/by-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/fr/fr_FR/upmc/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("fr_FR-upmc-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-upmc-medium/resolve/282bacef30b429ca30676bdd0eec155ea8d1b402/fr_FR-upmc-medium.onnx", 76733742L, "a2c792f2be60d403f5d2e379b97eff26a32299435e75f9d65c8f59421957fff0"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-fr_FR-upmc-medium/resolve/282bacef30b429ca30676bdd0eec155ea8d1b402/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -957,6 +1035,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/hi/hi_IN/pratham/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("hi_IN-pratham-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-hi_IN-pratham-medium/resolve/94517289ea9291e9a76ace527d8c34d6b170aa97/hi_IN-pratham-medium.onnx", 63145178L, "1d77908e8ab724c813c5cefaa48feadc9f2670ec5d145f83bade981c428740a0"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-hi_IN-pratham-medium/resolve/94517289ea9291e9a76ace527d8c34d6b170aa97/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -969,6 +1048,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/hi/hi_IN/priyamvada/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("hi_IN-priyamvada-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-hi_IN-priyamvada-medium/resolve/ec05e05b3eae80817ea62258d13f4d42e46cd1c2/hi_IN-priyamvada-medium.onnx", 63145178L, "8871f3e07adb6ca490f8dbcd3956a8647c53c35b5d0a1c2a8d097b3bf721a31b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-hi_IN-priyamvada-medium/resolve/ec05e05b3eae80817ea62258d13f4d42e46cd1c2/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -981,6 +1061,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://www.iitm.ac.in/donlab/indictts/downloads/license.pdf",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/hi/hi_IN/rohan/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("hi_IN-rohan-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-hi_IN-rohan-medium/resolve/fe149a55f4949f711d42bfca3e214d5c6c8d797b/hi_IN-rohan-medium.onnx", 62946428L, "353d2a20bdb6dd03b74e1aff82b7a10a1646f677f8474c6c81fd606705536224"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-hi_IN-rohan-medium/resolve/fe149a55f4949f711d42bfca3e214d5c6c8d797b/tokens.txt", 968L, "e8a50ae0c75612d18cfcf3f90800dca79f961e3ed97f9574f3535194469187fd"),
@@ -993,6 +1074,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/hu/hu_HU/anna/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("hu_HU-anna-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-hu_HU-anna-medium/resolve/dec1dc1120c96916b49c71e3ac199e83beee341a/hu_HU-anna-medium.onnx", 63201424L, "33ec97c272e650e528fb164939bc782517f50c0f0fd3c3ef9235d5b98300c67c"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-hu_HU-anna-medium/resolve/dec1dc1120c96916b49c71e3ac199e83beee341a/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -1005,6 +1087,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/hu/hu_HU/berta/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("hu_HU-berta-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-hu_HU-berta-medium/resolve/398598b41cd739d103a2c335a29a5e1620d38b09/hu_HU-berta-medium.onnx", 63201424L, "c618da4ac9b5bec3a859e0a46d84733d7feef15571d4b47a94879f62b4e8dd9b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-hu_HU-berta-medium/resolve/398598b41cd739d103a2c335a29a5e1620d38b09/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1017,6 +1100,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/hu/hu_HU/imre/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("hu_HU-imre-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-hu_HU-imre-medium/resolve/ce29439977c5700c7694b78b787a46e8fafbab8d/hu_HU-imre-medium.onnx", 63201424L, "4f242eb3c6cc5c5183fa457a734d434ed359b65b707827884a416fb071ffc06c"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-hu_HU-imre-medium/resolve/ce29439977c5700c7694b78b787a46e8fafbab8d/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -1029,6 +1113,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://www.kaggle.com/code/mpwolke/indic-tts-malayalam-speech-corpus",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/id/id_ID/news_tts/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("id_ID-news_tts-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-id_ID-news_tts-medium/resolve/92e236bcdec557d138aaa96bea6944dfa856f4d4/id_ID-news_tts-medium.onnx", 62946438L, "3c2e55d7b8485b9c132383f07e6fc6807b54ed8d6f4a8f54d1d4d4740d2b54ff"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-id_ID-news_tts-medium/resolve/92e236bcdec557d138aaa96bea6944dfa856f4d4/tokens.txt", 968L, "e8a50ae0c75612d18cfcf3f90800dca79f961e3ed97f9574f3535194469187fd"),
@@ -1041,6 +1126,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://hdl.handle.net/20.500.12537/104",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/is/is_IS/bui/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("is_IS-bui-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-is_IS-bui-medium/resolve/cb53280ea64b94ae1ecbec1cb575f66979b04da7/is_IS-bui-medium.onnx", 76495595L, "f3bb6b8956952f04155ee80efab349ff89da9be7112d320bedd7e429f6099f1b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-is_IS-bui-medium/resolve/cb53280ea64b94ae1ecbec1cb575f66979b04da7/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1053,6 +1139,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://hdl.handle.net/20.500.12537/104",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/is/is_IS/salka/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("is_IS-salka-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-is_IS-salka-medium/resolve/ebaa7cda3a34ab1cb0d748b05e63c1c71a00fc34/is_IS-salka-medium.onnx", 76495595L, "215ed100f058f876eaf6ce1f83845bd14fa3497fd4a261d10079c69f2a59798e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-is_IS-salka-medium/resolve/ebaa7cda3a34ab1cb0d748b05e63c1c71a00fc34/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1065,6 +1152,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://hdl.handle.net/20.500.12537/104",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/is/is_IS/steinn/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("is_IS-steinn-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-is_IS-steinn-medium/resolve/888f4cbf09c7cd3057be7d8f67e8ef465227808d/is_IS-steinn-medium.onnx", 76495595L, "de85e6f3e75f5de0a1e66e5e595e28811961ccf05b1245a596cb6d98100a085e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-is_IS-steinn-medium/resolve/888f4cbf09c7cd3057be7d8f67e8ef465227808d/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1077,6 +1165,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://hdl.handle.net/20.500.12537/104",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/is/is_IS/ugla/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("is_IS-ugla-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-is_IS-ugla-medium/resolve/f4a3e9ca660aeff424fd7b28df47367441d7c3e2/is_IS-ugla-medium.onnx", 76495595L, "289559fecb632c2febfb64c1c367bc1791bc0372ecdcf008e13078443d3c5fdc"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-is_IS-ugla-medium/resolve/f4a3e9ca660aeff424fd7b28df47367441d7c3e2/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1089,6 +1178,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://huggingface.co/datasets/paolapersico1/Voice-Dataset-Italian",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/it/it_IT/paola/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("it_IT-paola-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-it_IT-paola-medium/resolve/b2d11ae8ce81120ba05f39fb43ecbff2d6d634ea/it_IT-paola-medium.onnx", 63511166L, "cbe315465f8a0be7db8b40f922fe906cf202996b0e15d388c540e9ac3d4b7fd7"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-it_IT-paola-medium/resolve/b2d11ae8ce81120ba05f39fb43ecbff2d6d634ea/tokens.txt", 921L, "95064d2a5d6b029c6710f9c83062a4401cbcee9678e419f381ca3b18a690983d"),
@@ -1101,6 +1191,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "https://www.caito.de/2019/01/03/the-m-ailabs-speech-dataset/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/it/it_IT/riccardo/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("it_IT-riccardo-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-it_IT-riccardo-x_low/resolve/e951548ed9492b44509cdc22e31db407b3ee76b4/it_IT-riccardo-x_low.onnx", 28130919L, "9257d8a673115e996f29b6183a8f672008f2b8c537894a675addf347aa7e45b6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-it_IT-riccardo-x_low/resolve/e951548ed9492b44509cdc22e31db407b3ee76b4/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1113,6 +1204,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://github.com/Olga-Yakovleva/RHVoice",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ka/ka_GE/natia/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ka_GE-natia-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ka_GE-natia-medium/resolve/5e74711897e753af5ca8e7a8e4c380998d8c788f/ka_GE-natia-medium.onnx", 63201423L, "d30263fca3304a79a9cf81bb7454e7670652226ce9d55b2c6e4adb985083212a"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ka_GE-natia-medium/resolve/5e74711897e753af5ca8e7a8e4c380998d8c788f/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -1125,6 +1217,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "CC-BY-4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/kk/kk_KZ/iseke/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("kk_KZ-iseke-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-kk_KZ-iseke-x_low/resolve/f535ec375a4531ddae5665ff638e12270944b417/kk_KZ-iseke-x_low.onnx", 28130918L, "35af0c47fec0360a90bd8f21c991a60604d6a2164d191f7fd2ad9256f9eba974"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-kk_KZ-iseke-x_low/resolve/f535ec375a4531ddae5665ff638e12270944b417/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1137,6 +1230,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "high",
         speakerCount = 6,
         licence = "CC-BY-4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/kk/kk_KZ/issai/high/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("kk_KZ-issai-high.onnx", "https://huggingface.co/csukuangfj/vits-piper-kk_KZ-issai-high/resolve/22e6357072c742143b1fa7704391386a3756e8a4/kk_KZ-issai-high.onnx", 127864385L, "2a2e21c96f21dae5e160c55f0ab969e9fb71f355b33d81ffd2d6c3927b1c9aef"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-kk_KZ-issai-high/resolve/22e6357072c742143b1fa7704391386a3756e8a4/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1149,6 +1243,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "CC-BY-4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/kk/kk_KZ/raya/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("kk_KZ-raya-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-kk_KZ-raya-x_low/resolve/4d5953c5cb80830cafc36f579ef24e525ec84a3f/kk_KZ-raya-x_low.onnx", 28130918L, "baad444337eabcf0b5af65a260135748dd020a01ca0fa2fdf50d5f9eaf6893a3"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-kk_KZ-raya-x_low/resolve/4d5953c5cb80830cafc36f579ef24e525ec84a3f/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1161,6 +1256,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "http://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/lb/lb_LU/marylux/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("lb_LU-marylux-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-lb_LU-marylux-medium/resolve/a7af6b47cf3d1dc061a66f2ee9a3f835f6abd455/lb_LU-marylux-medium.onnx", 63201428L, "490b2917381905f638b16b83eb208bf4c49bcc09abc94b6d019cdcf90f125401"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-lb_LU-marylux-medium/resolve/a7af6b47cf3d1dc061a66f2ee9a3f835f6abd455/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1173,6 +1269,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0 1.0 Universal",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/lv/lv_LV/aivars/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("lv_LV-aivars-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-lv_LV-aivars-medium/resolve/5dabfb0558f9b4046598c9d50599e6004a9544c6/lv_LV-aivars-medium.onnx", 63511166L, "a85a008f63feb962cd6631415ad2aa98bb1861cdf5971fc13b8f45d5a3ff366d"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-lv_LV-aivars-medium/resolve/5dabfb0558f9b4046598c9d50599e6004a9544c6/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1185,6 +1282,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ne/ne_NP/chitwan/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ne_NP-chitwan-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ne_NP-chitwan-medium/resolve/2b6bad58d4f7df8f794f3514cca582c08e7223ff/ne_NP-chitwan-medium.onnx", 62950216L, "4c0220bc13a665add2bef76bd6d40fedcc2273731c933c4cdf3bf3c1440ae1e9"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ne_NP-chitwan-medium/resolve/2b6bad58d4f7df8f794f3514cca582c08e7223ff/tokens.txt", 968L, "e8a50ae0c75612d18cfcf3f90800dca79f961e3ed97f9574f3535194469187fd"),
@@ -1197,6 +1295,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 18,
         licence = "CC-BY-SA-4.0 International",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ne/ne_NP/google/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ne_NP-google-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ne_NP-google-medium/resolve/0f9c5a81be073c810490427dd3bc5743cca32585/ne_NP-google-medium.onnx", 76766529L, "3793a5acad5a4909b01ab845ff73ee49df4051e5e8742cbc7cbbfc6b6a7e61a4"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ne_NP-google-medium/resolve/0f9c5a81be073c810490427dd3bc5743cca32585/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1209,6 +1308,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 18,
         licence = "CC-BY-SA-4.0 International",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ne/ne_NP/google/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ne_NP-google-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-ne_NP-google-x_low/resolve/49d596b2c0e4b4378ff619a500ff949977e1e77e/ne_NP-google-x_low.onnx", 27693301L, "758d0568eafb7875b4ab888b0dfc86c41419c04dada2c602bd8aeafcf01ee69f"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ne_NP-google-x_low/resolve/49d596b2c0e4b4378ff619a500ff949977e1e77e/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1221,6 +1321,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_BE/nathalie/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_BE-nathalie-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-nathalie-medium/resolve/1356793b677b4effa325817d758902c88d775709/nl_BE-nathalie-medium.onnx", 63201420L, "d6901ce5548dc4ca2d7f42fd5e53647fdd790b5b6a4350aa8b4e24adc3e903dc"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-nathalie-medium/resolve/1356793b677b4effa325817d758902c88d775709/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1233,6 +1334,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_BE/nathalie/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_BE-nathalie-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-nathalie-x_low/resolve/cb252ad783ea48798bbf74a31092d3acd5d2c947/nl_BE-nathalie-x_low.onnx", 20628939L, "b20eb11541fa6afcb04007b4f0b7a3e6f540ed9445f1762f7f384c34bfb6e5c6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-nathalie-x_low/resolve/cb252ad783ea48798bbf74a31092d3acd5d2c947/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1245,6 +1347,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0 1.0 Universal",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_BE/rdh/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_BE-rdh-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-rdh-medium/resolve/6e4aa36cc18a29bd5b72786dc52eee9fb49bc26a/nl_BE-rdh-medium.onnx", 63104652L, "45260062e54e44270d6e3b57c082b3d0d7085e4b542fa2909cf212ffad4b73a0"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-rdh-medium/resolve/6e4aa36cc18a29bd5b72786dc52eee9fb49bc26a/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1257,6 +1360,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "CC0 1.0 Universal",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_BE/rdh/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_BE-rdh-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-rdh-x_low/resolve/cab7c5f0cc661b9e22599779a3cbe69ca894c5bb/nl_BE-rdh-x_low.onnx", 20628939L, "a28de2ff4caa6c33d001327d0c270a6b6596840b09a4db97300cf6f18d1bbda9"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_BE-rdh-x_low/resolve/cab7c5f0cc661b9e22599779a3cbe69ca894c5bb/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1269,6 +1373,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 52,
         licence = "CC-BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_NL/mls/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_NL-mls-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_NL-mls-medium/resolve/12a0255aae38537f7511b7139e3445b84866e771/nl_NL-mls-medium.onnx", 76584373L, "9e3d6e14dd200cc1f077d8d92d9bc5ec9a489bb55c8feedaca41c5529f335f94"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_NL-mls-medium/resolve/12a0255aae38537f7511b7139e3445b84866e771/tokens.txt", 954L, "620e1aecf1a68fea3ba5850d137b0138fa2037c9b372dad13b95a2a215d0849a"),
@@ -1281,6 +1386,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_NL/mls_5809/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_NL-mls_5809-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_NL-mls_5809-low/resolve/3990eb21abccce65943532e99d2b92ada3fa6f5e/nl_NL-mls_5809-low.onnx", 63104652L, "f6af8d7f517f55593edbd925bb4b3933462df1e1f3a17a70e28d0d2cca310203"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_NL-mls_5809-low/resolve/3990eb21abccce65943532e99d2b92ada3fa6f5e/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1293,6 +1399,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/nl/nl_NL/mls_7432/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("nl_NL-mls_7432-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-nl_NL-mls_7432-low/resolve/2fe31d23db8b1f68cf626095c660cd431d7a17c1/nl_NL-mls_7432-low.onnx", 63104652L, "995265c7bc98a418cf4cf3efab0fcf4ed3a80972172034d6758da3a907a94776"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-nl_NL-mls_7432-low/resolve/2fe31d23db8b1f68cf626095c660cd431d7a17c1/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1305,6 +1412,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/no/no_NO/talesyntese/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("no_NO-talesyntese-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-no_NO-talesyntese-medium/resolve/c9003dc23feabf3579bf390238955ac2e88c179e/no_NO-talesyntese-medium.onnx", 63201424L, "8027a2c33f6dc30e137a0f7f15022c07ef2d0e56300a5dfc29e38408970a0ddf"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-no_NO-talesyntese-medium/resolve/c9003dc23feabf3579bf390238955ac2e88c179e/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1317,6 +1425,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pl/pl_PL/darkman/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pl_PL-darkman-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-darkman-medium/resolve/2a1dfbd2449c2a19bf794f3977bb5088a83c3cce/pl_PL-darkman-medium.onnx", 63201421L, "fe8df9888ce02d985472355b3cad5fa2267c8bffa7c09438029bb16d07060adc"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-darkman-medium/resolve/2a1dfbd2449c2a19bf794f3977bb5088a83c3cce/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -1329,6 +1438,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pl/pl_PL/gosia/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pl_PL-gosia-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-gosia-medium/resolve/bdee685fb766e9f9c97caa75094f9a3d13441521/pl_PL-gosia-medium.onnx", 63201421L, "6e02e04a26ff2a96fe5780dad58df0d5249177ba96a6bbe1fe2ba5a6714d17e4"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-gosia-medium/resolve/bdee685fb766e9f9c97caa75094f9a3d13441521/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -1341,6 +1451,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pl/pl_PL/mc_speech/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pl_PL-mc_speech-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-mc_speech-medium/resolve/e00e9020dfab9fd4cd842b5ee25787b773dcb4a8/pl_PL-mc_speech-medium.onnx", 63201421L, "64beff4c49496734822f4429c4fd8be90e752a08196de6fc4cda6af8ce851cbd"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-mc_speech-medium/resolve/e00e9020dfab9fd4cd842b5ee25787b773dcb4a8/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1353,6 +1464,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pl/pl_PL/mls_6892/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pl_PL-mls_6892-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-mls_6892-low/resolve/fc063090ffa2562dc86990d22fb3404c949617b1/pl_PL-mls_6892-low.onnx", 63104653L, "251fe5f77e7a5dcb0559667049ae5eae0fbad1070ad4cd930caf59d53657b91e"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pl_PL-mls_6892-low/resolve/fc063090ffa2562dc86990d22fb3404c949617b1/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1365,6 +1477,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pt/pt_BR/cadu/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pt_BR-cadu-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-cadu-medium/resolve/eb2a3d3b4184b5aa21dd5bfd9216225e6946284f/pt_BR-cadu-medium.onnx", 62950207L, "b6318f52e2c7ed8a9ac90caec529180aad581958b31e90f99cf3690a830a8ed7"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-cadu-medium/resolve/eb2a3d3b4184b5aa21dd5bfd9216225e6946284f/tokens.txt", 968L, "e8a50ae0c75612d18cfcf3f90800dca79f961e3ed97f9574f3535194469187fd"),
@@ -1377,6 +1490,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "low",
         speakerCount = 1,
         licence = "CC BY 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pt/pt_BR/edresson/low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pt_BR-edresson-low.onnx", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-edresson-low/resolve/ec462f904a89c8d3b6c16d2f2d24a97eabd33145/pt_BR-edresson-low.onnx", 63104660L, "912728fca27834ee8184eb9e597b85338105f14bf798906d94d8390d0e81bb62"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-edresson-low/resolve/ec462f904a89c8d3b6c16d2f2d24a97eabd33145/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1389,6 +1503,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pt/pt_BR/faber/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pt_BR-faber-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-faber-medium/resolve/4f385076a8f9d5bc7b4cd9fea4dc77e6e8ca8167/pt_BR-faber-medium.onnx", 63201428L, "39fb6b580d6d40a3230b7a9d0851d282074537b9694892b5b3cd90ff87c6cbb3"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-faber-medium/resolve/4f385076a8f9d5bc7b4cd9fea4dc77e6e8ca8167/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -1401,6 +1516,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/pt/pt_BR/jeff/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("pt_BR-jeff-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-jeff-medium/resolve/2c440443ed6fa45432e598f74ff64ea5d61b6e6b/pt_BR-jeff-medium.onnx", 62950207L, "e5a8c799ee3782114eb788999a97f58fac5994f5444777d807d8930cb4c1cad7"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-pt_BR-jeff-medium/resolve/2c440443ed6fa45432e598f74ff64ea5d61b6e6b/tokens.txt", 968L, "e8a50ae0c75612d18cfcf3f90800dca79f961e3ed97f9574f3535194469187fd"),
@@ -1413,6 +1529,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ro/ro_RO/mihai/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ro_RO-mihai-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ro_RO-mihai-medium/resolve/b7955c4f2151846c863e197689ec2bcb74b1de8d/ro_RO-mihai-medium.onnx", 63201423L, "bbeedb8a14a28a089c5bc47e689dc6053c6190abbd00d591033de0f4ed6eae8b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ro_RO-mihai-medium/resolve/b7955c4f2151846c863e197689ec2bcb74b1de8d/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1425,6 +1542,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ru/ru_RU/denis/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ru_RU-denis-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ru_RU-denis-medium/resolve/1e2f78fc13100abc60bf56264dc2ee254b4c5f8e/ru_RU-denis-medium.onnx", 63201422L, "f0129d8cbd0fef7df16a101d0cd302b25a8fd8bbda7b11af885b1e9f3e974dcf"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ru_RU-denis-medium/resolve/1e2f78fc13100abc60bf56264dc2ee254b4c5f8e/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -1437,6 +1555,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ru/ru_RU/dmitri/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ru_RU-dmitri-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ru_RU-dmitri-medium/resolve/51cc3e9ea521e33ef3771f11e02b29ecb42a91f1/ru_RU-dmitri-medium.onnx", 63201422L, "9d6319458fe67d443586aa2c2fe99b6f0d8b92ac9496168204442ef93d6b64e6"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ru_RU-dmitri-medium/resolve/51cc3e9ea521e33ef3771f11e02b29ecb42a91f1/tokens.txt", 907L, "2619c1a9de1bcf928162f40c583caf39368cfd6b2340c7bcad51dc634411ec36"),
@@ -1449,6 +1568,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/ru/ru_RU/ruslan/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("ru_RU-ruslan-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-ru_RU-ruslan-medium/resolve/22c226825c24319e30cbf8a3844a240b9f6b1951/ru_RU-ruslan-medium.onnx", 63201422L, "43d3e034b04abe67c9ceab09a062617260e71804f55779cc68979a7b3e434064"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-ru_RU-ruslan-medium/resolve/22c226825c24319e30cbf8a3844a240b9f6b1951/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1461,6 +1581,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/sk/sk_SK/lili/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("sk_SK-lili-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-sk_SK-lili-medium/resolve/e24926b2960bdd9f471d40384adb33558b14e3b5/sk_SK-lili-medium.onnx", 63201421L, "4184b6990b4cd832ed7889abbeaff217d96cb1eb168c29231168b0d8c4848993"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-sk_SK-lili-medium/resolve/e24926b2960bdd9f471d40384adb33558b14e3b5/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1473,6 +1594,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/sl/sl_SI/artur/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("sl_SI-artur-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-sl_SI-artur-medium/resolve/6d8fe8757edf4d3481543621d645ab87fd09538b/sl_SI-artur-medium.onnx", 63200622L, "7e0c703d8cd2577e669e1dcb95d1cf47b06a8abfdd08c50890508d69f6528c70"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-sl_SI-artur-medium/resolve/6d8fe8757edf4d3481543621d645ab87fd09538b/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1485,6 +1607,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 2,
         licence = "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/sr/sr_RS/serbski_institut/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("sr_RS-serbski_institut-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-sr_RS-serbski_institut-medium/resolve/c11ecae3cda764e16fd861ed8ebb44bb2e1191ad/sr_RS-serbski_institut-medium.onnx", 76733743L, "d692a8f22c68a5294fbd744392f1e213efd171989b935ef7ad72329b2500d2ff"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-sr_RS-serbski_institut-medium/resolve/c11ecae3cda764e16fd861ed8ebb44bb2e1191ad/tokens.txt", 940L, "ef3a7e4a8d1af0c9d4dc45aaae1a6242ebe24a7ed6f3d025a49eb29682784c6d"),
@@ -1497,6 +1620,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/sv/sv_SE/nst/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("sv_SE-nst-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-sv_SE-nst-medium/resolve/04df2eea5794c14b235bb25f35f69bf4f7d5592d/sv_SE-nst-medium.onnx", 63104654L, "61dd6f6a45801fb51117a74cff17957428d7156d747b163fa1fbb9c1df26278d"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-sv_SE-nst-medium/resolve/04df2eea5794c14b235bb25f35f69bf4f7d5592d/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1509,6 +1633,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://lanfrica.com/record/kiswahili-tts-dataset",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/sw/sw_CD/lanfrica/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("sw_CD-lanfrica-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-sw_CD-lanfrica-medium/resolve/627325ced1dfadc02e5e2b6c1b2dbe546e66485f/sw_CD-lanfrica-medium.onnx", 63201438L, "1476cf51ff6cee33b34b966781abce544cd85b038cfb88171b7cad96f7eecd8b"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-sw_CD-lanfrica-medium/resolve/627325ced1dfadc02e5e2b6c1b2dbe546e66485f/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1521,6 +1646,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/tr/tr_TR/dfki/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("tr_TR-dfki-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-tr_TR-dfki-medium/resolve/a802000f81ce62c67b49ea3dbfcc185e8c352b7f/tr_TR-dfki-medium.onnx", 63201422L, "35c924643ba76043184b4b685b468ef8e06492d1c6eb029fbe12cac63b56ff82"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-tr_TR-dfki-medium/resolve/a802000f81ce62c67b49ea3dbfcc185e8c352b7f/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1533,6 +1659,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 1,
         licence = "Apache 2.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/uk/uk_UA/lada/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("uk_UA-lada-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-uk_UA-lada-x_low/resolve/3974c8da833c1c9ca9a6e955fe238e350d4870eb/uk_UA-lada-x_low.onnx", 20628943L, "23412cc9d3d025a06080b25c1cc3362bf7c216d3466e40c6fbf6547cde3a9943"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-uk_UA-lada-x_low/resolve/3974c8da833c1c9ca9a6e955fe238e350d4870eb/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),
@@ -1545,6 +1672,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 3,
         licence = "CC0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/uk/uk_UA/ukrainian_tts/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("uk_UA-ukrainian_tts-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-uk_UA-ukrainian_tts-medium/resolve/4fd40e3e9fc24f8d95cc4dec05fa2ad6bd749c62/uk_UA-ukrainian_tts-medium.onnx", 76735793L, "18d3c09ab8be906b240249e52178c089c4be9d1907b873d9066bfadcfef8d6ba"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-uk_UA-ukrainian_tts-medium/resolve/4fd40e3e9fc24f8d95cc4dec05fa2ad6bd749c62/tokens.txt", 273L, "67a6c6b42c95340c3bd64dabcd74259bb12839ffcd5fe347700dcb2656e90d52"),
@@ -1557,6 +1685,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "medium",
         speakerCount = 1,
         licence = "https://creativecommons.org/licenses/by/4.0/",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/vi/vi_VN/vais1000/medium/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("vi_VN-vais1000-medium.onnx", "https://huggingface.co/csukuangfj/vits-piper-vi_VN-vais1000-medium/resolve/3d92898cf942406c23330da466a831d3d923c2a2/vi_VN-vais1000-medium.onnx", 63201425L, "7264e130a2f2e62c2dd586e3790ba054b669f9f72a2bdb2c0d60207136611576"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-vi_VN-vais1000-medium/resolve/3d92898cf942406c23330da466a831d3d923c2a2/tokens.txt", 921L, "87c8ef66eae5473ed0cc0366b3964c736ca6c5f676c979522ea31234e47430b9"),
@@ -1569,6 +1698,7 @@ internal val PiperVoiceCatalog: List<PiperVoicePack> = listOf(
         quality = "x_low",
         speakerCount = 65,
         licence = "CC BY-NC-SA 4.0",
+        sampleUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/vi/vi_VN/vivos/x_low/samples/speaker_0.mp3",
         files = listOf(
             PiperFile("vi_VN-vivos-x_low.onnx", "https://huggingface.co/csukuangfj/vits-piper-vi_VN-vivos-x_low/resolve/9c6650281ff08d720c953ba04a288e0d434c54be/vi_VN-vivos-x_low.onnx", 27789545L, "9344614b4d7462d100cd78ad808172899e22c8d2dd611b5116ead470a2f312ab"),
             PiperFile("tokens.txt", "https://huggingface.co/csukuangfj/vits-piper-vi_VN-vivos-x_low/resolve/9c6650281ff08d720c953ba04a288e0d434c54be/tokens.txt", 763L, "42d1a69ed2b91a51928a711aa228ed9f3dc021c6d359a3e9c4f37eb1d20f80bd"),

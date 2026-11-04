@@ -717,9 +717,13 @@
     <string name="piper_available">Available to download</string>
     <string name="piper_none_for_language">No offline voices for this language.</string>
     <string name="piper_details">%1$s · %2$s</string>
-    <string name="piper_licence">Licence: %1$s</string>
     <string name="piper_first_download_note">Your first voice also downloads %1$s of shared speech data.</string>
-    <string name="piper_attribution">Voices by the Piper project, run with sherpa-onnx. Each voice shows the licence of its recordings.</string>
+    <string name="piper_attribution">Voices by the Piper project, run with sherpa-onnx.</string>
+    <string name="piper_test">Test voice</string>
+    <string name="piper_test_voice">Test %1$s</string>
+    <string name="piper_stop_test">Stop</string>
+    <string name="piper_stop_test_voice">Stop testing %1$s</string>
+    <string name="piper_test_failed">The sample could not be played. Check the connection and try again.</string>
     <string name="piper_download">Download</string>
     <string name="piper_download_voice">Download %1$s</string>
     <string name="piper_resume">Resume</string>

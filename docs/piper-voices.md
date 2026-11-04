@@ -6,10 +6,10 @@ voices. They run on the device through [sherpa-onnx](https://github.com/k2-fsa/s
 once a voice is downloaded.
 
 In Settings → Speech, choose **Piper (offline)**, then **Choose an offline voice**.
-The list opens on voices for the primary language. Each voice shows its size and
-the licence of the recordings it was trained on. Downloading the first voice also
-downloads 9 MB of shared espeak-ng data. Tap **Use** on a downloaded voice to
-select it.
+The list opens on voices for the primary language. Each voice shows its size.
+**Test voice** streams Piper's recorded sample of the voice before you download
+it. Downloading the first voice also downloads 9 MB of shared espeak-ng data. Tap
+**Use** on a downloaded voice to select it.
 
 ## Downloads
 
@@ -48,8 +48,10 @@ model or without a named dataset licence are left out.
 python3 -I scripts/piper/generate_catalog.py
 ```
 
-Some datasets are licensed for non-commercial use only (for example CC BY-NC-SA).
-Wingmate shows each licence before download and does not filter by it.
+Each voice's dataset licence is kept in the catalog for attribution but is not
+shown in the app. Some datasets are licensed for non-commercial use only (for
+example CC BY-NC-SA); Wingmate does not filter by licence. Sample clips come from
+`rhasspy/piper-voices` at a pinned revision.
 
 The engine is the official sherpa-onnx Android AAR from JitPack, which is
 byte-identical to the GitHub release. It stays on 1.13.x because sherpa-onnx 2.0

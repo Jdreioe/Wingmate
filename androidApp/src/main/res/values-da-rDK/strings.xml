@@ -717,9 +717,13 @@
     <string name="piper_available">Kan hentes</string>
     <string name="piper_none_for_language">Ingen offline stemmer til dette sprog.</string>
     <string name="piper_details">%1$s · %2$s</string>
-    <string name="piper_licence">Licens: %1$s</string>
     <string name="piper_first_download_note">Din første stemme henter også %1$s fælles taledata.</string>
-    <string name="piper_attribution">Stemmer fra Piper-projektet, afspillet med sherpa-onnx. Hver stemme viser licensen for sine optagelser.</string>
+    <string name="piper_attribution">Stemmer fra Piper-projektet, afspillet med sherpa-onnx.</string>
+    <string name="piper_test">Test stemme</string>
+    <string name="piper_test_voice">Test %1$s</string>
+    <string name="piper_stop_test">Stop</string>
+    <string name="piper_stop_test_voice">Stop test af %1$s</string>
+    <string name="piper_test_failed">Prøven kunne ikke afspilles. Tjek forbindelsen, og prøv igen.</string>
     <string name="piper_download">Hent</string>
     <string name="piper_download_voice">Hent %1$s</string>
     <string name="piper_resume">Fortsæt</string>

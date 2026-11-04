@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +35,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -74,6 +74,7 @@ internal fun PiperVoicesPage(onVoiceChosen: () -> Unit, modifier: Modifier = Mod
             }
         }
     }
+    DisposableEffect(viewModel) { onDispose { viewModel.stopSample() } }
     PiperVoicesContent(state = state, onAction = viewModel::onAction, modifier = modifier)
 }
 
@@ -203,6 +204,14 @@ private fun PiperVoiceRowItem(
     val cancelLabel = stringResource(R.string.piper_cancel_voice, name)
     val useLabel = stringResource(R.string.piper_use_voice, name)
     val deleteLabel = stringResource(R.string.piper_delete_voice, name)
+    val testing = ready.testingKey == key
+    val testLabel = stringResource(if (testing) R.string.piper_stop_test_voice else R.string.piper_test_voice, name)
+    val testButton: @Composable () -> Unit = {
+        OutlinedButton(
+            onClick = { onAction(PiperVoicesAction.Test(key)) },
+            modifier = Modifier.semantics { contentDescription = testLabel },
+        ) { Text(stringResource(if (testing) R.string.piper_stop_test else R.string.piper_test)) }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
@@ -214,25 +223,24 @@ private fun PiperVoiceRowItem(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            stringResource(R.string.piper_licence, pack.licence),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
         if (ready.selectedKey == key) {
             Text(stringResource(R.string.voice_selected), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
         }
         if (ready.unusableKey == key) {
             Text(stringResource(R.string.piper_unusable), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
+        if (ready.testFailedKey == key) {
+            Text(stringResource(R.string.piper_test_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        }
 
         when (val state = row.state) {
-            PiperVoiceState.NotInstalled -> Button(
-                onClick = { onAction(PiperVoicesAction.Download(key)) },
-                modifier = Modifier.semantics { contentDescription = downloadLabel },
-            ) { Text(stringResource(R.string.piper_download)) }
+            PiperVoiceState.NotInstalled -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onAction(PiperVoicesAction.Download(key)) },
+                    modifier = Modifier.semantics { contentDescription = downloadLabel },
+                ) { Text(stringResource(R.string.piper_download)) }
+                testButton()
+            }
 
             is PiperVoiceState.Downloading -> {
                 LinearProgressIndicator(
@@ -277,6 +285,7 @@ private fun PiperVoiceRowItem(
                         onClick = { onAction(PiperVoicesAction.Cancel(key)) },
                         modifier = Modifier.semantics { contentDescription = cancelLabel },
                     ) { Text(stringResource(R.string.common_cancel)) }
+                    testButton()
                 }
             }
 

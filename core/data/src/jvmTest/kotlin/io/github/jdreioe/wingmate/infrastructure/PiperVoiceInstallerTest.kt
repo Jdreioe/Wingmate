@@ -49,6 +49,7 @@ class PiperVoiceInstallerTest {
         quality = "medium",
         speakerCount = 1,
         licence = "CC0",
+        sampleUrl = "https://example.test/sample.mp3",
         files = listOf(
             pinned("da_DK-test-medium.onnx", "https://example.test/model.onnx", model),
             pinned("tokens.txt", "https://example.test/tokens.txt", tokens),

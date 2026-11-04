@@ -10,7 +10,8 @@ data class PiperFile(
 
 /**
  * A downloadable Piper voice from Wingmate's pinned catalog. [licence] is the training
- * dataset's licence from the voice's model card, shown before download and kept for attribution.
+ * dataset's licence from the voice's model card, kept for attribution. [sampleUrl] is
+ * Piper's recorded sample of the voice, streamed to test it before download.
  */
 data class PiperVoicePack(
     val key: String,
@@ -19,6 +20,7 @@ data class PiperVoicePack(
     val quality: String,
     val speakerCount: Int,
     val licence: String,
+    val sampleUrl: String,
     val files: List<PiperFile>,
 ) {
     val sizeBytes: Long get() = files.sumOf { it.sizeBytes }

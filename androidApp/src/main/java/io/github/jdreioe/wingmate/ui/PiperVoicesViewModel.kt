@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.ui
 
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jdreioe.wingmate.application.SettingsUseCase
@@ -12,6 +14,7 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidPiperSynthesizer
 import io.github.jdreioe.wingmate.infrastructure.PiperVoiceInstaller
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 /** Data access for the Piper voice list; faked in tests. */
@@ -39,6 +43,9 @@ internal interface PiperVoiceOperations {
     /** Saves [voice] and makes its language the primary language. */
     suspend fun select(voice: Voice)
     suspend fun primaryLanguage(): String
+
+    /** Streams [url] and returns when it finishes; throws when it cannot play. Cancelling stops it. */
+    suspend fun playSample(url: String)
 }
 
 internal class DefaultPiperVoiceOperations(
@@ -72,6 +79,36 @@ internal class DefaultPiperVoiceOperations(
     }
 
     override suspend fun primaryLanguage(): String = withContext(Dispatchers.Default) { settingsUseCase.get().primaryLanguage }
+
+    override suspend fun playSample(url: String) = suspendCancellableCoroutine { continuation ->
+        val player = MediaPlayer()
+        continuation.invokeOnCancellation { player.release() }
+        player.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+        player.setOnPreparedListener { it.start() }
+        player.setOnCompletionListener {
+            it.release()
+            if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
+        }
+        player.setOnErrorListener { mp, what, extra ->
+            mp.release()
+            if (continuation.isActive) {
+                continuation.resumeWith(Result.failure(IllegalStateException("sample playback failed: $what/$extra")))
+            }
+            true
+        }
+        try {
+            player.setDataSource(url)
+            player.prepareAsync()
+        } catch (failure: Exception) {
+            player.release()
+            continuation.resumeWith(Result.failure(failure))
+        }
+    }
 }
 
 /** One catalog voice with its download state on this device. */
@@ -95,6 +132,10 @@ internal sealed interface PiperVoicesUiState {
         /** The voice that failed to load; it should be deleted and downloaded again. */
         val unusableKey: String? = null,
         val selectFailed: Boolean = false,
+        /** The voice whose sample is playing. */
+        val testingKey: String? = null,
+        /** The voice whose sample could not be played, usually because there is no connection. */
+        val testFailedKey: String? = null,
     ) : PiperVoicesUiState
 }
 
@@ -104,6 +145,9 @@ internal sealed interface PiperVoicesAction {
     data class Cancel(val key: String) : PiperVoicesAction
     data class Delete(val key: String) : PiperVoicesAction
     data class Use(val key: String) : PiperVoicesAction
+
+    /** Plays the voice's sample before download, or stops it when it is already playing. */
+    data class Test(val key: String) : PiperVoicesAction
 }
 
 internal sealed interface PiperVoicesEvent {
@@ -111,12 +155,14 @@ internal sealed interface PiperVoicesEvent {
 }
 
 /**
- * Browses Wingmate's Piper catalog: download, cancel, resume, delete, and choose voices.
+ * Browses Wingmate's Piper catalog: test, download, cancel, resume, delete, and choose voices.
  * Download progress comes straight from the installer, so it survives leaving the page.
  */
 internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations) : ViewModel() {
     private val filter = MutableStateFlow<String?>(null)
     private val selection = MutableStateFlow(SelectionState())
+    private val sample = MutableStateFlow(SampleState())
+    private var sampleJob: Job? = null
     private val mutableState = MutableStateFlow<PiperVoicesUiState>(PiperVoicesUiState.Loading)
     val state: StateFlow<PiperVoicesUiState> = mutableState.asStateFlow()
 
@@ -132,7 +178,7 @@ internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations
             filter.value = languages.firstOrNull { it == primary }
                 ?: languages.firstOrNull { it.substringBefore('-') == primary.substringBefore('-') }
             selection.value = SelectionState(selectedKey = operations.selectedVoice()?.piperVoiceKey)
-            combine(operations.states, filter, selection, ::readyState).collect { mutableState.value = it }
+            combine(operations.states, filter, selection, sample, ::readyState).collect { mutableState.value = it }
         }
     }
 
@@ -149,6 +195,32 @@ internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations
                 operations.delete(action.key)
             }
             is PiperVoicesAction.Use -> use(action.key)
+            is PiperVoicesAction.Test -> test(action.key)
+        }
+    }
+
+    /** Stops a playing sample, for example when the page closes. */
+    fun stopSample() {
+        sampleJob?.cancel()
+        sampleJob = null
+        sample.value = SampleState()
+    }
+
+    private fun test(key: String) {
+        val playing = sample.value.testingKey
+        stopSample()
+        if (playing == key) return
+        val pack = operations.catalog.firstOrNull { it.key == key } ?: return
+        sample.value = SampleState(testingKey = key)
+        sampleJob = viewModelScope.launch {
+            sample.value = try {
+                operations.playSample(pack.sampleUrl)
+                SampleState()
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                SampleState(failedKey = key)
+            }
         }
     }
 
@@ -185,6 +257,7 @@ internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations
         states: Map<String, PiperVoiceState>,
         languageFilter: String?,
         selection: SelectionState,
+        sample: SampleState,
     ): PiperVoicesUiState.Ready {
         val rows = operations.catalog.map { PiperVoiceRow(it, states[it.key] ?: PiperVoiceState.NotInstalled) }
         return PiperVoicesUiState.Ready(
@@ -199,8 +272,12 @@ internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations
             preparingKey = selection.preparingKey,
             unusableKey = selection.unusableKey,
             selectFailed = selection.selectFailed,
+            testingKey = sample.testingKey,
+            testFailedKey = sample.failedKey,
         )
     }
+
+    private data class SampleState(val testingKey: String? = null, val failedKey: String? = null)
 
     private data class SelectionState(
         val selectedKey: String? = null,
