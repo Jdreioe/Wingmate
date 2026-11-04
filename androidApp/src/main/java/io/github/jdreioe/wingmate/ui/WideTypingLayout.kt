@@ -94,7 +94,7 @@ internal enum class WideSpeechState { Idle, Playing, Paused }
  * ```
  *
  * The on-screen keyboard only takes space from the bottom (the app root pads for it). The caller
- * shortens the Message to one line while it is up, so more Phrase rows fit above it; rows keep
+ * shortens the Message to two lines while it is up, so more Phrase rows fit above it; rows keep
  * their size and order, and lower rows scroll. There is no tray to show or hide.
  */
 @Composable

@@ -619,12 +619,20 @@ internal fun PhraseScreenContent(
                     }
                     if (wideTyping) {
                         val heldMessage = communicationState.heldMessage
-                        // While the on-screen keyboard is up, the Message is one line (it scrolls)
-                        // so more Phrase rows fit above the keyboard; it follows the keyboard's
-                        // animation, and the rows keep their size and order.
-                        val inputScale = settings.inputFieldScale.coerceIn(0.75f, 2f)
+                        // The Message shows whole lines, more scroll inside: three, or two while the
+                        // on-screen keyboard is up so more Phrase rows fit above it. It follows the
+                        // keyboard's animation, and the rows keep their size and order.
+                        val messageStyle = MaterialTheme.typography.headlineSmall.let { style ->
+                            style.copy(
+                                fontSize = style.fontSize * settings.fontSizeScale,
+                                lineHeight = style.lineHeight * settings.fontSizeScale,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        val messageLine = with(LocalDensity.current) { messageStyle.lineHeight.toDp() }
                         val messageHeight by animateDpAsState(
-                            targetValue = if (isImeVisible) 64.dp * inputScale else 128.dp * inputScale,
+                            // 24dp: the field's vertical padding.
+                            targetValue = messageLine * (if (isImeVisible) 2 else 3) + 24.dp,
                             animationSpec = tween(250),
                             label = "wide-message-height",
                         )
@@ -649,19 +657,13 @@ internal fun PhraseScreenContent(
                                     highlightColor = secondaryHighlightColor,
                                     ssmlRanges = ssmlRanges,
                                     ssmlColor = ssmlHighlightColor,
-                                    textStyle = MaterialTheme.typography.headlineSmall.copy(
-                                        fontSize = MaterialTheme.typography.headlineSmall.fontSize * settings.fontSizeScale,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    ),
+                                    textStyle = messageStyle,
                                     minLines = 1,
                                     maxLines = Int.MAX_VALUE,
                                     placeholder = {
                                         Text(
                                             stringResource(R.string.phrase_screen_enter_text_placeholder),
-                                            style = MaterialTheme.typography.headlineSmall.copy(
-                                                fontSize = MaterialTheme.typography.headlineSmall.fontSize * settings.fontSizeScale,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            ),
+                                            style = messageStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
                                         )
                                     },
                                 )
