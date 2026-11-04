@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -29,6 +30,7 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.res.stringResource
@@ -56,6 +58,7 @@ fun TestVoiceScreen(
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
     var engine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var playbackFailed by remember { mutableStateOf(false) }
+    var rateSaveFailed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var testText by rememberSaveable(defaultTestText) { mutableStateOf(initialPhraseToSave ?: defaultTestText) }
     var keepAsPhrase by rememberSaveable { mutableStateOf(initialPhraseToSave != null) }
@@ -153,6 +156,46 @@ fun TestVoiceScreen(
             if ((selectedVoice?.supportedLanguages?.size ?: 0) > 1) {
                 Spacer(modifier = Modifier.height(16.dp))
                 SetupActionButton(label = stringResource(R.string.welcome_change_language), onClick = onChangeLanguage)
+            }
+
+            // Speaking rate, set while hearing the voice; saved on the voice, as Settings does.
+            selectedVoice?.let { voice ->
+                val range = if (engine == TtsEngine.ELEVENLABS) 0.7f..1.2f else 0.5f..2.0f
+                var rate by remember(voice.name) { mutableFloatStateOf((voice.rate ?: 1.0).toFloat().coerceIn(range)) }
+                Spacer(modifier = Modifier.height(24.dp))
+                val rateLabel = stringResource(R.string.welcome_test_rate, rate)
+                Text(rateLabel, style = MaterialTheme.typography.titleMedium)
+                Slider(
+                    value = rate,
+                    onValueChange = { rate = it },
+                    onValueChangeFinished = {
+                        val updated = voice.copy(rate = rate.toDouble(), rateForSSML = null)
+                        selectedVoice = updated
+                        scope.launch {
+                            rateSaveFailed = false
+                            try {
+                                withContext(Dispatchers.IO) { voiceUseCase.select(updated) }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = e.loggingClassName())
+                                rateSaveFailed = true
+                            }
+                        }
+                    },
+                    valueRange = range,
+                    // 0.1 steps, so TalkBack and switch users move it one notch at a time.
+                    steps = ((range.endInclusive - range.start) * 10).roundToInt() - 1,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics { contentDescription = rateLabel },
+                )
+                if (rateSaveFailed) {
+                    Text(
+                        stringResource(R.string.welcome_test_rate_failed),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(24.dp))

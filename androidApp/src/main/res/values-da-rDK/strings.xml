@@ -707,4 +707,6 @@
     <string name="voice_preview_stop">Stop %1$s</string>
     <string name="voice_preview_failed">Stemmen kunne ikke afspilles.</string>
     <string name="welcome_current_voice">Nuværende stemme: %1$s</string>
+    <string name="welcome_test_rate">Hastighed: %1$.1f×</string>
+    <string name="welcome_test_rate_failed">Hastigheden kunne ikke gemmes. Prøv igen.</string>
 </resources>

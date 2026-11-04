@@ -707,4 +707,6 @@
     <string name="voice_preview_stop">Stop %1$s</string>
     <string name="voice_preview_failed">This voice could not play.</string>
     <string name="welcome_current_voice">Current voice: %1$s</string>
+    <string name="welcome_test_rate">Speed: %1$.1f×</string>
+    <string name="welcome_test_rate_failed">The speed could not be saved. Try again.</string>
 </resources>
