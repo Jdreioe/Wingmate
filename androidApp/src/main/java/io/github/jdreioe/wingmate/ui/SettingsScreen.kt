@@ -1943,16 +1943,24 @@ private fun rememberVoiceSelectionOperations(): VoiceSelectionOperations {
     }
 }
 
-/** Voice picker shared by Settings and Welcome; [onVoiceSelected] defaults to [onBack]. */
+/**
+ * Voice picker shared by Settings and Welcome; [onVoiceSelected] defaults to [onBack].
+ * Setup passes [engineToSave] so the engine is saved together with the chosen voice.
+ */
 @Composable
 internal fun VoiceSelectionPage(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onVoiceSelected: (() -> Unit)? = null
+    onVoiceSelected: (() -> Unit)? = null,
+    engineToSave: TtsEngine? = null,
 ) {
     val operations = rememberVoiceSelectionOperations()
     val viewModel: VoiceSelectionViewModel = viewModel(
-        factory = remember(operations) { viewModelFactory { initializer { VoiceSelectionViewModel(operations) } } }
+        // Keyed by engine: a cached view model must not keep another engine.
+        key = "voice-selection-${engineToSave?.name ?: "saved"}",
+        factory = remember(operations, engineToSave) {
+            viewModelFactory { initializer { VoiceSelectionViewModel(operations, engineToSave) } }
+        }
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.onAction(VoiceSelectionAction.Load) }

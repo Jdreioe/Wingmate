@@ -107,8 +107,14 @@ internal sealed interface VoiceSelectionEvent {
     data object VoiceChosen : VoiceSelectionEvent
 }
 
+/**
+ * [engineToSave] lists that engine's voices instead of the saved engine's and saves it
+ * together with the chosen voice, so setup never leaves an engine paired with another
+ * engine's voice. Null keeps the saved engine (Settings).
+ */
 internal class VoiceSelectionViewModel(
     private val operations: VoiceSelectionOperations,
+    private val engineToSave: TtsEngine? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow<VoiceSelectionUiState>(VoiceSelectionUiState.Loading)
     val state: StateFlow<VoiceSelectionUiState> = mutableState.asStateFlow()
@@ -137,7 +143,7 @@ internal class VoiceSelectionViewModel(
         loadJob = viewModelScope.launch {
             mutableState.value = try {
                 val settings = operations.settings()
-                val engine = settings.ttsEngine
+                val engine = engineToSave ?: settings.ttsEngine
                 val voices = if (engine == TtsEngine.SYSTEM) operations.systemVoices() else cloudVoices(engine)
                 VoiceSelectionUiState.Ready(
                     engine = engine,
@@ -184,7 +190,14 @@ internal class VoiceSelectionViewModel(
                 } else {
                     chosen.selectedLanguage.ifBlank { chosen.primaryLanguage.orEmpty() }
                 }
-                if (primary.isNotBlank()) operations.updateSettings { it.copy(primaryLanguage = primary) }
+                if (primary.isNotBlank() || engineToSave != null) {
+                    operations.updateSettings { current ->
+                        current.copy(
+                            ttsEngine = engineToSave ?: current.ttsEngine,
+                            primaryLanguage = primary.ifBlank { current.primaryLanguage },
+                        )
+                    }
+                }
                 updateReady { it.copy(selected = chosen) }
                 mutableEvents.send(VoiceSelectionEvent.VoiceChosen)
             } catch (failure: CancellationException) {

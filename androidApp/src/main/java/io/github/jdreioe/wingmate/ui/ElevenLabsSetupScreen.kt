@@ -50,7 +50,7 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
             scope.launch {
                 busy = true; failed = false
                 try {
-                    withContext(Dispatchers.Default) { facade.saveValidatedElevenLabsSpeechConfig(key) }
+                    withContext(Dispatchers.Default) { facade.saveValidatedElevenLabsCredential(key) }
                     key = ""; configured = true; onDone()
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { failed = true }

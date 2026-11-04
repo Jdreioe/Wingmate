@@ -7,9 +7,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
@@ -20,16 +17,11 @@ import org.koin.compose.koinInject
 import androidx.compose.ui.res.stringResource
 
 import com.hojmoseit.wingmate.R
-/**
- * Setup page for choosing a speech engine. It saves nothing: setup saves the engine once
- * the device voice is chosen or the cloud provider is set up, so backing out of a provider
- * never leaves an engine without credentials.
- */
+/** Setup page for choosing a speech engine. It saves nothing: setup saves the engine with the voice. */
 @Composable
 fun VoiceEngineSelectorScreen(
     onEngineChosen: (TtsEngine) -> Unit,
     onBack: () -> Unit,
-    errorMessage: String? = null,
 ) {
     val settingsUseCase = koinInject<SettingsUseCase>()
 
@@ -264,16 +256,6 @@ fun VoiceEngineSelectorScreen(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
-                }
-
-                errorMessage?.let {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))

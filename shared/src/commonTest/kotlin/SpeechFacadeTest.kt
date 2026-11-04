@@ -159,6 +159,22 @@ class SpeechFacadeTest {
     }
 
     @Test
+    fun validatedGoogleCredentialLeavesEngineForTheVoiceChoice() = runBlocking {
+        val settings = InMemorySettingsRepository().apply {
+            update(get().copy(ttsEngine = TtsEngine.SYSTEM))
+        }
+        val config = InMemoryConfigRepository()
+        val facade = facade(settings = settings, config = config)
+
+        facade.saveValidatedGoogleSpeechConfig(" google-secret ", selectEngine = false) {
+            listOf(Voice(name = "en-US-Neural2-A"))
+        }
+
+        assertEquals("google-secret", config.getGoogleSpeechConfig()?.apiKey)
+        assertEquals(TtsEngine.SYSTEM, settings.get().ttsEngine)
+    }
+
+    @Test
     fun failedGoogleReplacementRestoresCredentialAndEngine() = runBlocking {
         val settings = InMemorySettingsRepository().apply {
             update(get().copy(ttsEngine = TtsEngine.SYSTEM))

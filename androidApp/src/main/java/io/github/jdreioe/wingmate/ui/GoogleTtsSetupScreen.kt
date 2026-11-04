@@ -100,7 +100,7 @@ fun GoogleTtsSetupScreen(
             saveError = null
             try {
                 withContext(Dispatchers.Default) {
-                    speechFacade.saveValidatedGoogleSpeechConfig(apiKey)
+                    speechFacade.saveValidatedGoogleCredential(apiKey)
                 }
                 apiKey = ""
                 credentialConfigured = true

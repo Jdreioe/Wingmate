@@ -59,7 +59,12 @@ fun App() {
             var welcomeReopened by rememberSaveable { mutableStateOf(false) }
             // The setup Phrase already added in this session, so retrying Review cannot add it twice.
             var savedSetupPhrase by rememberSaveable { mutableStateOf<String?>(null) }
-            var currentScreen by remember { mutableStateOf<Screen?>(null) }
+            // Saveable with the reopen flag, so recreation (e.g. a font size change) keeps
+            // the Communicator where they were instead of re-routing from startup.
+            var currentScreen by rememberSaveable { mutableStateOf<Screen?>(null) }
+            var restoredIntoSetup by rememberSaveable { mutableStateOf(false) }
+            // The restore already routed; recreation must not route it again.
+            var handledRestoreRevision by rememberSaveable { mutableLongStateOf(0L) }
             var startupLoadState by remember { mutableStateOf<StartupLoadState>(StartupLoadState.Loading) }
             var startupRetryKey by remember { mutableIntStateOf(0) }
             var startupBoardSetId by remember { mutableStateOf<String?>(null) }
@@ -111,6 +116,7 @@ fun App() {
                 settingsStateManager.applyLoadedSettings(savedSettings)
                 savedSetupPhrase = null
                 welcomeReopened = false
+                restoredIntoSetup = false
                 startupBoardSetId = null
                 featureUsageReporter.setEnabled(choices.featureUsageReportingEnabled)
                 if (choices.featureUsageReportingEnabled) {
@@ -133,6 +139,7 @@ fun App() {
             fun showWelcomeFlow() {
                 startupBoardSetId = null
                 welcomeReopened = true
+                restoredIntoSetup = false
                 currentScreen = Screen.Welcome
                 featureUsageReporter.reportEvent(FeatureUsageEvents.WELCOME_REOPENED)
             }
@@ -147,9 +154,10 @@ fun App() {
                     val settings = loaded.settings
                     settingsStateManager.applyLoadedSettings(settings)
                     val hasSelectedVoice = loaded.selectedVoice != null
-                    welcomeReopened = false
-                    startupBoardSetId = settings.startupBoardSetId
-                    currentScreen = if (needsWelcome(settings, hasSelectedVoice)) Screen.Welcome else routeFor(settings.startupMode)
+                    if (currentScreen == null) {
+                        startupBoardSetId = settings.startupBoardSetId
+                        currentScreen = if (needsWelcome(settings, hasSelectedVoice)) Screen.Welcome else routeFor(settings.startupMode)
+                    }
                     featureUsageReporter.reportEvent(
                         FeatureUsageEvents.APP_STARTED,
                         "welcome_completed" to settings.welcomeFlowCompleted.toString(),
@@ -159,7 +167,7 @@ fun App() {
             }
 
             LaunchedEffect(restoreRevision) {
-                if (restoreRevision == 0L) return@LaunchedEffect
+                if (restoreRevision == 0L || restoreRevision == handledRestoreRevision) return@LaunchedEffect
                 startupLoadState = StartupLoadState.Loading
                 communicationSession.reloadAfterRestore()
                 val loaded = withContext(Dispatchers.Default) {
@@ -171,11 +179,9 @@ fun App() {
                     startupBoardSetId = loaded.settings.startupBoardSetId
                     welcomeReopened = false
                     featureUsageReporter.setEnabled(loaded.settings.featureUsageReportingEnabled)
-                    currentScreen = if (needsWelcome(loaded.settings, loaded.selectedVoice != null)) {
-                        Screen.Welcome
-                    } else {
-                        routeFor(loaded.settings.startupMode)
-                    }
+                    handledRestoreRevision = restoreRevision
+                    restoredIntoSetup = needsWelcome(loaded.settings, loaded.selectedVoice != null)
+                    currentScreen = if (restoredIntoSetup) Screen.Welcome else routeFor(loaded.settings.startupMode)
                 }
             }
 
@@ -231,6 +237,7 @@ fun App() {
                                     WelcomeScreen(
                                         initialChoices = remember { WelcomeChoices.fromSettings(settingsStateManager.getCurrentSettings()) },
                                         onComplete = ::completeWelcomeAndNavigate,
+                                        restoredFromBackup = restoredIntoSetup,
                                         onExit = if (welcomeReopened) {
                                             {
                                                 welcomeReopened = false

@@ -696,5 +696,8 @@
     <string name="welcome_privacy_online_when_on">Sendes kun online, hvis det er slået til</string>
     <string name="welcome_leave_setup">Forlad opsætning</string>
     <string name="welcome_start_failed">Wingmate kunne ikke gemme, at opsætningen er startet. Prøv igen.</string>
-    <string name="welcome_engine_save_failed">Talemotoren kunne ikke gemmes. Prøv igen.</string>
+    <string name="welcome_restored_needs_setup">Din sikkerhedskopi blev gendannet. Opsæt en stemme for at begynde at kommunikere.</string>
+    <string name="welcome_review_speech">Tale</string>
+    <string name="welcome_review_speech_online">Sendes online til %1$s</string>
+    <string name="welcome_review_loading">Indlæser</string>
 </resources>

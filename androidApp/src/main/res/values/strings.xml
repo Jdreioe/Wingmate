@@ -696,5 +696,8 @@
     <string name="welcome_privacy_online_when_on">Sent online only if turned on</string>
     <string name="welcome_leave_setup">Leave setup</string>
     <string name="welcome_start_failed">Wingmate could not save that setup has started. Try again.</string>
-    <string name="welcome_engine_save_failed">This speech engine could not be saved. Try again.</string>
+    <string name="welcome_restored_needs_setup">Your backup was restored. Set up a voice to start communicating.</string>
+    <string name="welcome_review_speech">Speech</string>
+    <string name="welcome_review_speech_online">Sent online to %1$s</string>
+    <string name="welcome_review_loading">Loading</string>
 </resources>

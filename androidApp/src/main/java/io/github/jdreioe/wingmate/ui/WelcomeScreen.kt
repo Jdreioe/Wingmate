@@ -37,7 +37,9 @@ import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.reportEvent
+import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
@@ -111,9 +113,9 @@ private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
  * page that was actually shown before; a page opened with Change returns to Review.
  * A backup restored from the Start page is routed by App's restore handling.
  *
- * Voice, engine, and language are saved as they are chosen, exactly as in Settings; a
- * cloud engine is saved only once its provider is set up, so no exit point can leave an
- * engine without credentials.
+ * Voice and language are saved as they are chosen, as in Settings. The chosen engine is
+ * held here and saved together with the voice, so no way out of setup can leave an engine
+ * paired with another engine's voice or without credentials.
  */
 @Composable
 fun WelcomeScreen(
@@ -125,18 +127,23 @@ fun WelcomeScreen(
      * Leaving keeps voice changes already made and discards the other answers.
      */
     onExit: (() -> Unit)?,
+    /** True when a restored backup still needs setup, so Start can confirm the restore. */
+    restoredFromBackup: Boolean = false,
 ) {
     val koin = getKoin()
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    val configRepository = remember(koin) { koin.getOrNull<ConfigRepository>() }
+    val speechService = remember(koin) { koin.getOrNull<SpeechService>() }
     val scope = rememberCoroutineScope()
 
     var path by rememberSaveable(stateSaver = stepListSaver) { mutableStateOf(listOf(WelcomeStep.Start)) }
     /** The path to Review while a page opened with Change is shown; empty otherwise. */
     var reviewPath by rememberSaveable(stateSaver = stepListSaver) { mutableStateOf(emptyList<WelcomeStep>()) }
     var choices by rememberSaveable(stateSaver = welcomeChoicesSaver) { mutableStateOf(initialChoices) }
+    /** The engine whose voices the Voice page lists; saved only together with a voice. */
+    var chosenEngine by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
     var startFailed by remember { mutableStateOf(false) }
-    var engineSaveFailed by remember { mutableStateOf(false) }
     val step = path.last()
 
     fun push(next: WelcomeStep) { path = path + next }
@@ -179,23 +186,58 @@ fun WelcomeScreen(
         }
     }
 
-    /** Saves [engine] once it can speak, then opens the voice list for it. */
-    fun useEngine(engine: TtsEngine) {
+    /** Lists [engine]'s voices next; only one activation counts if [from] is no longer shown. */
+    fun useEngine(engine: TtsEngine, from: WelcomeStep) {
+        if (path.last() != from) return
+        chosenEngine = engine
+        push(WelcomeStep.Voice)
+    }
+
+    /** A cloud engine goes through its provider page unless its credentials are already saved. */
+    fun chooseEngine(engine: TtsEngine) {
+        featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to engine.name.lowercase())
+        val providerStep = when (engine) {
+            TtsEngine.SYSTEM -> return useEngine(engine, WelcomeStep.VoiceEngine)
+            TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> WelcomeStep.AzureSetup
+            TtsEngine.GOOGLE_CLOUD -> WelcomeStep.GoogleSetup
+            TtsEngine.ELEVENLABS -> WelcomeStep.ElevenLabsSetup
+        }
         scope.launch {
-            engineSaveFailed = false
-            try {
+            val configured = try {
                 withContext(Dispatchers.Default) {
-                    val useCase = checkNotNull(settingsUseCase)
-                    useCase.update(useCase.get().copy(ttsEngine = engine))
+                    val config = checkNotNull(configRepository)
+                    when (providerStep) {
+                        WelcomeStep.AzureSetup -> config.getSpeechConfigStatus().credentialConfigured
+                        WelcomeStep.GoogleSetup -> config.getGoogleSpeechConfigStatus().credentialConfigured
+                        else -> config.getElevenLabsSpeechConfigStatus().credentialConfigured
+                    }
                 }
-                push(WelcomeStep.Voice)
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: Exception) {
-                OperationalLogger.warn("welcome.engine", "save_failed", exceptionClass = failure.loggingClassName())
-                engineSaveFailed = true
-                path = path.takeWhile { it != WelcomeStep.VoiceEngine } + WelcomeStep.VoiceEngine
+                OperationalLogger.warn("welcome.engine", "status_failed", exceptionClass = failure.loggingClassName())
+                false
             }
+            if (configured) {
+                useEngine(engine, WelcomeStep.VoiceEngine)
+            } else if (path.last() == WelcomeStep.VoiceEngine) {
+                push(providerStep)
+            }
+        }
+    }
+
+    /** Leaves reopened setup, stopping a voice preview first so it does not play on. */
+    fun leave() {
+        val exit = onExit ?: return
+        scope.launch {
+            try {
+                speechService?.stop()
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                OperationalLogger.warn("speech.stop", "failed", exceptionClass = failure.loggingClassName())
+            }
+            exit()
         }
     }
 
@@ -207,7 +249,7 @@ fun WelcomeScreen(
         if (step == WelcomeStep.Review) reviewPath = emptyList()
     }
     BackHandler(enabled = path.size > 1 || onExit != null) {
-        if (path.size > 1) pop() else onExit?.invoke()
+        if (path.size > 1) pop() else leave()
     }
 
     val pageModifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
@@ -216,7 +258,7 @@ fun WelcomeScreen(
         // Start and Review have their own way out (Back) and their own busy states.
         if (onExit != null && step != WelcomeStep.Start && step != WelcomeStep.Review) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onExit, modifier = Modifier.heightIn(min = 48.dp)) {
+                TextButton(onClick = ::leave, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(stringResource(R.string.welcome_leave_setup))
                 }
             }
@@ -227,22 +269,12 @@ fun WelcomeScreen(
                 choices = choices,
                 onChoicesChange = { choices = it },
                 startFailed = startFailed,
-                engineSaveFailed = engineSaveFailed,
-                onExit = onExit,
+                restoredFromBackup = restoredFromBackup,
+                chosenEngine = chosenEngine,
+                onExit = onExit?.let { ::leave },
                 pageModifier = pageModifier,
                 onStartSetup = ::startSetup,
-                onEngineChosen = { engine ->
-                    featureUsageReporter?.reportEvent(
-                        FeatureUsageEvents.VOICE_ENGINE_SELECTED,
-                        "engine" to engine.name.lowercase()
-                    )
-                    when (engine) {
-                        TtsEngine.SYSTEM -> useEngine(engine)
-                        TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> push(WelcomeStep.AzureSetup)
-                        TtsEngine.GOOGLE_CLOUD -> push(WelcomeStep.GoogleSetup)
-                        TtsEngine.ELEVENLABS -> push(WelcomeStep.ElevenLabsSetup)
-                    }
-                },
+                onEngineChosen = ::chooseEngine,
                 onUseEngine = ::useEngine,
                 onPush = ::push,
                 onPop = ::pop,
@@ -267,12 +299,13 @@ private fun WelcomeStepContent(
     choices: WelcomeChoices,
     onChoicesChange: (WelcomeChoices) -> Unit,
     startFailed: Boolean,
-    engineSaveFailed: Boolean,
+    restoredFromBackup: Boolean,
+    chosenEngine: TtsEngine?,
     onExit: (() -> Unit)?,
     pageModifier: Modifier,
     onStartSetup: () -> Unit,
     onEngineChosen: (TtsEngine) -> Unit,
-    onUseEngine: (TtsEngine) -> Unit,
+    onUseEngine: (TtsEngine, WelcomeStep) -> Unit,
     onPush: (WelcomeStep) -> Unit,
     onPop: () -> Unit,
     onFinishSection: (WelcomeStep) -> Unit,
@@ -281,26 +314,41 @@ private fun WelcomeStepContent(
     onWorkspaceChosen: () -> Unit,
 ) {
     when (step) {
-        WelcomeStep.Start -> StartPage(onSetUp = onStartSetup, onExit = onExit, startFailed = startFailed)
-        WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(
-            onEngineChosen = onEngineChosen,
-            onBack = onPop,
-            errorMessage = if (engineSaveFailed) stringResource(R.string.welcome_engine_save_failed) else null,
+        WelcomeStep.Start -> StartPage(
+            onSetUp = onStartSetup,
+            onExit = onExit,
+            startFailed = startFailed,
+            restoredFromBackup = restoredFromBackup,
         )
-        // Provider pages also save credentials; the engine is saved only once they are done.
-        WelcomeStep.AzureSetup -> F0SetupScreen(onDone = { onUseEngine(TtsEngine.AZURE_USER_RESOURCE) }, onBack = onPop)
-        WelcomeStep.GoogleSetup -> GoogleTtsSetupScreen(onDone = { onUseEngine(TtsEngine.GOOGLE_CLOUD) }, onBack = onPop)
-        WelcomeStep.ElevenLabsSetup -> ElevenLabsSetupScreen(onDone = { onUseEngine(TtsEngine.ELEVENLABS) }, onBack = onPop)
-        WelcomeStep.Voice -> VoiceSelectionPage(
+        WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(onEngineChosen = onEngineChosen, onBack = onPop)
+        // Provider pages save credentials only; the engine is saved together with the voice.
+        WelcomeStep.AzureSetup -> F0SetupScreen(
+            onDone = { onUseEngine(TtsEngine.AZURE_USER_RESOURCE, WelcomeStep.AzureSetup) },
             onBack = onPop,
-            onVoiceSelected = { onPush(WelcomeStep.Language) },
-            modifier = pageModifier,
         )
-        WelcomeStep.Language -> LanguageSelectionPage(
+        WelcomeStep.GoogleSetup -> GoogleTtsSetupScreen(
+            onDone = { onUseEngine(TtsEngine.GOOGLE_CLOUD, WelcomeStep.GoogleSetup) },
             onBack = onPop,
-            onContinue = { onPush(WelcomeStep.TestVoice) },
-            modifier = pageModifier,
         )
+        WelcomeStep.ElevenLabsSetup -> ElevenLabsSetupScreen(
+            onDone = { onUseEngine(TtsEngine.ELEVENLABS, WelcomeStep.ElevenLabsSetup) },
+            onBack = onPop,
+        )
+        WelcomeStep.Voice -> PageWithBack(onBack = onPop) {
+            VoiceSelectionPage(
+                onBack = onPop,
+                onVoiceSelected = { onPush(WelcomeStep.Language) },
+                engineToSave = chosenEngine,
+                modifier = pageModifier,
+            )
+        }
+        WelcomeStep.Language -> PageWithBack(onBack = onPop) {
+            LanguageSelectionPage(
+                onBack = onPop,
+                onContinue = { onPush(WelcomeStep.TestVoice) },
+                modifier = pageModifier,
+            )
+        }
         WelcomeStep.TestVoice -> TestVoiceScreen(
             initialPhraseToSave = choices.phraseToSave,
             onNext = { phraseToSave ->
@@ -334,6 +382,20 @@ private fun WelcomeStepContent(
 }
 
 // ─── Shared layout ───────────────────────────────────────────────────────────
+
+/** Adds setup's on-screen Back below a shared Settings page that has none of its own. */
+@Composable
+private fun PageWithBack(onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) { content() }
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth().padding(24.dp).heightIn(min = 56.dp),
+        ) {
+            Text(stringResource(R.string.common_back))
+        }
+    }
+}
 
 /**
  * Common frame for setup pages: a heading, scrollable content, and large Back and
@@ -447,6 +509,7 @@ private fun StartPage(
     onSetUp: () -> Unit,
     onExit: (() -> Unit)?,
     startFailed: Boolean,
+    restoredFromBackup: Boolean,
 ) {
     val koin = getKoin()
     val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
@@ -471,6 +534,13 @@ private fun StartPage(
         onPrimary = onSetUp,
         onBack = onExit?.takeIf { !isRestoring },
     ) {
+        if (restoredFromBackup) {
+            Text(
+                stringResource(R.string.welcome_restored_needs_setup),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         Text(stringResource(R.string.welcome_supporter_note), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
             enabled = !isRestoring && backupManager != null && backupFilePicker != null,
@@ -734,20 +804,29 @@ private fun ReviewPage(
 ) {
     val koin = getKoin()
     val voiceUseCase = remember(koin) { koin.getOrNull<VoiceUseCase>() }
-    val unknownVoice = stringResource(R.string.test_voice_unknown_voice)
-    // Null while loading, so nothing misleading is shown or announced before the name arrives.
-    val voiceName by produceState<String?>(null, voiceUseCase) {
+    val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    val unknown = stringResource(R.string.test_voice_unknown_voice)
+    val deviceEngine = stringResource(R.string.welcome_privacy_device_engine)
+    val sentOnlineTemplate = stringResource(R.string.welcome_review_speech_online)
+    // Null while loading, so nothing misleading is shown or announced before the values arrive.
+    val voiceAndSpeech by produceState<Pair<String, String>?>(null, voiceUseCase, settingsUseCase) {
         value = try {
-            withContext(Dispatchers.IO) { voiceUseCase?.selected() }
-                ?.let { it.displayName ?: it.name }
-                ?: unknownVoice
+            withContext(Dispatchers.IO) {
+                val voice = voiceUseCase?.selected()?.let { it.displayName ?: it.name } ?: unknown
+                val speech = when (val engine = settingsUseCase?.get()?.ttsEngine) {
+                    null -> unknown
+                    else -> engine.cloudProviderName()?.let { sentOnlineTemplate.format(it) } ?: deviceEngine
+                }
+                voice to speech
+            }
         } catch (failure: CancellationException) {
             throw failure
         } catch (failure: Exception) {
             OperationalLogger.warn("welcome.review", "voice_load_failed", exceptionClass = failure.loggingClassName())
-            unknownVoice
+            unknown to unknown
         }
     }
+    val loading = stringResource(R.string.welcome_review_loading)
     var finishing by remember { mutableStateOf(false) }
     var saveFailed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -792,7 +871,9 @@ private fun ReviewPage(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        ReviewRow(stringResource(R.string.welcome_review_voice), voiceName ?: "…", !finishing, onChangeVoice)
+        ReviewRow(stringResource(R.string.welcome_review_voice), voiceAndSpeech?.first ?: loading, !finishing, onChangeVoice)
+        HorizontalDivider()
+        ReviewRow(stringResource(R.string.welcome_review_speech), voiceAndSpeech?.second ?: loading, !finishing, onChangeVoice)
         HorizontalDivider()
         ReviewRow(
             stringResource(R.string.welcome_review_phrase),

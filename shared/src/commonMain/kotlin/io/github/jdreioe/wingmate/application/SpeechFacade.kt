@@ -124,9 +124,18 @@ class SpeechFacade(
     suspend fun saveValidatedGoogleSpeechConfig(apiKey: String): List<Voice> =
         saveValidatedGoogleSpeechConfig(apiKey) { voiceUseCase.loadGoogleCatalog() }
 
+    /**
+     * Like [saveValidatedGoogleSpeechConfig] but leaves the engine selection alone, for
+     * callers that switch engine together with a voice (Android setup and Settings).
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun saveValidatedGoogleCredential(apiKey: String): List<Voice> =
+        saveValidatedGoogleSpeechConfig(apiKey, selectEngine = false) { voiceUseCase.loadGoogleCatalog() }
+
     /** [downloadVoices] only asks Google; saving the catalog is a separate, local step. */
     internal suspend fun saveValidatedGoogleSpeechConfig(
         apiKey: String,
+        selectEngine: Boolean = true,
         downloadVoices: suspend () -> List<Voice>,
     ): List<Voice> = nativeCall {
         val normalizedKey = apiKey.trim()
@@ -137,7 +146,7 @@ class SpeechFacade(
             configRepository.saveGoogleSpeechConfig(GoogleSpeechConfig(normalizedKey))
             val voices = verifiedGoogleVoices(downloadVoices)
             voiceUseCase.saveGoogleCatalog(voices)
-            settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
+            if (selectEngine) settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.GOOGLE_CLOUD))
             voices
         } catch (failure: Exception) {
             try {
@@ -147,7 +156,7 @@ class SpeechFacade(
                     } else {
                         configRepository.saveGoogleSpeechConfig(previousConfig)
                     }
-                    settingsUseCase.update(previousSettings)
+                    if (selectEngine) settingsUseCase.update(previousSettings)
                 }
             } catch (_: Exception) {
                 // Cancellation wins; otherwise the previous key may not be back, which is a storage failure.
@@ -194,9 +203,18 @@ class SpeechFacade(
     suspend fun saveValidatedElevenLabsSpeechConfig(apiKey: String): List<Voice> =
         saveValidatedElevenLabsSpeechConfig(apiKey) { voiceUseCase.loadElevenLabsCatalog() }
 
+    /**
+     * Like [saveValidatedElevenLabsSpeechConfig] but leaves the engine selection alone, for
+     * callers that switch engine together with a voice (Android setup and Settings).
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun saveValidatedElevenLabsCredential(apiKey: String): List<Voice> =
+        saveValidatedElevenLabsSpeechConfig(apiKey, selectEngine = false) { voiceUseCase.loadElevenLabsCatalog() }
+
     /** [downloadVoices] only asks ElevenLabs; saving the catalog is a separate, local step. */
     internal suspend fun saveValidatedElevenLabsSpeechConfig(
         apiKey: String,
+        selectEngine: Boolean = true,
         downloadVoices: suspend () -> List<Voice>,
     ): List<Voice> = nativeCall {
         val normalizedKey = apiKey.trim()
@@ -207,7 +225,7 @@ class SpeechFacade(
             configRepository.saveElevenLabsSpeechConfig(ElevenLabsSpeechConfig(normalizedKey))
             val voices = verifiedElevenLabsVoices(downloadVoices)
             voiceUseCase.saveElevenLabsCatalog(voices)
-            settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.ELEVENLABS))
+            if (selectEngine) settingsUseCase.update(previousSettings.copy(ttsEngine = TtsEngine.ELEVENLABS))
             voices
         } catch (failure: Exception) {
             try {
@@ -217,7 +235,7 @@ class SpeechFacade(
                     } else {
                         configRepository.saveElevenLabsSpeechConfig(previousConfig)
                     }
-                    settingsUseCase.update(previousSettings)
+                    if (selectEngine) settingsUseCase.update(previousSettings)
                 }
             } catch (_: Exception) {
                 // Cancellation wins; otherwise the previous key may not be back, which is a storage failure.

@@ -15,14 +15,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.domain.ConfigRepository
-import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
-import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +49,6 @@ fun F0SetupScreen(
     onBack: () -> Unit
 ) {
     val configRepository = koinInject<ConfigRepository>()
-    val settingsUseCase = koinInject<SettingsUseCase>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
@@ -81,11 +77,10 @@ fun F0SetupScreen(
                 saveError = null
                 val failure = runCatching {
                     withContext(Dispatchers.Default) {
+                        // Credentials only: callers switch the engine (setup with the voice, Settings on done).
                         configRepository.saveSpeechConfig(
                             SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim())
                         )
-                        val settings = runCatching { settingsUseCase.get() }.getOrDefault(Settings())
-                        settingsUseCase.update(settings.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE))
                     }
                 }.exceptionOrNull()
                 saving = false
