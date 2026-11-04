@@ -49,6 +49,17 @@ internal data class WelcomeNavigation(
         else -> copy(path = path + next)
     }
 
+    /**
+     * Opens the voice list after [from] (the engine page or a provider page). A provider
+     * page opened with "Enter the key again" returns to the voice list below it instead of
+     * stacking a second one.
+     */
+    fun toVoiceFrom(from: WelcomeStep): WelcomeNavigation {
+        if (step != from) return this
+        val below = path.dropLast(1)
+        return if (below.lastOrNull() == WelcomeStep.Voice) copy(path = below) else copy(path = path + WelcomeStep.Voice)
+    }
+
     companion object {
         /** Keeps the navigation across activity recreation. */
         val Saver = listSaver<WelcomeNavigation, List<String>>(

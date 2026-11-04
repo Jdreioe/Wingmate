@@ -99,8 +99,9 @@ fun App() {
             // Saveable, so recreation keeps the Communicator where they were instead of
             // re-routing from startup.
             var currentScreen by rememberSaveable(stateSaver = screenSaver) { mutableStateOf<Screen?>(null) }
-            // The restore already routed; recreation must not route it again.
-            var handledRestoreRevision by rememberSaveable { mutableLongStateOf(0L) }
+            // The restore already routed; activity recreation in the same process must not
+            // route it again. Not saved: the revision counter restarts with the process.
+            var handledRestoreRevision by remember { mutableLongStateOf(backupManager.restoreRevision.value) }
             var startupLoadState by remember { mutableStateOf<StartupLoadState>(StartupLoadState.Loading) }
             var startupRetryKey by remember { mutableIntStateOf(0) }
             var startupBoardSetId by remember { mutableStateOf<String?>(null) }

@@ -129,6 +129,7 @@ fun WelcomeScreen(
     /** The engine whose voices the Voice page lists; saved only together with a voice. */
     var chosenEngine by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
     var startFailed by remember { mutableStateOf(false) }
+    var engineCheckFailed by remember { mutableStateOf(false) }
     val step = nav.step
 
     fun startSetup() {
@@ -158,15 +159,17 @@ fun WelcomeScreen(
     fun useEngine(engine: TtsEngine, from: WelcomeStep) {
         if (nav.step != from) return
         chosenEngine = engine
-        nav = nav.advance(from, WelcomeStep.Voice)
+        nav = nav.toVoiceFrom(from)
     }
 
     /** A cloud engine goes through its provider page unless its credentials are already saved. */
     fun chooseEngine(engine: TtsEngine) {
+        if (nav.step != WelcomeStep.VoiceEngine) return
+        engineCheckFailed = false
         featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to engine.name.lowercase())
         val providerStep = engine.providerStep() ?: return useEngine(engine, WelcomeStep.VoiceEngine)
         scope.launch {
-            val configured = try {
+            val configured: Boolean = try {
                 withContext(Dispatchers.Default) {
                     val config = checkNotNull(configRepository)
                     when (providerStep) {
@@ -179,7 +182,9 @@ fun WelcomeScreen(
                 throw failure
             } catch (failure: Exception) {
                 OperationalLogger.warn("welcome.engine", "status_failed", exceptionClass = failure.loggingClassName())
-                false
+                // Unknown: neither skip a working key nor ask for one without saying why.
+                engineCheckFailed = true
+                return@launch
             }
             if (configured) {
                 useEngine(engine, WelcomeStep.VoiceEngine)
@@ -192,7 +197,8 @@ fun WelcomeScreen(
     /**
      * Brings the setup Phrase in line with Review before setup is marked finished: a retry
      * after a failed finish edits or removes the Phrase already added instead of adding
-     * another. Returns false if it could not be saved.
+     * another. Returns false if it could not be saved. (If the activity is recreated while
+     * an add is still running, its id can be lost and a retry adds a second copy; rare.)
      */
     suspend fun syncSetupPhrase(wanted: String?): Boolean {
         if (wanted == savedPhraseText) return true
@@ -259,6 +265,7 @@ fun WelcomeScreen(
                 choices = choices,
                 onChoicesChange = { choices = it },
                 startFailed = startFailed,
+                engineCheckFailed = engineCheckFailed,
                 restoredFromBackup = restoredFromBackup,
                 chosenEngine = chosenEngine,
                 onExit = onExit?.let { ::leave },
@@ -292,6 +299,7 @@ private fun WelcomeStepContent(
     choices: WelcomeChoices,
     onChoicesChange: (WelcomeChoices) -> Unit,
     startFailed: Boolean,
+    engineCheckFailed: Boolean,
     restoredFromBackup: Boolean,
     chosenEngine: TtsEngine?,
     onExit: (() -> Unit)?,
@@ -313,7 +321,11 @@ private fun WelcomeStepContent(
             startFailed = startFailed,
             restoredFromBackup = restoredFromBackup,
         )
-        WelcomeStep.VoiceEngine -> EnginePage(onEngineChosen = onEngineChosen, onBack = onBack)
+        WelcomeStep.VoiceEngine -> EnginePage(
+            onEngineChosen = onEngineChosen,
+            onBack = onBack,
+            checkFailed = engineCheckFailed,
+        )
         // Provider pages save credentials only; the engine is saved together with the voice.
         WelcomeStep.AzureSetup -> F0SetupScreen(
             onDone = { onUseEngine(TtsEngine.AZURE_USER_RESOURCE, WelcomeStep.AzureSetup) },
@@ -546,7 +558,7 @@ private fun StartPage(
     WelcomePage(
         title = stringResource(R.string.welcome_title),
         subtitle = stringResource(R.string.welcome_subtitle),
-        primaryLabel = stringResource(R.string.welcome_set_up),
+        primaryLabel = stringResource(if (restoredFromBackup) R.string.welcome_finish_setup else R.string.welcome_set_up),
         // Leaving the page would cancel a restore in progress.
         primaryEnabled = !isRestoring,
         onPrimary = onSetUp,
@@ -631,7 +643,7 @@ private fun StartPage(
  * saves the engine together with the voice. Starts on the engine already in use.
  */
 @Composable
-private fun EnginePage(onEngineChosen: (TtsEngine) -> Unit, onBack: () -> Unit) {
+private fun EnginePage(onEngineChosen: (TtsEngine) -> Unit, onBack: () -> Unit, checkFailed: Boolean) {
     val koin = getKoin()
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     var selected by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
@@ -671,6 +683,14 @@ private fun EnginePage(onEngineChosen: (TtsEngine) -> Unit, onBack: () -> Unit) 
                     onSelect = { selected = engine },
                 )
             }
+        }
+        if (checkFailed) {
+            Text(
+                stringResource(R.string.welcome_engine_check_failed),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
         }
     }
 }

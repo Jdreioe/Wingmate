@@ -696,4 +696,6 @@
     <string name="welcome_engine_google_desc">Natural voices. Needs a Google Cloud key. Sends your words online.</string>
     <string name="welcome_engine_elevenlabs">ElevenLabs</string>
     <string name="welcome_engine_elevenlabs_desc">Personal and cloned voices. Needs a key. Sends your words online.</string>
+    <string name="welcome_engine_check_failed">Wingmate could not check for a saved key. Try again.</string>
+    <string name="welcome_finish_setup">Finish setup</string>
 </resources>

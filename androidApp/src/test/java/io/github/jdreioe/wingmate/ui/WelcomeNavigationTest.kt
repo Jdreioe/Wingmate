@@ -39,4 +39,13 @@ class WelcomeNavigationTest {
 
         assertEquals(atReview, voiceDone)
     }
+
+    @Test
+    fun `entering a key again returns to the voice list instead of stacking another`() {
+        val first = WelcomeNavigation(listOf(Start, VoiceEngine, AzureSetup)).toVoiceFrom(AzureSetup)
+        assertEquals(listOf(Start, VoiceEngine, AzureSetup, Voice), first.path)
+
+        val again = first.advance(Voice, AzureSetup).toVoiceFrom(AzureSetup)
+        assertEquals(first, again)
+    }
 }

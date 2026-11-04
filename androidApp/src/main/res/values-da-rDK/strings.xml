@@ -696,4 +696,6 @@
     <string name="welcome_engine_google_desc">Naturlige stemmer. Kræver en Google Cloud-nøgle. Sender dine ord online.</string>
     <string name="welcome_engine_elevenlabs">ElevenLabs</string>
     <string name="welcome_engine_elevenlabs_desc">Personlige og klonede stemmer. Kræver en nøgle. Sender dine ord online.</string>
+    <string name="welcome_engine_check_failed">Wingmate kunne ikke tjekke for en gemt nøgle. Prøv igen.</string>
+    <string name="welcome_finish_setup">Gør opsætningen færdig</string>
 </resources>
