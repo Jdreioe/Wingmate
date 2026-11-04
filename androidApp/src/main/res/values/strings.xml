@@ -714,4 +714,6 @@
     <string name="setup_section_review">Review</string>
     <string name="setup_progress_description">Step %1$d of %2$d: %3$s</string>
     <string name="typing_hide_keyboard">Hide keyboard</string>
+    <string name="typing_panel_earlier">Earlier actions</string>
+    <string name="typing_panel_more">More actions</string>
 </resources>

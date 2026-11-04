@@ -20,11 +20,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -37,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,6 +53,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.domain.Settings
+import kotlinx.coroutines.launch
 
 /**
  * Whether Typing uses [WideTypingLayout]: at least Medium width and tall enough for the
@@ -204,7 +210,8 @@ private fun WideTypingPanel(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 72.dp * controlScale)
-                    .typingAccessTarget("typing:keyboard", enabled = true, shape = ButtonDefaults.filledTonalShape, action = toggleKeyboard),
+                    .typingAccessTarget("typing:keyboard", enabled = true, shape = ButtonDefaults.filledTonalShape, action = toggleKeyboard)
+                    .selectOnTouchDown(settings.selectOnTouchDown, toggleKeyboard),
                 contentPadding = PaddingValues(horizontal = 8.dp),
             ) {
                 StackedLabel(
@@ -215,12 +222,59 @@ private fun WideTypingPanel(
         }
         // Everything below Speak, Stop and Keyboard scrolls as one, so a held Message, large
         // scaling or the on-screen keyboard shortens this area instead of clipping it.
+        // Touch-down selection fires on contact, so a drag cannot scroll there; the buttons
+        // below page through it instead, for touch, dwell and switch alike.
+        val scroll = rememberScrollState()
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 8.dp),
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scroll, enabled = !settings.selectOnTouchDown)
+                .padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (heldMessage != null) HeldMessageCard(heldMessage, onSwapHeld, settings)
             actions()
+        }
+        if (scroll.maxValue > 0) PanelPager(scroll, settings)
+    }
+}
+
+/** Earlier and More: page the panel's scroll area by most of its height. Shown while it overflows. */
+@Composable
+private fun PanelPager(scroll: ScrollState, settings: Settings) {
+    val scope = rememberCoroutineScope()
+    val page = { forward: Boolean ->
+        scope.launch {
+            val step = scroll.viewportSize * 0.8f
+            scroll.animateScrollBy(if (forward) step else -step)
+        }
+        Unit
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(false, true).forEach { forward ->
+            val enabled = if (forward) scroll.canScrollForward else scroll.canScrollBackward
+            val action = { page(forward) }
+            OutlinedButton(
+                onClick = action,
+                enabled = enabled,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp)
+                    .typingAccessTarget(
+                        if (forward) "typing:panel-more" else "typing:panel-earlier",
+                        enabled = enabled,
+                        shape = ButtonDefaults.outlinedShape,
+                        action = action,
+                    )
+                    .selectOnTouchDown(enabled && settings.selectOnTouchDown, action),
+                contentPadding = PaddingValues(horizontal = 8.dp),
+            ) {
+                StackedLabel(
+                    if (forward) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+                    stringResource(if (forward) R.string.typing_panel_more else R.string.typing_panel_earlier),
+                )
+            }
         }
     }
 }
@@ -259,7 +313,8 @@ private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settin
             modifier = Modifier
                 .align(Alignment.End)
                 .heightIn(min = 48.dp)
-                .typingAccessTarget("typing:swap-held", enabled = true, shape = ButtonDefaults.textShape, action = onSwap),
+                .typingAccessTarget("typing:swap-held", enabled = true, shape = ButtonDefaults.textShape, action = onSwap)
+                .selectOnTouchDown(settings.selectOnTouchDown, onSwap),
         ) {
             Icon(Icons.Filled.SwapHoriz, contentDescription = null)
             Spacer(Modifier.width(6.dp))
