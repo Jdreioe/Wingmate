@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -15,7 +16,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -225,19 +225,28 @@ internal fun SettingsContent(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(if (twoPane) stringResource(R.string.ui_settings_title) else settingsRouteTitle(state.route))
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                )
+            val navigationIcon: @Composable () -> Unit = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_close))
+                }
+            }
+            val barColors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
             )
+            // Two panes: the title belongs to the list, so it starts above it; each page has its own heading.
+            if (twoPane) {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.ui_settings_title)) },
+                    navigationIcon = navigationIcon,
+                    colors = barColors,
+                )
+            } else {
+                CenterAlignedTopAppBar(
+                    title = { Text(settingsRouteTitle(state.route)) },
+                    navigationIcon = navigationIcon,
+                    colors = barColors,
+                )
+            }
         }
         ) { contentPadding ->
                 Box(
@@ -1180,7 +1189,9 @@ private fun SettingsCategoryRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .selectable(selected = selected, onClick = onClick)
+            .clickable(onClick = onClick)
+            // Only the open category is marked: a plain list (phones) announces no selection state.
+            .then(if (selected) Modifier.semantics { this.selected = true } else Modifier)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
