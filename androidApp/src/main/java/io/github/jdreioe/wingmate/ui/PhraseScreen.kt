@@ -626,7 +626,14 @@ internal fun PhraseScreenContent(
                                     onValueChange = { newValue -> onAction(PhraseScreenAction.EditInput(newValue)) },
                                     // A fixed height: a long Message scrolls inside, so the
                                     // Typing Screen below never moves while typing.
-                                    modifier = Modifier.fillMaxWidth().height(128.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(128.dp * settings.inputFieldScale.coerceIn(0.75f, 2f))
+                                        // As on phones: focusing the Message means typing, so
+                                        // speech actions hand focus back to it afterwards.
+                                        .onFocusChanged { focus ->
+                                            if (focus.hasFocus) inputSurface = TypingInputSurface.Keyboard
+                                        },
                                     focusRequester = textFieldFocusRequester,
                                     highlightRanges = secondaryLanguageRanges,
                                     highlightColor = secondaryHighlightColor,
@@ -695,7 +702,8 @@ internal fun PhraseScreenContent(
                             onResume = resumeSpeech,
                             stopEnabled = speechActive,
                             onStop = stopSpeech,
-                            keyboardShown = isImeVisible,
+                            // Typing, with an on-screen or a hardware keyboard; hiding drops focus.
+                            keyboardShown = isImeVisible || inputSurface == TypingInputSurface.Keyboard,
                             onShowKeyboard = showKeyboard,
                             onHideKeyboard = showTray,
                             heldMessage = heldMessage?.displayText,
@@ -708,7 +716,7 @@ internal fun PhraseScreenContent(
                                         isActionEnabled = typingActionEnabled,
                                         settings = settings,
                                         feedback = boardFeedback,
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
                             },

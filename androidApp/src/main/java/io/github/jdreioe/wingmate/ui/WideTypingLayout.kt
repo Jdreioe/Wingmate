@@ -25,7 +25,10 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -65,8 +68,8 @@ internal enum class WideSpeechState { Idle, Playing, Paused }
  * │ Message (fixed height)        │ app actions  │
  * │ predictions (fixed, optional) │ Speak        │
  * │ Typing Screen: Pages, Phrases │ Stop | Kbd   │
- * │   rows of fixed height,       │ Action grid  │
- * │   pinned to the top           │ Held message │
+ * │   rows of fixed height,       │ Held message │
+ * │   pinned to the top           │ Action grid ↕│
  * └───────────────────────────────┴──────────────┘
  * ```
  *
@@ -160,6 +163,8 @@ private fun WideTypingPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(88.dp * controlScale)
+                // Switch, dwell and selection keys reach it like any Typing Screen Button.
+                .typingAccessTarget("typing:speak", enabled = true, shape = ButtonDefaults.shape, action = speakAction)
                 .selectOnTouchDown(settings.selectOnTouchDown, speakAction),
         ) {
             Icon(
@@ -187,14 +192,19 @@ private fun WideTypingPanel(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 72.dp * controlScale)
+                    .typingAccessTarget("typing:stop", enabled = stopEnabled, shape = ButtonDefaults.outlinedShape, action = onStop)
                     .selectOnTouchDown(stopEnabled && settings.selectOnTouchDown, onStop),
                 contentPadding = PaddingValues(horizontal = 8.dp),
             ) {
                 StackedLabel(Icons.Filled.Stop, stringResource(R.string.playback_stop))
             }
+            val toggleKeyboard = if (keyboardShown) onHideKeyboard else onShowKeyboard
             FilledTonalButton(
-                onClick = if (keyboardShown) onHideKeyboard else onShowKeyboard,
-                modifier = Modifier.weight(1f).heightIn(min = 72.dp * controlScale),
+                onClick = toggleKeyboard,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 72.dp * controlScale)
+                    .typingAccessTarget("typing:keyboard", enabled = true, shape = ButtonDefaults.filledTonalShape, action = toggleKeyboard),
                 contentPadding = PaddingValues(horizontal = 8.dp),
             ) {
                 StackedLabel(
@@ -203,9 +213,15 @@ private fun WideTypingPanel(
                 )
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp)) { actions() }
-        // Below the Action grid, so holding a Message shortens the grid instead of moving it.
-        if (heldMessage != null) HeldMessageCard(heldMessage, onSwapHeld, settings)
+        // Everything below Speak, Stop and Keyboard scrolls as one, so a held Message, large
+        // scaling or the on-screen keyboard shortens this area instead of clipping it.
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (heldMessage != null) HeldMessageCard(heldMessage, onSwapHeld, settings)
+            actions()
+        }
     }
 }
 
@@ -238,7 +254,13 @@ private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settin
                 ),
             )
         }
-        TextButton(onClick = onSwap, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
+        TextButton(
+            onClick = onSwap,
+            modifier = Modifier
+                .align(Alignment.End)
+                .heightIn(min = 48.dp)
+                .typingAccessTarget("typing:swap-held", enabled = true, shape = ButtonDefaults.textShape, action = onSwap),
+        ) {
             Icon(Icons.Filled.SwapHoriz, contentDescription = null)
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.typing_held_message_swap))

@@ -31,10 +31,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -406,8 +404,9 @@ private fun ObfBoard.typingActionButtons(): List<ObfButton> =
         .mapNotNull { id -> buttons.firstOrNull { it.id == id } }
 
 /**
- * The Action strip as a two-column grid that scrolls vertically, for the wide layout's side
- * panel. Same Buttons, order and behaviour as the strip; each cell keeps its place.
+ * The Action strip as a two-column grid, for the wide layout's side panel. Same Buttons, order
+ * and behaviour as the strip, in fixed cells sized by the Communicator's input scale. Not lazy:
+ * the caller scrolls it together with what sits beside it.
  */
 @Composable
 internal fun TypingActionGrid(
@@ -421,31 +420,35 @@ internal fun TypingActionGrid(
     val buttons = remember(template) { template.typingActionButtons() }
     val unsupportedDescription = stringResource(R.string.typing_screen_unsupported_action)
     val unavailableDescription = stringResource(R.string.typing_screen_unavailable_action)
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        gridItems(buttons, key = ObfButton::id) { button ->
-            val effects = remember(button) { parseObfButtonActions(button) }
-            val enabled = effects.isNotEmpty() &&
-                effects.none { it is ObfButtonActionEffect.Unsupported } &&
-                effects.all(isActionEnabled)
-            val disabledDescription = when {
-                effects.any { it is ObfButtonActionEffect.Unsupported } -> unsupportedDescription
-                !enabled -> unavailableDescription
-                else -> null
+    val cellHeight = 56.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        buttons.chunked(2).forEach { pair ->
+            Row(Modifier.fillMaxWidth().height(cellHeight), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { button ->
+                    key(button.id) {
+                        val effects = remember(button) { parseObfButtonActions(button) }
+                        val enabled = effects.isNotEmpty() &&
+                            effects.none { it is ObfButtonActionEffect.Unsupported } &&
+                            effects.all(isActionEnabled)
+                        val disabledDescription = when {
+                            effects.any { it is ObfButtonActionEffect.Unsupported } -> unsupportedDescription
+                            !enabled -> unavailableDescription
+                            else -> null
+                        }
+                        TypingActionButton(
+                            settings = settings, feedback = feedback,
+                            button = button,
+                            effects = effects,
+                            enabled = enabled,
+                            disabledDescription = disabledDescription,
+                            onClick = { effects.forEach(onAction) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                // A lone last Button keeps the width of the others.
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
-            TypingActionButton(
-                settings = settings, feedback = feedback,
-                button = button,
-                effects = effects,
-                enabled = enabled,
-                disabledDescription = disabledDescription,
-                onClick = { effects.forEach(onAction) },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-            )
         }
     }
 }
@@ -577,7 +580,7 @@ private fun TypingActionButton(
  * entered/left on hover for dwell, and outlined while the scanner is on it.
  */
 @Composable
-private fun Modifier.typingAccessTarget(
+internal fun Modifier.typingAccessTarget(
     targetId: String,
     enabled: Boolean,
     shape: androidx.compose.ui.graphics.Shape,
