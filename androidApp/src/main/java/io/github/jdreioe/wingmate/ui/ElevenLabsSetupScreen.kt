@@ -34,7 +34,8 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { failed = true }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.elevenlabs_setup), style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.elevenlabs_description))
         Text(stringResource(R.string.elevenlabs_help))
@@ -66,6 +67,7 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
                 finally { busy = false }
             }
         }) { Text(stringResource(R.string.elevenlabs_clear)) }
-        TextButton(onClick = onBack, enabled = !busy) { Text(stringResource(R.string.common_back)) }
+    }
+    SetupBackButton(onClick = onBack, enabled = !busy, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp))
     }
 }

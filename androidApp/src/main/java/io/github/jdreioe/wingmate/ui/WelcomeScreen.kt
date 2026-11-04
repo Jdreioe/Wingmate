@@ -395,6 +395,14 @@ private fun WelcomeStepContent(
 
 // ─── Shared layout ───────────────────────────────────────────────────────────
 
+/** Setup's large Back button. Every setup page uses it, so Back looks the same and sits in the same place. */
+@Composable
+internal fun SetupBackButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        Text(stringResource(R.string.common_back))
+    }
+}
+
 /** Adds setup's on-screen Back (and an optional second action) below a shared Settings page. */
 @Composable
 private fun PageWithBack(
@@ -409,9 +417,7 @@ private fun PageWithBack(
             modifier = Modifier.fillMaxWidth().padding(24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.common_back))
-            }
+            SetupBackButton(onClick = onBack, modifier = Modifier.weight(1f))
             secondaryLabel?.let {
                 OutlinedButton(onClick = onSecondary, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
                     Text(it)
@@ -456,9 +462,7 @@ private fun WelcomePage(
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (onBack != null) {
-                    OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                        Text(stringResource(R.string.common_back))
-                    }
+                    SetupBackButton(onClick = onBack, modifier = Modifier.weight(1f))
                 }
                 Button(
                     onClick = onPrimary,

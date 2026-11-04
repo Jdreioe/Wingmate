@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -102,33 +103,24 @@ fun F0SetupScreen(
         featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_SETUP_STARTED)
     }
 
+    /** Back steps through this page's own steps before leaving it. */
+    fun goBack() {
+        when (step) {
+            F0Step.GUIDE -> onBack()
+            F0Step.CREDENTIALS -> step = F0Step.GUIDE
+            F0Step.SUCCESS -> onDone()
+        }
+    }
+    BackHandler(enabled = step == F0Step.CREDENTIALS) { step = F0Step.GUIDE }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = {
-                        when (step) {
-                            F0Step.GUIDE -> onBack()
-                            F0Step.CREDENTIALS -> step = F0Step.GUIDE
-                            F0Step.SUCCESS -> onDone()
-                        }
-                    }
-                ) { Text(stringResource(R.string.common_back)) }
-                Text(stringResource(R.string.azure_setup_title), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.width(64.dp))
-            }
-
-            Spacer(Modifier.height(24.dp))
             when (step) {
                 F0Step.GUIDE -> GuideStep(
                     onSignUp = { uriHandler.openUri(AZURE_SIGN_UP_URL) },
@@ -156,6 +148,10 @@ fun F0SetupScreen(
                 )
                 F0Step.SUCCESS -> SuccessStep(onDone)
             }
+        }
+        if (step != F0Step.SUCCESS) {
+            SetupBackButton(onClick = ::goBack, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp))
+        }
         }
     }
 }

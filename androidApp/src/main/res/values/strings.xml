@@ -274,7 +274,6 @@
     <string name="language_no_available">No languages available</string>
     <string name="language_no_match">No languages match filters</string>
 
-    <string name="azure_setup_title">Azure TTS setup</string>
     <string name="azure_setup_credentials_title">Enter Azure credentials</string>
     <string name="azure_setup_credentials_description">Paste KEY 1 and the Location/Region.</string>
     <string name="azure_setup_endpoint_label">Region or endpoint</string>

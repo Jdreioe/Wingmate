@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -115,35 +116,26 @@ fun GoogleTtsSetupScreen(
         }
     }
 
+    /** Back steps through this page's own steps before leaving it. */
+    fun goBack() {
+        when (step) {
+            GoogleTtsSetupStep.WELCOME -> onBack()
+            GoogleTtsSetupStep.CLOUD_PROJECT, GoogleTtsSetupStep.API_KEY -> step = GoogleTtsSetupStep.WELCOME
+            GoogleTtsSetupStep.SUCCESS -> onDone()
+        }
+    }
+    BackHandler(enabled = step == GoogleTtsSetupStep.CLOUD_PROJECT || step == GoogleTtsSetupStep.API_KEY) {
+        step = GoogleTtsSetupStep.WELCOME
+    }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().then(if (showNavigation) Modifier.statusBarsPadding() else Modifier)) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .then(if (showNavigation) Modifier.statusBarsPadding() else Modifier)
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
-            if (showNavigation) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = {
-                        when (step) {
-                            GoogleTtsSetupStep.WELCOME -> onBack()
-                            GoogleTtsSetupStep.CLOUD_PROJECT, GoogleTtsSetupStep.API_KEY ->
-                                step = GoogleTtsSetupStep.WELCOME
-                            GoogleTtsSetupStep.SUCCESS -> onDone()
-                        }
-                    }) {
-                        Text(stringResource(if (step == GoogleTtsSetupStep.WELCOME) R.string.common_cancel else R.string.common_back))
-                    }
-                    Text(stringResource(R.string.google_setup_title), style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(64.dp))
-                }
-                Spacer(Modifier.height(24.dp))
-            }
             when (step) {
                 GoogleTtsSetupStep.WELCOME -> {
                     Text(
@@ -277,6 +269,10 @@ fun GoogleTtsSetupScreen(
                     }
                 }
             }
+        }
+        if (showNavigation && step != GoogleTtsSetupStep.SUCCESS) {
+            SetupBackButton(onClick = ::goBack, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp))
+        }
         }
     }
 }

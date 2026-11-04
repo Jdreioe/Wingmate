@@ -266,7 +266,6 @@
     <string name="language_no_available">Ingen sprog tilgængelige</string>
     <string name="language_no_match">Ingen sprog matcher filtrene</string>
 
-    <string name="azure_setup_title">Opsætning af Azure TTS</string>
     <string name="azure_setup_credentials_title">Indtast Azure-oplysninger</string>
     <string name="azure_setup_credentials_description">Indsæt KEY 1 og Placering/Region.</string>
     <string name="azure_setup_endpoint_label">Region eller slutpunkt</string>
