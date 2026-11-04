@@ -69,6 +69,18 @@ class PiperVoicesViewModelTest {
     }
 
     @Test
+    fun `showing the page again picks up a voice chosen elsewhere`() = runTest {
+        val operations = FakePiperVoiceOperations(installed = setOf("en_US-lessac-medium"))
+        val viewModel = PiperVoicesViewModel(operations)
+        viewModel.onAction(PiperVoicesAction.Use("en_US-lessac-medium"))
+
+        operations.selected = null // a device voice was chosen in setup
+        viewModel.onAction(PiperVoicesAction.Shown)
+
+        assertNull((viewModel.state.value as PiperVoicesUiState.Ready).selectedKey)
+    }
+
+    @Test
     fun `testing a voice plays its sample until tapped again`() = runTest {
         val operations = FakePiperVoiceOperations()
         val viewModel = PiperVoicesViewModel(operations)

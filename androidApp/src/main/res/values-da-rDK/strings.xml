@@ -632,6 +632,7 @@
     <string name="welcome_privacy_online">Sendes online</string>
     <string name="welcome_privacy_speech_title">Tale</string>
     <string name="welcome_privacy_speech_system">Enhedens talemotor læser dine ord højt. Nogle talemotorer bruger internettet.</string>
+    <string name="welcome_privacy_speech_piper">En offline Piper-stemme læser dine ord højt på denne enhed. De sendes ikke online.</string>
     <string name="welcome_privacy_speech_cloud">Dine ord sendes til %1$s for at blive talt.</string>
     <string name="welcome_privacy_history_desc">Viser det, du siger, så du kan sige det igen. Skjules den, holdes nye beskeder ude af listen og ordforslag, men de gemmes stadig på denne enhed.</string>
     <string name="welcome_review_title">Klar til at kommunikere</string>
@@ -662,6 +663,8 @@
     <string name="welcome_engine_title">Hvad skal tale for dig?</string>
     <string name="welcome_engine_device">Denne enhed</string>
     <string name="welcome_engine_device_desc">Gratis, ingen opsætning.</string>
+    <string name="welcome_engine_piper">Offline stemme</string>
+    <string name="welcome_engine_piper_desc">Naturlige stemmer. Gratis. Hent én stemme, så virker den uden internet.</string>
     <string name="welcome_engine_azure">Microsoft Azure</string>
     <string name="welcome_engine_azure_desc">Naturlige stemmer. Kræver en Azure-konto. Sender dine ord online.</string>
     <string name="welcome_engine_google">Google Cloud</string>

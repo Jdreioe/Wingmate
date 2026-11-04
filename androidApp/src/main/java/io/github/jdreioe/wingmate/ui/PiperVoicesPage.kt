@@ -82,6 +82,7 @@ internal fun PiperVoicesPage(onVoiceChosen: () -> Unit, modifier: Modifier = Mod
             }
         }
     }
+    LaunchedEffect(viewModel) { viewModel.onAction(PiperVoicesAction.Shown) }
     DisposableEffect(viewModel) { onDispose { viewModel.stopSample() } }
     PiperVoicesContent(state = state, onAction = viewModel::onAction, modifier = modifier)
 }

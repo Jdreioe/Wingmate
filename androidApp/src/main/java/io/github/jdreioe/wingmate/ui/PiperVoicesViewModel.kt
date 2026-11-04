@@ -8,6 +8,7 @@ import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.PiperVoicePack
 import io.github.jdreioe.wingmate.domain.PiperVoiceState
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.piperVoiceKey
 import io.github.jdreioe.wingmate.infrastructure.AndroidPiperSynthesizer
@@ -40,7 +41,7 @@ internal interface PiperVoiceOperations {
     suspend fun prepare(key: String)
     suspend fun selectedVoice(): Voice?
 
-    /** Saves [voice] and makes its language the primary language. */
+    /** Saves [voice], makes its language the primary language, and makes Piper the engine. */
     suspend fun select(voice: Voice)
     suspend fun primaryLanguage(): String
 
@@ -73,8 +74,10 @@ internal class DefaultPiperVoiceOperations(
     override suspend fun select(voice: Voice) {
         withContext(Dispatchers.Default) {
             voiceUseCase.select(voice)
-            val language = voice.primaryLanguage ?: return@withContext
-            settingsUseCase.update(settingsUseCase.get().copy(primaryLanguage = language))
+            // Saved together, so setup never pairs another engine with a Piper voice.
+            settingsUseCase.update(
+                settingsUseCase.get().let { it.copy(ttsEngine = TtsEngine.PIPER, primaryLanguage = voice.primaryLanguage ?: it.primaryLanguage) }
+            )
         }
     }
 
@@ -140,6 +143,8 @@ internal sealed interface PiperVoicesUiState {
 }
 
 internal sealed interface PiperVoicesAction {
+    /** Sent each time the page is shown; the saved voice may have changed elsewhere (setup, Settings). */
+    data object Shown : PiperVoicesAction
     data class LanguageFiltered(val language: String?) : PiperVoicesAction
     data class Download(val key: String) : PiperVoicesAction
     data class Cancel(val key: String) : PiperVoicesAction
@@ -184,6 +189,10 @@ internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations
 
     fun onAction(action: PiperVoicesAction) {
         when (action) {
+            PiperVoicesAction.Shown -> viewModelScope.launch {
+                operations.refresh()
+                selection.value = SelectionState(selectedKey = operations.selectedVoice()?.piperVoiceKey)
+            }
             is PiperVoicesAction.LanguageFiltered -> filter.value = action.language
             is PiperVoicesAction.Download -> {
                 clearNotices()
@@ -238,7 +247,7 @@ internal class PiperVoicesViewModel(private val operations: PiperVoiceOperations
                 return@launch
             }
             try {
-                operations.select(pack.toVoice())
+                operations.select(pack.toVoice().withTuningOf(operations.selectedVoice()))
                 selection.value = SelectionState(selectedKey = key)
                 mutableEvents.send(PiperVoicesEvent.VoiceChosen)
             } catch (failure: CancellationException) {

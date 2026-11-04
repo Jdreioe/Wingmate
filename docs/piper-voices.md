@@ -5,7 +5,9 @@ voices. They run on the device through [sherpa-onnx](https://github.com/k2-fsa/s
 (ONNX Runtime and the espeak-ng phonemizer), so speech works without a network
 once a voice is downloaded.
 
-In Settings → Speech, choose **Piper (offline)**, then **Choose an offline voice**.
+In setup, choose **Offline voice** on "What should speak for you?". In Settings →
+Speech, choose **Piper (offline)**, then **Choose an offline voice**. Either way,
+choosing a voice also makes Piper the speech engine.
 The list opens on voices for the primary language. Each voice shows its size.
 The Play button on each voice streams Piper's recorded sample of it, so you can
 hear a voice before you download it. Downloading the first voice also downloads 9 MB of shared espeak-ng data. Tap

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -412,8 +413,7 @@ private fun WelcomeStepContent(
             onBack = onBack,
             // A saved key can stop working (e.g. restored from a backup); setup is the only
             // place to replace it before Settings is reachable.
-            secondaryLabel = voiceEngine?.takeIf { it != TtsEngine.SYSTEM }
-                ?.let { stringResource(R.string.welcome_reenter_key) },
+            secondaryLabel = voiceEngine?.providerStep()?.let { stringResource(R.string.welcome_reenter_key) },
             onSecondary = { voiceEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
             // A voice is already selected: name it, so Continue (which keeps it) needs no search
             // through a long list. Tapping another voice chooses that one instead.
@@ -732,7 +732,7 @@ private data class SavedVoice(val engine: TtsEngine, val name: String)
 private data class EngineOption(val engine: TtsEngine, val title: Int, val description: Int)
 
 /**
- * Choosing what speaks: the device's own engine or a cloud provider. Saves nothing; setup
+ * Choosing what speaks: the device's own engine, offline Piper voices, or a cloud provider. Saves nothing; setup
  * saves the engine together with the voice. Starts on the engine already in use.
  */
 @Composable
@@ -761,6 +761,7 @@ private fun EnginePage(
     val current = selected ?: TtsEngine.SYSTEM
     val options = listOf(
         EngineOption(TtsEngine.SYSTEM, R.string.welcome_engine_device, R.string.welcome_engine_device_desc),
+        EngineOption(TtsEngine.PIPER, R.string.welcome_engine_piper, R.string.welcome_engine_piper_desc),
         EngineOption(TtsEngine.AZURE_USER_RESOURCE, R.string.welcome_engine_azure, R.string.welcome_engine_azure_desc),
         EngineOption(TtsEngine.GOOGLE_CLOUD, R.string.welcome_engine_google, R.string.welcome_engine_google_desc),
         EngineOption(TtsEngine.ELEVENLABS, R.string.welcome_engine_elevenlabs, R.string.welcome_engine_elevenlabs_desc),
@@ -779,7 +780,11 @@ private fun EnginePage(
                 ChoiceCard(
                     title = stringResource(title),
                     description = stringResource(description),
-                    icon = if (engine == TtsEngine.SYSTEM) Icons.Default.PhoneAndroid else Icons.Default.Cloud,
+                    icon = when (engine) {
+                        TtsEngine.SYSTEM -> Icons.Default.PhoneAndroid
+                        TtsEngine.PIPER -> Icons.Default.DownloadForOffline
+                        else -> Icons.Default.Cloud
+                    },
                     selected = current == engine ||
                         (engine == TtsEngine.AZURE_USER_RESOURCE && current == TtsEngine.AZURE_MANAGED),
                     onSelect = { selected = engine },
@@ -905,7 +910,11 @@ private fun PrivacyPage(
                 SetupActionButton(label = stringResource(R.string.common_retry), onClick = { retryKey++ })
             }
             is EngineLoad.Ready -> when (val provider = current.engine.cloudProviderName()) {
-                null -> PrivacyCard(
+                null -> if (current.engine == TtsEngine.PIPER) PrivacyCard(
+                    title = stringResource(R.string.welcome_privacy_speech_title),
+                    location = DataLocation.OnDevice,
+                    description = stringResource(R.string.welcome_privacy_speech_piper),
+                ) else PrivacyCard(
                     title = stringResource(R.string.welcome_privacy_speech_title),
                     location = DataLocation.DeviceEngine,
                     description = stringResource(R.string.welcome_privacy_speech_system),
@@ -948,9 +957,9 @@ private fun PrivacyPage(
     }
 }
 
-/** The setup page that saves this engine's credentials, or null for the device's own engine. */
+/** The setup page that saves this engine's credentials, or null for an engine that needs none. */
 private fun TtsEngine.providerStep(): WelcomeStep? = when (this) {
-    TtsEngine.SYSTEM -> null
+    TtsEngine.SYSTEM, TtsEngine.PIPER -> null
     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> WelcomeStep.AzureSetup
     TtsEngine.GOOGLE_CLOUD -> WelcomeStep.GoogleSetup
     TtsEngine.ELEVENLABS -> WelcomeStep.ElevenLabsSetup
@@ -970,9 +979,9 @@ private sealed interface EngineLoad {
     data class Ready(val engine: TtsEngine) : EngineLoad
 }
 
-/** The cloud provider that receives spoken text, or null for the device's own engine. Brand names stay untranslated. */
+/** The cloud provider that receives spoken text, or null when speech stays on the device. Brand names stay untranslated. */
 private fun TtsEngine.cloudProviderName(): String? = when (this) {
-    TtsEngine.SYSTEM -> null
+    TtsEngine.SYSTEM, TtsEngine.PIPER -> null
     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> "Microsoft Azure"
     TtsEngine.GOOGLE_CLOUD -> "Google Cloud"
     TtsEngine.ELEVENLABS -> "ElevenLabs"
@@ -1021,6 +1030,7 @@ private fun ReviewPage(
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     val unknown = stringResource(R.string.test_voice_unknown_voice)
     val deviceEngine = stringResource(R.string.welcome_privacy_device_engine)
+    val onDevice = stringResource(R.string.welcome_privacy_on_device)
     val sentOnlineTemplate = stringResource(R.string.welcome_review_speech_online)
     val speedTemplate = stringResource(R.string.welcome_review_speed)
     // Null while loading, so nothing misleading is shown or announced before the values arrive.
@@ -1036,6 +1046,7 @@ private fun ReviewPage(
                 val settings = settingsUseCase?.get()
                 val speech = when (val engine = settings?.ttsEngine) {
                     null -> unknown
+                    TtsEngine.PIPER -> onDevice
                     else -> engine.cloudProviderName()?.let { sentOnlineTemplate.format(it) } ?: deviceEngine
                 }
                 val multilingual = voice.isMultilingual()

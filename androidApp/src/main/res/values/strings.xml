@@ -632,6 +632,7 @@
     <string name="welcome_privacy_online">Sent online</string>
     <string name="welcome_privacy_speech_title">Speech</string>
     <string name="welcome_privacy_speech_system">Your device\'s speech engine reads your words aloud. Some engines use the internet.</string>
+    <string name="welcome_privacy_speech_piper">An offline Piper voice reads your words aloud on this device. They are not sent online.</string>
     <string name="welcome_privacy_speech_cloud">Your words are sent to %1$s to be spoken.</string>
     <string name="welcome_privacy_history_desc">Lists what you say so you can say it again. Hiding it keeps new messages out of the list and predictions, but they are still saved on this device.</string>
     <string name="welcome_review_title">Ready to communicate</string>
@@ -662,6 +663,8 @@
     <string name="welcome_engine_title">What should speak for you?</string>
     <string name="welcome_engine_device">This device</string>
     <string name="welcome_engine_device_desc">Free, no setup.</string>
+    <string name="welcome_engine_piper">Offline voice</string>
+    <string name="welcome_engine_piper_desc">Natural voices. Free. Download one voice, then it works without internet.</string>
     <string name="welcome_engine_azure">Microsoft Azure</string>
     <string name="welcome_engine_azure_desc">Natural voices. Needs an Azure account. Sends your words online.</string>
     <string name="welcome_engine_google">Google Cloud</string>
