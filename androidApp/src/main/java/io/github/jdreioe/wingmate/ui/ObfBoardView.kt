@@ -209,6 +209,12 @@ internal data class ObfBoardUiState(
     val selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     val homeBoardId: String? = null,
     val scrollingMinimumCellHeight: Dp? = null,
+    /**
+     * With [scrollingMinimumCellHeight], caps row height and pins rows to the top, so a
+     * short list in a tall viewport keeps normal-sized Buttons that do not move or grow as
+     * Buttons are added or the keyboard opens. Used by the wide Typing layout.
+     */
+    val scrollingMaximumCellHeight: Dp? = null,
     val settings: Settings = Settings(),
     val focusedCell: Pair<Int, Int>? = null,
 )
@@ -376,6 +382,7 @@ internal fun ObfBoardContent(
     val selectedFieldSpans = state.selectedFieldSpans
     val homeBoardId = state.homeBoardId
     val scrollingMinimumCellHeight = state.scrollingMinimumCellHeight
+    val scrollingMaximumCellHeight = state.scrollingMaximumCellHeight
     val settings = state.settings
     val focusedCell = state.focusedCell
 
@@ -585,7 +592,7 @@ internal fun ObfBoardContent(
                             val rowHeight = maxOf(
                                 minimumHeight,
                                 (availableGridHeight - gap * (visibleRows - 1)) / visibleRows,
-                            )
+                            ).let { fitted -> scrollingMaximumCellHeight?.let { minOf(fitted, maxOf(it, minimumHeight)) } ?: fitted }
                             rowHeight * rows + gap * (rows - 1)
                         }
                         ?: fittedHeight
@@ -594,7 +601,7 @@ internal fun ObfBoardContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(contentHeight)
-                                .align(Alignment.BottomCenter)
+                                .align(if (scrollingMaximumCellHeight != null) Alignment.TopCenter else Alignment.BottomCenter)
                         ) {
                             SpanningBoardGrid(
                                 rows = rows,

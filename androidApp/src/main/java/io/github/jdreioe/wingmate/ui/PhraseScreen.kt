@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.*
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.domain.CommunicationPlaybackStatus
@@ -249,6 +250,11 @@ internal fun PhraseScreenContent(
             val isImeRetracting = WindowInsets.imeAnimationSource.getBottom(density) > 0 &&
                 WindowInsets.imeAnimationTarget.getBottom(density) == 0
             val isImeVisible = WindowInsets.isImeVisible && !isImeRetracting
+            // Tablets, unfolded foldables and laptop windows get the wide layout: the Message on
+            // top, the Typing Screen always under it, and speech controls in a side panel. It
+            // depends on the window only, so an on-screen keyboard never switches layouts.
+            val windowSize = currentWindowSize()
+            val wideTyping = usesWideTyping(windowSize)
             var wasImeVisible by remember { mutableStateOf(false) }
             // When switching to the keyboard, the tray stays underneath while the
             // keyboard starts (a few hundred ms after it is requested) and slides up
@@ -288,7 +294,8 @@ internal fun PhraseScreenContent(
                 topBar = {
                     // Hidden while the system keyboard is up to leave room for the
                     // Message; everything in it is back as soon as the keyboard closes.
-                    AnimatedVisibility(
+                    // The wide layout has no top bar; its actions are in the side panel.
+                    if (!wideTyping) AnimatedVisibility(
                         visible = !isImeVisible,
                         enter = fadeIn(tween(200)),
                         exit = fadeOut(tween(200)),
@@ -372,49 +379,16 @@ internal fun PhraseScreenContent(
                                         }
                                     }
                                 } else {
-                                    if (supportsMathMode(settings.ttsEngine)) {
-                                        IconToggleButton(
-                                            checked = mathMode,
-                                            onCheckedChange = { onAction(PhraseScreenAction.MathMode(it)) }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Calculate,
-                                                contentDescription = stringResource(R.string.speech_math_mode_description),
-                                                tint = if (mathMode) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                                }
-                                            )
-                                        }
-                                    }
-                                    IconButton(
-                                        onClick = openBoardSets,
-                                        enabled = onOpenBoardSetManager != null
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.GridView,
-                                            contentDescription = stringResource(R.string.mode_switch_to_screens)
-                                        )
-                                    }
-
-                                    IconButton(onClick = toggleFullscreen) {
-                                        Icon(
-                                            imageVector = if (showFullscreen) {
-                                                Icons.Filled.FullscreenExit
-                                            } else {
-                                                Icons.Filled.Fullscreen
-                                            },
-                                            contentDescription = stringResource(R.string.phrase_screen_toggle_fullscreen_cd)
-                                        )
-                                    }
-
-                                    IconButton(onClick = openSettings) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Settings,
-                                            contentDescription = stringResource(R.string.phrase_screen_app_settings)
-                                        )
-                                    }
+                                    TypingAppBarActions(
+                                        mathModeSupported = supportsMathMode(settings.ttsEngine),
+                                        mathMode = mathMode,
+                                        onMathModeChange = { onAction(PhraseScreenAction.MathMode(it)) },
+                                        onOpenScreens = openBoardSets,
+                                        screensEnabled = onOpenBoardSetManager != null,
+                                        showFullscreen = showFullscreen,
+                                        onToggleFullscreen = toggleFullscreen,
+                                        onOpenSettings = openSettings,
+                                    )
                                 }
                             }
                         )
@@ -584,7 +558,7 @@ internal fun PhraseScreenContent(
 
                     // Free space above the Message bar; the bar and its input
                     // surface stay anchored to the bottom (#299, layout 1).
-                    Spacer(modifier = Modifier.weight(1f))
+                    if (!wideTyping) Spacer(modifier = Modifier.weight(1f))
 
                     val speechActive = isSpeechPaused ||
                         communicationState.currentSpeechRequestId != null ||
@@ -601,6 +575,149 @@ internal fun PhraseScreenContent(
                         }
                     }
                     val typingTemplate = typingTemplateGraph?.rootBoard
+                    // The Typing Screen, shared by the phone tray and the wide layout.
+                    val typingScreen: @Composable (template: ObfBoard, phraseRowHeight: Dp?, showActionStrip: Boolean, modifier: Modifier) -> Unit =
+                        { template, phraseRowHeight, showActionStrip, trayModifier ->
+                        TypingScreenTray(
+                            focusedCell = ui.boardFocusedCell,
+                            onFocusCell = { onAction(PhraseScreenAction.FocusCell(it)) },
+                            settings = settings, feedback = boardFeedback,
+                            template = template,
+                            phrases = visiblePhrases,
+                            categories = categories,
+                            selection = selectedPage,
+                            showHistory = settings.historyVisible && historyItems.isNotEmpty(),
+                            history = historyItems,
+                            showLikelyNext = ui.showLikelyNext,
+                            likelyNext = ui.likelyNext,
+                            onSelectionChanged = { onAction(PhraseScreenAction.SelectPage(it)) },
+                            onOpenCategoryMenu = { category ->
+                                onAction(PhraseScreenAction.RequestDialog(TypingDialog.CategoryMenu, categoryId = category.id))
+                            },
+                            onAddCategory = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.AddCategory)) },
+                            onAddPhrase = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.AddPhrase)) },
+                            onPhraseActivated = activatePhraseFromTypingScreen,
+                            onEditPhrase = { phrase ->
+                                onAction(PhraseScreenAction.RequestDialog(TypingDialog.EditPhrase, phraseId = phrase.id))
+                            },
+                            onDeletePhrase = { phrase -> onAction(PhraseScreenAction.DeletePhrase(phrase.id)) },
+                            // Dropping onto a Phrase takes its place in the repository order.
+                            onMovePhrase = { moved, target ->
+                                onAction(PhraseScreenAction.MovePhrase(moved.id, target.id))
+                            },
+                            onHistoryActivated = { historyItem ->
+                                activatePhraseFromTypingScreen(historyItem.toTypingHistoryPhrase())
+                            },
+                            onAction = onTypingAction,
+                            vocabularyMutationsEnabled = ui.vocabularyReady,
+                            isActionEnabled = typingActionEnabled,
+                            phraseRowHeight = phraseRowHeight,
+                            showActionStrip = showActionStrip,
+                            modifier = trayModifier,
+                        )
+                    }
+                    if (wideTyping) {
+                        val heldMessage = communicationState.heldMessage
+                        WideTypingLayout(
+                            panelWidth = if (WindowWidth.of(windowSize.width) == WindowWidth.Expanded) 304.dp else 248.dp,
+                            message = {
+                                SecondaryLanguageTextField(
+                                    value = input,
+                                    onValueChange = { newValue -> onAction(PhraseScreenAction.EditInput(newValue)) },
+                                    // A fixed height: a long Message scrolls inside, so the
+                                    // Typing Screen below never moves while typing.
+                                    modifier = Modifier.fillMaxWidth().height(128.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)),
+                                    focusRequester = textFieldFocusRequester,
+                                    highlightRanges = secondaryLanguageRanges,
+                                    highlightColor = secondaryHighlightColor,
+                                    ssmlRanges = ssmlRanges,
+                                    ssmlColor = ssmlHighlightColor,
+                                    textStyle = MaterialTheme.typography.headlineSmall.copy(
+                                        fontSize = MaterialTheme.typography.headlineSmall.fontSize * settings.fontSizeScale,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                    minLines = 1,
+                                    maxLines = Int.MAX_VALUE,
+                                    placeholder = {
+                                        Text(
+                                            stringResource(R.string.phrase_screen_enter_text_placeholder),
+                                            style = MaterialTheme.typography.headlineSmall.copy(
+                                                fontSize = MaterialTheme.typography.headlineSmall.fontSize * settings.fontSizeScale,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            ),
+                                        )
+                                    },
+                                )
+                            },
+                            // Wingmate's predictions are for a hardware keyboard; the slot keeps
+                            // its height either way, so the Typing Screen does not move.
+                            predictions = if (predictionsEnabled) ({
+                                if (!isImeVisible && (predictions.words.isNotEmpty() || predictions.letters.isNotEmpty())) {
+                                    PredictionBar(
+                                        predictions = predictions,
+                                        onWordSelected = { word -> onAction(PhraseScreenAction.CompleteWord(word)) },
+                                        onLetterSelected = { letter -> onAction(PhraseScreenAction.InsertPrediction(letter.toString())) },
+                                        fontSizeScale = settings.fontSizeScale,
+                                    )
+                                }
+                            }) else null,
+                            typingScreen = {
+                                if (typingTemplate == null) {
+                                    RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryLoad) })
+                                } else {
+                                    typingScreen(
+                                        typingTemplate,
+                                        96.dp * settings.inputFieldScale.coerceIn(0.75f, 2f),
+                                        false,
+                                        Modifier.fillMaxSize(),
+                                    )
+                                }
+                            },
+                            appActions = {
+                                TypingAppBarActions(
+                                    mathModeSupported = supportsMathMode(settings.ttsEngine),
+                                    mathMode = mathMode,
+                                    onMathModeChange = { onAction(PhraseScreenAction.MathMode(it)) },
+                                    onOpenScreens = openBoardSets,
+                                    screensEnabled = onOpenBoardSetManager != null,
+                                    showFullscreen = showFullscreen,
+                                    onToggleFullscreen = toggleFullscreen,
+                                    onOpenSettings = openSettings,
+                                )
+                            },
+                            speech = when {
+                                isSpeechPaused -> WideSpeechState.Paused
+                                speechPlaying -> WideSpeechState.Playing
+                                else -> WideSpeechState.Idle
+                            },
+                            onSpeak = playInput,
+                            onPause = pauseSpeech,
+                            onResume = resumeSpeech,
+                            stopEnabled = speechActive,
+                            onStop = stopSpeech,
+                            keyboardShown = isImeVisible,
+                            onShowKeyboard = showKeyboard,
+                            onHideKeyboard = showTray,
+                            heldMessage = heldMessage?.displayText,
+                            onSwapHeld = toggleThatThought,
+                            actions = {
+                                if (typingTemplate != null) {
+                                    TypingActionGrid(
+                                        template = typingTemplate,
+                                        onAction = onTypingAction,
+                                        isActionEnabled = typingActionEnabled,
+                                        settings = settings,
+                                        feedback = boardFeedback,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            },
+                            settings = settings,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        return@Column
+                    }
+
                     // Landscape with the keyboard up leaves room for one row above the
                     // Message bar: the Action strip (with Swap when a Message is held)
                     // replaces the Held and Phrase rows, so the Message stays visible.
@@ -924,41 +1041,7 @@ internal fun PhraseScreenContent(
                         ) {
                             if (typingTemplate == null) {
                                 RepositoryFailurePanel(onRetry = { onAction(PhraseScreenAction.RetryLoad) })
-                            } else TypingScreenTray(
-                                focusedCell = ui.boardFocusedCell,
-                                onFocusCell = { onAction(PhraseScreenAction.FocusCell(it)) },
-                                settings = settings, feedback = boardFeedback,
-                                template = typingTemplate,
-                                phrases = visiblePhrases,
-                                categories = categories,
-                                selection = selectedPage,
-                                showHistory = settings.historyVisible && historyItems.isNotEmpty(),
-                                history = historyItems,
-                                showLikelyNext = ui.showLikelyNext,
-                                likelyNext = ui.likelyNext,
-                                onSelectionChanged = { onAction(PhraseScreenAction.SelectPage(it)) },
-                                onOpenCategoryMenu = { category ->
-                                    onAction(PhraseScreenAction.RequestDialog(TypingDialog.CategoryMenu, categoryId = category.id))
-                                },
-                                onAddCategory = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.AddCategory)) },
-                                onAddPhrase = { onAction(PhraseScreenAction.RequestDialog(TypingDialog.AddPhrase)) },
-                                onPhraseActivated = activatePhraseFromTypingScreen,
-                                onEditPhrase = { phrase ->
-                                    onAction(PhraseScreenAction.RequestDialog(TypingDialog.EditPhrase, phraseId = phrase.id))
-                                },
-                                onDeletePhrase = { phrase -> onAction(PhraseScreenAction.DeletePhrase(phrase.id)) },
-                                // Dropping onto a Phrase takes its place in the repository order.
-                                onMovePhrase = { moved, target ->
-                                    onAction(PhraseScreenAction.MovePhrase(moved.id, target.id))
-                                },
-                                onHistoryActivated = { historyItem ->
-                                    activatePhraseFromTypingScreen(historyItem.toTypingHistoryPhrase())
-                                },
-                                onAction = onTypingAction,
-                                vocabularyMutationsEnabled = ui.vocabularyReady,
-                                isActionEnabled = typingActionEnabled,
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                            )
+                            } else typingScreen(typingTemplate, null, true, Modifier.weight(1f).fillMaxWidth())
                         }
                     }
                     }
@@ -1080,5 +1163,62 @@ private fun RepositoryFailurePanel(onRetry: () -> Unit) {
         Button(onClick = onRetry) {
             Text(stringResource(R.string.common_retry))
         }
+    }
+}
+
+/** The top bar's actions, shared by the phone top bar and the wide layout's side panel. */
+@Composable
+private fun TypingAppBarActions(
+    mathModeSupported: Boolean,
+    mathMode: Boolean,
+    onMathModeChange: (Boolean) -> Unit,
+    onOpenScreens: () -> Unit,
+    screensEnabled: Boolean,
+    showFullscreen: Boolean,
+    onToggleFullscreen: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    if (mathModeSupported) {
+        IconToggleButton(
+            checked = mathMode,
+            onCheckedChange = onMathModeChange,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Calculate,
+                contentDescription = stringResource(R.string.speech_math_mode_description),
+                tint = if (mathMode) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+    IconButton(
+        onClick = onOpenScreens,
+        enabled = screensEnabled
+    ) {
+        Icon(
+            imageVector = Icons.Filled.GridView,
+            contentDescription = stringResource(R.string.mode_switch_to_screens)
+        )
+    }
+
+    IconButton(onClick = onToggleFullscreen) {
+        Icon(
+            imageVector = if (showFullscreen) {
+                Icons.Filled.FullscreenExit
+            } else {
+                Icons.Filled.Fullscreen
+            },
+            contentDescription = stringResource(R.string.phrase_screen_toggle_fullscreen_cd)
+        )
+    }
+
+    IconButton(onClick = onOpenSettings) {
+        Icon(
+            imageVector = Icons.Filled.Settings,
+            contentDescription = stringResource(R.string.phrase_screen_app_settings)
+        )
     }
 }

@@ -26,11 +26,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -132,6 +136,13 @@ internal fun TypingScreenTray(
     feedback: BoardFeedback = remember { BoardFeedback() },
     focusedCell: Pair<Int, Int>? = null,
     onFocusCell: (Pair<Int, Int>?) -> Unit = {},
+    /**
+     * A fixed Phrase row height, pinned to the top, instead of fitting rows to the tray. The wide
+     * layout uses it so rows keep their size and place when the keyboard shortens the view.
+     */
+    phraseRowHeight: Dp? = null,
+    /** False when the Action strip is shown elsewhere (the wide layout's side panel). */
+    showActionStrip: Boolean = true,
 ) {
     val page = remember(selection) {
         when (selection) {
@@ -221,7 +232,7 @@ internal fun TypingScreenTray(
     }
 
     TypingPageElementLayout(
-        elements = elements.filter { it.isSupported },
+        elements = elements.filter { it.isSupported && (showActionStrip || it.content !is PageElementContent.ActionStrip) },
         columns = template.grid?.columns ?: phraseColumns,
         modifier = modifier,
     ) { element ->
@@ -249,7 +260,8 @@ internal fun TypingScreenTray(
                     showClearControl = false,
                     // Fit whole rows to the keyboard-height tray without shrinking
                     // below the Communicator's preferred minimum button size.
-                    scrollingMinimumCellHeight = 72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f),
+                    scrollingMinimumCellHeight = phraseRowHeight ?: (72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)),
+                    scrollingMaximumCellHeight = phraseRowHeight,
                     settings = settings,
                     focusedCell = focusedCell,
                     highlightedButtonId = selectionHighlight.buttonId,
@@ -372,15 +384,7 @@ internal fun TypingActionRow(
     settings: Settings,
     feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
-    val buttons = remember(template) {
-        template.pageElements()
-            .sortedWith(compareBy({ it.row }, { it.column }))
-            .map(PageElement::content)
-            .filterIsInstance<PageElementContent.ActionStrip>()
-            .flatMap { it.configuration.buttonIds }
-            .distinct()
-            .mapNotNull { id -> template.buttons.firstOrNull { it.id == id } }
-    }
+    val buttons = remember(template) { template.typingActionButtons() }
     TypingActionStrip(
                             settings = settings, feedback = feedback,
         buttons = buttons,
@@ -389,6 +393,61 @@ internal fun TypingActionRow(
         modifier = modifier.height(56.dp),
         leading = leading,
     )
+}
+
+/** The Typing Screen's Action-strip Buttons, in template order. */
+private fun ObfBoard.typingActionButtons(): List<ObfButton> =
+    pageElements()
+        .sortedWith(compareBy({ it.row }, { it.column }))
+        .map(PageElement::content)
+        .filterIsInstance<PageElementContent.ActionStrip>()
+        .flatMap { it.configuration.buttonIds }
+        .distinct()
+        .mapNotNull { id -> buttons.firstOrNull { it.id == id } }
+
+/**
+ * The Action strip as a two-column grid that scrolls vertically, for the wide layout's side
+ * panel. Same Buttons, order and behaviour as the strip; each cell keeps its place.
+ */
+@Composable
+internal fun TypingActionGrid(
+    template: ObfBoard,
+    onAction: (ObfButtonActionEffect) -> Unit,
+    isActionEnabled: (ObfButtonActionEffect) -> Boolean,
+    settings: Settings,
+    modifier: Modifier = Modifier,
+    feedback: BoardFeedback = remember { BoardFeedback() },
+) {
+    val buttons = remember(template) { template.typingActionButtons() }
+    val unsupportedDescription = stringResource(R.string.typing_screen_unsupported_action)
+    val unavailableDescription = stringResource(R.string.typing_screen_unavailable_action)
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        gridItems(buttons, key = ObfButton::id) { button ->
+            val effects = remember(button) { parseObfButtonActions(button) }
+            val enabled = effects.isNotEmpty() &&
+                effects.none { it is ObfButtonActionEffect.Unsupported } &&
+                effects.all(isActionEnabled)
+            val disabledDescription = when {
+                effects.any { it is ObfButtonActionEffect.Unsupported } -> unsupportedDescription
+                !enabled -> unavailableDescription
+                else -> null
+            }
+            TypingActionButton(
+                settings = settings, feedback = feedback,
+                button = button,
+                effects = effects,
+                enabled = enabled,
+                disabledDescription = disabledDescription,
+                onClick = { effects.forEach(onAction) },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -446,6 +505,7 @@ private fun TypingActionButton(
     onClick: () -> Unit,
     settings: Settings,
     feedback: BoardFeedback = remember { BoardFeedback() },
+    modifier: Modifier = Modifier,
 ) {
     val single = effects.singleOrNull()
     val isSsml = effects.isNotEmpty() && effects.all {
@@ -468,7 +528,7 @@ private fun TypingActionButton(
         else -> null
     }
     val shape = RoundedCornerShape(if (isSsml) 12.dp else 16.dp)
-    val modifier = Modifier
+    val buttonModifier = modifier
         .fillMaxHeight()
         .typingAccessTarget("board:${button.id}", enabled, shape, onClick)
         .selectOnTouchDown(enabled && settings.selectOnTouchDown, onClick)
@@ -481,7 +541,7 @@ private fun TypingActionButton(
             enabled = enabled,
             shape = shape,
             contentPadding = PaddingValues(horizontal = 14.dp),
-            modifier = modifier,
+            modifier = buttonModifier,
         ) {
             Text(label, fontFamily = FontFamily.Monospace, maxLines = 1)
         }
@@ -500,7 +560,7 @@ private fun TypingActionButton(
             } else {
                 ButtonDefaults.filledTonalButtonColors()
             },
-            modifier = modifier,
+            modifier = buttonModifier,
         ) {
             if (icon != null) {
                 Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))

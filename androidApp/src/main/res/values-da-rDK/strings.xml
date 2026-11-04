@@ -713,4 +713,5 @@
     <string name="setup_section_privacy">Privatliv</string>
     <string name="setup_section_review">Gennemse</string>
     <string name="setup_progress_description">Trin %1$d af %2$d: %3$s</string>
+    <string name="typing_hide_keyboard">Skjul tastatur</string>
 </resources>
