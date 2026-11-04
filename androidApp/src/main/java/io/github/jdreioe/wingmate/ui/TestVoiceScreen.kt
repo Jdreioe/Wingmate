@@ -300,7 +300,10 @@ fun TestVoiceScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     // A cloud voice usually fails because of the connection or the saved key.
-                    stringResource(if (engine == TtsEngine.SYSTEM) R.string.test_voice_failed else R.string.test_voice_failed_cloud),
+                    stringResource(
+                        if (engine == TtsEngine.SYSTEM || engine == TtsEngine.PIPER) R.string.test_voice_failed
+                        else R.string.test_voice_failed_cloud
+                    ),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },

@@ -70,3 +70,7 @@
 # missing classes are unreachable and safe to ignore for R8.
 -dontwarn com.github.luben.zstd.**
 -dontwarn org.tukaani.xz.**
+
+# ── sherpa-onnx (Piper voices) ───────────────────────────────
+# The JNI layer reads config fields and constructs result classes by name.
+-keep class com.k2fsa.sherpa.onnx.** { *; }

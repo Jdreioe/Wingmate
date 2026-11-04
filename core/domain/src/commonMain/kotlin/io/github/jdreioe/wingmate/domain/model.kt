@@ -95,6 +95,8 @@ enum class TtsEngine {
     AZURE_MANAGED,
     GOOGLE_CLOUD,
     ELEVENLABS,
+    /** Downloaded Piper voices synthesized on the device; see [PiperVoicePack]. */
+    PIPER,
 }
 
 @Serializable

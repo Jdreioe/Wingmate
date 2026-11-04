@@ -30,7 +30,7 @@
     <string name="common_retry">Prøv igen</string>
     <string name="communication_storage_failed">Din besked kunne ikke indlæses eller gemmes. Hold Wingmate åben, og prøv igen.</string>
     <string name="communication_playback_failed">Oplæsningen kunne ikke gennemføres. Din besked er stadig tilgængelig. Prøv at læse den op igen.</string>
-    <string name="communication_speech_fallback">Stemmen i skyen var ikke tilgængelig, så enhedens stemme læste op i stedet.</string>
+    <string name="communication_speech_fallback">Den valgte stemme var ikke tilgængelig, så enhedens stemme læste op i stedet.</string>
     <string name="startup_load_failed">Wingmate kunne ikke indlæse dine indstillinger. Din eksisterende konfiguration er ikke blevet ændret.</string>
     <string name="voice_load_failed">Stemmerne kunne ikke indlæses. Kontrollér din forbindelse eller enhedens stemmeindstillinger, og prøv igen.</string>
     <string name="voice_save_failed">Stemmen kunne ikke gemmes. Din nuværende kommunikationsopsætning blev bevaret; tryk på stemmen for at prøve igen.</string>
@@ -632,6 +632,7 @@
     <string name="welcome_privacy_online">Sendes online</string>
     <string name="welcome_privacy_speech_title">Tale</string>
     <string name="welcome_privacy_speech_system">Enhedens talemotor læser dine ord højt. Nogle talemotorer bruger internettet.</string>
+    <string name="welcome_privacy_speech_piper">En offline Piper-stemme læser dine ord højt på denne enhed. De sendes ikke online.</string>
     <string name="welcome_privacy_speech_cloud">Dine ord sendes til %1$s for at blive talt.</string>
     <string name="welcome_privacy_history_desc">Viser det, du siger, så du kan sige det igen. Skjules den, holdes nye beskeder ude af listen og ordforslag, men de gemmes stadig på denne enhed.</string>
     <string name="welcome_review_title">Klar til at kommunikere</string>
@@ -662,6 +663,8 @@
     <string name="welcome_engine_title">Hvad skal tale for dig?</string>
     <string name="welcome_engine_device">Denne enhed</string>
     <string name="welcome_engine_device_desc">Gratis, ingen opsætning.</string>
+    <string name="welcome_engine_piper">Offline stemme</string>
+    <string name="welcome_engine_piper_desc">Naturlige stemmer. Gratis. Hent én stemme, så virker den uden internet.</string>
     <string name="welcome_engine_azure">Microsoft Azure</string>
     <string name="welcome_engine_azure_desc">Naturlige stemmer. Kræver en Azure-konto. Sender dine ord online.</string>
     <string name="welcome_engine_google">Google Cloud</string>
@@ -708,4 +711,34 @@
     <string name="welcome_review_speed">Hastighed %1$.1f×</string>
     <string name="ui_settings_azure_setup">Opsæt Azure</string>
     <string name="ui_settings_google_setup">Opsæt Google Cloud TTS</string>
+
+    <!-- Piper offline voices -->
+    <string name="piper_title">Piper (offline)</string>
+    <string name="piper_description">Naturlige stemmer, der virker uden internet, når de er hentet.</string>
+    <string name="piper_on_device">På denne enhed</string>
+    <string name="piper_available">Kan hentes</string>
+    <string name="piper_none_for_language">Ingen offline stemmer til dette sprog.</string>
+    <string name="piper_details">%1$s · %2$s</string>
+    <string name="piper_first_download_note">Din første stemme henter også %1$s fælles taledata.</string>
+    <string name="piper_attribution">Stemmer fra Piper-projektet, afspillet med sherpa-onnx.</string>
+    <string name="piper_play_sample">Afspil %1$s</string>
+    <string name="piper_stop_sample">Stop %1$s</string>
+    <string name="piper_sample_failed">Stemmen kunne ikke afspilles. Tjek forbindelsen, og prøv igen.</string>
+    <string name="piper_download">Hent</string>
+    <string name="piper_download_voice">Hent %1$s</string>
+    <string name="piper_resume">Fortsæt</string>
+    <string name="piper_try_again">Prøv igen</string>
+    <string name="piper_use">Brug</string>
+    <string name="piper_use_voice">Brug %1$s</string>
+    <string name="piper_loading">Indlæser…</string>
+    <string name="piper_progress">%1$s af %2$s</string>
+    <string name="piper_delete_voice">Slet %1$s</string>
+    <string name="piper_cancel_voice">Annuller hentning af %1$s</string>
+    <string name="piper_delete_title">Slet %1$s?</string>
+    <string name="piper_delete_message">Det frigør %1$s. Du kan hente den igen senere.</string>
+    <string name="piper_interrupted">Hentningen stoppede. Tryk Fortsæt for at fortsætte.</string>
+    <string name="piper_failed_network">Hentningen stoppede. Tjek forbindelsen, og tryk Fortsæt.</string>
+    <string name="piper_failed_damaged">Hentningen var beskadiget og blev fjernet. Tryk Prøv igen.</string>
+    <string name="piper_failed_storage">Ikke nok lagerplads. Frigør plads, og tryk Fortsæt.</string>
+    <string name="piper_unusable">Stemmen kunne ikke indlæses. Slet den, og hent den igen.</string>
 </resources>

@@ -1153,6 +1153,7 @@ private fun SpeechSection(
             subtitle = stringResource(
                 when (ttsEngine) {
                     TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                    TtsEngine.PIPER -> R.string.piper_title
                     TtsEngine.ELEVENLABS -> R.string.elevenlabs_title
                     TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
                     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
@@ -1174,6 +1175,11 @@ private fun SpeechSection(
                     selected = ttsEngine == TtsEngine.GOOGLE_CLOUD,
                     onClick = { onTtsEngineChange(TtsEngine.GOOGLE_CLOUD) },
                     label = { Text(stringResource(R.string.ui_settings_google)) },
+                )
+                FilterChip(
+                    selected = ttsEngine == TtsEngine.PIPER,
+                    onClick = { onTtsEngineChange(TtsEngine.PIPER) },
+                    label = { Text(stringResource(R.string.piper_title)) },
                 )
                 FilterChip(
                     selected = ttsEngine == TtsEngine.SYSTEM,
@@ -1962,7 +1968,11 @@ internal fun VoiceSelectionPage(
             }
         }
     }
-    VoiceSelectionContent(state = state, onAction = viewModel::onAction, modifier = modifier)
+    if ((state as? VoiceSelectionUiState.Ready)?.engine == TtsEngine.PIPER) {
+        PiperVoicesPage(onVoiceChosen = { currentOnChosen() }, modifier = modifier)
+    } else {
+        VoiceSelectionContent(state = state, onAction = viewModel::onAction, modifier = modifier)
+    }
 }
 
 @Composable

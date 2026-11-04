@@ -118,6 +118,9 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // sherpa-onnx's JNI library only needs ONNX Runtime; its C and C++ API
+        // libraries are for other bindings and would add ~4.5 MB per ABI.
+        jniLibs.excludes += listOf("**/libsherpa-onnx-c-api.so", "**/libsherpa-onnx-cxx-api.so")
     }
 
     compileOptions {

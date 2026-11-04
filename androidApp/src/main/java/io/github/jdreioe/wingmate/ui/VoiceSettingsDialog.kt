@@ -69,6 +69,7 @@ fun VoiceSettingsDialog(
                                 stringResource(
                                     when (ttsEngine) {
                                         TtsEngine.SYSTEM -> R.string.ui_settings_system_tts
+                                        TtsEngine.PIPER -> R.string.piper_title
                                         TtsEngine.ELEVENLABS -> R.string.elevenlabs_title
                                         TtsEngine.GOOGLE_CLOUD -> R.string.ui_settings_google_tts
                                         TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.ui_settings_azure_tts
@@ -82,6 +83,7 @@ fun VoiceSettingsDialog(
                             stringResource(
                                 when (ttsEngine) {
                                     TtsEngine.SYSTEM -> R.string.voice_settings_system_description
+                                    TtsEngine.PIPER -> R.string.piper_description
                                     TtsEngine.ELEVENLABS -> R.string.elevenlabs_description
                                     TtsEngine.GOOGLE_CLOUD -> R.string.voice_settings_google_description
                                     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> R.string.voice_settings_azure_description

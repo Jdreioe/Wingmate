@@ -21,6 +21,11 @@ import io.github.jdreioe.wingmate.infrastructure.AndroidBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidAptabaseFeatureUsageReporter
 import io.github.jdreioe.wingmate.infrastructure.AndroidSoundPlayer
 import io.github.jdreioe.wingmate.infrastructure.AndroidSpeechService
+import io.github.jdreioe.wingmate.infrastructure.AndroidPiperSynthesizer
+import io.github.jdreioe.wingmate.infrastructure.PiperVoiceInstaller
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import okio.Path.Companion.toPath
 import io.github.jdreioe.wingmate.infrastructure.AndroidGoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.GoogleApiRequestHeaders
 import io.github.jdreioe.wingmate.infrastructure.AndroidImageCacher
@@ -58,6 +63,15 @@ fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
             single<Context> { context }
             single<GoogleApiRequestHeaders> { AndroidGoogleApiRequestHeaders(context) }
             singleOf(::AndroidSpeechService) { bind<SpeechService>() }
+            // Downloaded Piper voices live in app-private storage, so uninstalling removes them.
+            single {
+                PiperVoiceInstaller(
+                    root = context.filesDir.absolutePath.toPath() / "piper",
+                    fileSystem = get(),
+                    httpClient = HttpClient(OkHttp),
+                )
+            }
+            singleOf(::AndroidPiperSynthesizer)
             singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
             singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }
             // Prefer SQLite-backed repositories on Android for parity with desktop
