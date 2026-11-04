@@ -1207,6 +1207,19 @@ private fun BoardSetWorkspaceRoot(
                     }
                 },
                 actions = {
+                    if (useOverflowMenu && mode == BoardWorkspaceMode.Edit) {
+                        // Undo is the safety net and Finish the way out, so a phone keeps both
+                        // visible; the rest of the editing tools are in the menu.
+                        IconButton(
+                            onClick = { workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit) },
+                            enabled = editSession?.undoStack?.isNotEmpty() == true
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = stringResource(R.string.board_workspace_undo))
+                        }
+                        TextButton(onClick = ::requestFinishEditing) {
+                            Text(stringResource(R.string.board_workspace_finish))
+                        }
+                    }
                     if (useOverflowMenu) {
                         Box {
                             IconButton(onClick = { appBarMenuExpanded = true }) {
@@ -1226,22 +1239,6 @@ private fun BoardSetWorkspaceRoot(
                                         onClick = {
                                             appBarMenuExpanded = false
                                             showAddBoardDialog = true
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.board_workspace_undo)) },
-                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) },
-                                        enabled = editSession?.undoStack?.isNotEmpty() == true,
-                                        onClick = {
-                                            appBarMenuExpanded = false
-                                            workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.board_workspace_finish)) },
-                                        onClick = {
-                                            appBarMenuExpanded = false
-                                            requestFinishEditing()
                                         }
                                     )
                                     DropdownMenuItem(
