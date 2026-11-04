@@ -27,6 +27,7 @@ import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
 import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,23 +75,29 @@ fun F0SetupScreen(
     }
 
     fun saveCredentials() {
+        // Checked in the order the fields appear: KEY 1, then the region.
         when {
+            subscriptionKey.isBlank() -> saveError = "key"
             endpoint.isBlank() -> saveError = "endpoint"
             AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Invalid ->
                 saveError = "endpoint"
-            subscriptionKey.isBlank() -> saveError = "key"
             else -> scope.launch {
                 featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_CREDENTIALS_SUBMITTED)
                 saving = true
                 saveError = null
-                val failure = runCatching {
+                val failure = try {
                     withContext(Dispatchers.Default) {
                         // Credentials only: callers switch the engine (setup with the voice, Settings on done).
                         configRepository.saveSpeechConfig(
                             SpeechServiceConfig(endpoint.trim(), subscriptionKey.trim())
                         )
                     }
-                }.exceptionOrNull()
+                    null
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    failure
+                }
                 saving = false
                 if (failure == null) {
                     featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_SETUP_COMPLETED)
@@ -98,7 +105,8 @@ fun F0SetupScreen(
                     onDone()
                 } else {
                     featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_SETUP_FAILED, "reason" to "save_failed")
-                    saveError = failure.message ?: "unknown"
+                    // Never shown raw: exception text is not written for the person setting up.
+                    saveError = "save"
                 }
             }
         }
@@ -141,7 +149,7 @@ fun F0SetupScreen(
                         when (error) {
                             "endpoint" -> stringResource(R.string.azure_setup_error_endpoint)
                             "key" -> stringResource(R.string.azure_setup_error_key)
-                            else -> stringResource(R.string.azure_setup_error_save, error)
+                            else -> stringResource(R.string.azure_setup_error_save)
                         }
                     },
                     onEndpointChange = { endpoint = it },

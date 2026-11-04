@@ -135,18 +135,26 @@ fun WelcomeScreen(
     /** True while checking for a saved key, so a repeated activation cannot start a second check. */
     var checkingEngine by remember { mutableStateOf(false) }
     val step = nav.step
-    // The saved voice belongs to the engine being set up, so it can be kept as it is.
-    val canKeepVoice by produceState(false, step, chosenEngine) {
-        value = step == WelcomeStep.Voice && try {
+    // The saved engine and voice, read while the Voice page is not shown so what it offers to
+    // keep never appears or moves under someone using dwell or a switch.
+    var savedVoice by remember { mutableStateOf<SavedVoice?>(null) }
+    LaunchedEffect(step == WelcomeStep.Voice) {
+        if (step == WelcomeStep.Voice) return@LaunchedEffect
+        savedVoice = try {
             withContext(Dispatchers.Default) {
-                settingsUseCase?.get()?.ttsEngine == chosenEngine && voiceUseCase?.selected() != null
+                val engine = settingsUseCase?.get()?.ttsEngine
+                val voice = voiceUseCase?.selected()
+                if (engine != null && voice != null) SavedVoice(engine, voice.displayName ?: voice.name.orEmpty()) else null
             }
         } catch (failure: CancellationException) {
             throw failure
         } catch (failure: Exception) {
-            false
+            OperationalLogger.warn("welcome.voice", "saved_voice_load_failed", exceptionClass = failure.loggingClassName())
+            null
         }
     }
+    /** The saved voice, when it belongs to the engine being set up and so can be kept as it is. */
+    val keepableVoice = savedVoice?.takeIf { it.engine == chosenEngine }?.name
 
     fun startSetup() {
         scope.launch {
@@ -267,6 +275,9 @@ fun WelcomeScreen(
     }
     LaunchedEffect(step) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.analyticsName)
+        // Back on Review, an engine picked but not saved with a voice is forgotten, so the
+        // engine page shows what is actually in use next time.
+        if (step == WelcomeStep.Review) chosenEngine = null
     }
     BackHandler(enabled = nav.canGoBack || onExit != null) {
         if (nav.canGoBack) nav = nav.back(nav.step) else leave()
@@ -289,7 +300,7 @@ fun WelcomeScreen(
                 startFailed = startFailed,
                 engineCheckFailed = engineCheckFailed,
                 checkingEngine = checkingEngine,
-                canKeepVoice = canKeepVoice,
+                keepableVoice = keepableVoice,
                 restoredFromBackup = restoredFromBackup,
                 chosenEngine = chosenEngine,
                 onExit = onExit?.let { ::leave },
@@ -325,7 +336,7 @@ private fun WelcomeStepContent(
     startFailed: Boolean,
     engineCheckFailed: Boolean,
     checkingEngine: Boolean,
-    canKeepVoice: Boolean,
+    keepableVoice: String?,
     restoredFromBackup: Boolean,
     chosenEngine: TtsEngine?,
     onExit: (() -> Unit)?,
@@ -376,7 +387,8 @@ private fun WelcomeStepContent(
                 ?.let { stringResource(R.string.welcome_reenter_key) },
             onSecondary = { chosenEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
             // Keeping the voice already in use must not mean finding it again in a long list.
-            primaryLabel = if (canKeepVoice) stringResource(R.string.welcome_keep_voice) else null,
+            subtitle = keepableVoice?.let { stringResource(R.string.welcome_current_voice, it) },
+            primaryLabel = if (keepableVoice != null) stringResource(R.string.welcome_keep_voice) else null,
             onPrimary = { onAdvance(WelcomeStep.Voice, WelcomeStep.TestVoice) },
         ) {
             VoiceSelectionPage(
@@ -439,6 +451,7 @@ private fun WelcomeStepContent(
 private fun PageWithBack(
     title: String,
     onBack: () -> Unit,
+    subtitle: String? = null,
     secondaryLabel: String? = null,
     onSecondary: () -> Unit = {},
     primaryLabel: String? = null,
@@ -451,6 +464,14 @@ private fun PageWithBack(
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp).semantics { heading() },
         )
+        subtitle?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp),
+            )
+        }
         Box(Modifier.weight(1f)) { content() }
         secondaryLabel?.let {
             SetupActionButton(label = it, onClick = onSecondary, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp))
@@ -668,6 +689,11 @@ private fun StartPage(
         )
     }
 }
+
+/** What Review shows about the voice. */
+private data class ReviewVoice(val name: String, val speech: String, val languages: String, val multilingual: Boolean)
+
+private data class SavedVoice(val engine: TtsEngine, val name: String)
 
 private data class EngineOption(val engine: TtsEngine, val title: Int, val description: Int)
 
@@ -918,8 +944,9 @@ private fun TtsEngine.cloudProviderName(): String? = when (this) {
     TtsEngine.ELEVENLABS -> "ElevenLabs"
 }
 
+/** One answer on Review. [detail] is a quieter second line; no [onChange] means nothing to choose. */
 @Composable
-private fun ReviewRow(label: String, value: String, enabled: Boolean, onChange: () -> Unit) {
+private fun ReviewRow(label: String, value: String, enabled: Boolean, onChange: (() -> Unit)?, detail: String? = null) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -927,14 +954,19 @@ private fun ReviewRow(label: String, value: String, enabled: Boolean, onChange: 
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.titleMedium)
+            detail?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        val changeLabel = stringResource(R.string.welcome_review_change_label, label)
-        FilledTonalButton(
-            onClick = onChange,
-            enabled = enabled,
-            modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = changeLabel },
-        ) {
-            Text(stringResource(R.string.welcome_review_change))
+        if (onChange != null) {
+            val changeLabel = stringResource(R.string.welcome_review_change_label, label)
+            FilledTonalButton(
+                onClick = onChange,
+                enabled = enabled,
+                modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = changeLabel },
+            ) {
+                Text(stringResource(R.string.welcome_review_change))
+            }
         }
     }
 }
@@ -957,10 +989,11 @@ private fun ReviewPage(
     val deviceEngine = stringResource(R.string.welcome_privacy_device_engine)
     val sentOnlineTemplate = stringResource(R.string.welcome_review_speech_online)
     // Null while loading, so nothing misleading is shown or announced before the values arrive.
-    val voiceAndLanguage by produceState<Pair<String, String>?>(null, voiceUseCase, settingsUseCase) {
+    val voiceAndLanguage by produceState<ReviewVoice?>(null, voiceUseCase, settingsUseCase) {
         value = try {
             withContext(Dispatchers.IO) {
-                val name = voiceUseCase?.selected()?.let { it.displayName ?: it.name } ?: unknown
+                val voice = voiceUseCase?.selected()
+                val name = voice?.let { it.displayName ?: it.name } ?: unknown
                 val settings = settingsUseCase?.get()
                 val speech = when (val engine = settings?.ttsEngine) {
                     null -> unknown
@@ -970,13 +1003,13 @@ private fun ReviewPage(
                     ?.filter { it.isNotBlank() }
                     ?.joinToString(" · ") { languageName(it) }
                     ?.ifBlank { null } ?: unknown
-                "$name\n$speech" to languages
+                ReviewVoice(name, speech, languages, multilingual = (voice?.supportedLanguages?.size ?: 0) > 1)
             }
         } catch (failure: CancellationException) {
             throw failure
         } catch (failure: Exception) {
             OperationalLogger.warn("welcome.review", "voice_load_failed", exceptionClass = failure.loggingClassName())
-            unknown to unknown
+            ReviewVoice(unknown, unknown, unknown, multilingual = false)
         }
     }
     val loading = stringResource(R.string.welcome_review_loading)
@@ -1032,9 +1065,21 @@ private fun ReviewPage(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        ReviewRow(stringResource(R.string.welcome_review_voice), voiceAndLanguage?.first ?: loading, !finishing, onChangeVoice)
+        ReviewRow(
+            stringResource(R.string.welcome_review_voice),
+            voiceAndLanguage?.name ?: loading,
+            !finishing,
+            onChangeVoice,
+            detail = voiceAndLanguage?.speech,
+        )
         HorizontalDivider()
-        ReviewRow(stringResource(R.string.welcome_review_language), voiceAndLanguage?.second ?: loading, !finishing, onChangeLanguage)
+        ReviewRow(
+            stringResource(R.string.welcome_review_language),
+            voiceAndLanguage?.languages ?: loading,
+            !finishing,
+            // A voice that speaks one language leaves nothing to choose.
+            onChangeLanguage.takeIf { voiceAndLanguage?.multilingual == true },
+        )
         HorizontalDivider()
         ReviewRow(
             stringResource(R.string.welcome_review_phrase),

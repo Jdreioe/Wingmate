@@ -283,7 +283,7 @@
     <string name="azure_credentials_replace">Replace Azure credentials</string>
     <string name="azure_setup_error_endpoint">Enter a valid Azure Speech region or official HTTPS endpoint.</string>
     <string name="azure_setup_error_key">Enter a Speech subscription key.</string>
-    <string name="azure_setup_error_save">Could not save the Azure credentials: %1$s</string>
+    <string name="azure_setup_error_save">The key could not be saved. Try again.</string>
     <string name="welcome_analytics_title">Help improve Wingmate</string>
     <string name="welcome_analytics_description">Anonymous feature use. Never your words or keys.</string>
     <string name="welcome_analytics_opt_in">Share anonymous analytics</string>
@@ -678,7 +678,7 @@
     <string name="welcome_engine_check_failed">Wingmate could not check for a saved key. Try again.</string>
     <string name="welcome_finish_setup">Finish setup</string>
     <string name="azure_guide_title">Get a free Azure voice</string>
-    <string name="azure_guide_computer">Easiest on a computer. Already have a key? Go to step 4.</string>
+    <string name="azure_guide_computer">Easiest on a computer. Already have a key? Press Enter key below.</string>
     <string name="azure_guide_account_title">Create an Azure account</string>
     <string name="azure_guide_account_body">Free. Microsoft asks for a card. Skip if you have a subscription.</string>
     <string name="azure_guide_account_action">Open Azure sign-up</string>
@@ -688,7 +688,7 @@
     <string name="azure_guide_key_title">Copy the key</string>
     <string name="azure_guide_key_body">Open wingmate-f0-…, then Keys and Endpoint. Copy KEY 1 and Location/Region.</string>
     <string name="azure_guide_key_action">Open my Speech resources</string>
-    <string name="azure_guide_paste_title">Paste it into Wingmate</string>
+    <string name="azure_guide_paste_title">Paste it with Enter key below</string>
     <string name="azure_guide_paste_action">Enter key</string>
     <string name="azure_guide_errors_title">If Azure shows an error</string>
     <string name="azure_guide_errors_body">• Already have a free Speech resource? Use its key (only one per subscription).\n• Region not allowed? Pick another region.\n• Not registered? Subscriptions → Resource providers → Microsoft.CognitiveServices → Register.</string>
@@ -706,4 +706,5 @@
     <string name="voice_preview_play">Play %1$s</string>
     <string name="voice_preview_stop">Stop %1$s</string>
     <string name="voice_preview_failed">This voice could not play.</string>
+    <string name="welcome_current_voice">Current voice: %1$s</string>
 </resources>

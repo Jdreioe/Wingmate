@@ -132,15 +132,13 @@ fun TestVoiceScreen(
             SetupActionButton(label = stringResource(R.string.common_retry), onClick = { loadAttempt++ })
         } else {
             // Voice info card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
+            // Information, not an action: a calm card, so Play and Continue lead.
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         selectedVoice?.displayName ?: selectedVoice?.name ?: stringResource(R.string.test_voice_unknown_voice),
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -148,7 +146,7 @@ fun TestVoiceScreen(
                             ?.let(::languageName)
                             ?: stringResource(R.string.test_voice_unknown_language),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

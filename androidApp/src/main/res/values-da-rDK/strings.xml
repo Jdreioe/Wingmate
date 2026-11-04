@@ -275,7 +275,7 @@
     <string name="azure_credentials_replace">Erstat Azure-oplysninger</string>
     <string name="azure_setup_error_endpoint">Indtast en gyldig Azure Speech-region eller et officielt HTTPS-endpoint.</string>
     <string name="azure_setup_error_key">Indtast en Speech-abonnementsnøgle.</string>
-    <string name="azure_setup_error_save">Azure-oplysningerne kunne ikke gemmes: %1$s</string>
+    <string name="azure_setup_error_save">Nøglen kunne ikke gemmes. Prøv igen.</string>
     <string name="welcome_analytics_title">Hjælp med at forbedre Wingmate</string>
     <string name="welcome_analytics_description">Anonym brug af funktioner. Aldrig dine ord eller nøgler.</string>
     <string name="welcome_analytics_opt_in">Del anonym analysedata</string>
@@ -678,7 +678,7 @@
     <string name="welcome_engine_check_failed">Wingmate kunne ikke tjekke for en gemt nøgle. Prøv igen.</string>
     <string name="welcome_finish_setup">Gør opsætningen færdig</string>
     <string name="azure_guide_title">Få en gratis Azure-stemme</string>
-    <string name="azure_guide_computer">Nemmest på en computer. Har du allerede en nøgle? Gå til trin 4.</string>
+    <string name="azure_guide_computer">Nemmest på en computer. Har du allerede en nøgle? Tryk på Indtast nøgle nedenfor.</string>
     <string name="azure_guide_account_title">Opret en Azure-konto</string>
     <string name="azure_guide_account_body">Gratis. Microsoft beder om et kort. Spring over, hvis du har et abonnement.</string>
     <string name="azure_guide_account_action">Åbn Azure-tilmelding</string>
@@ -688,7 +688,7 @@
     <string name="azure_guide_key_title">Kopiér nøglen</string>
     <string name="azure_guide_key_body">Åbn wingmate-f0-…, derefter Nøgler og slutpunkt. Kopiér KEY 1 og Placering/Region.</string>
     <string name="azure_guide_key_action">Åbn mine Speech-ressourcer</string>
-    <string name="azure_guide_paste_title">Indsæt den i Wingmate</string>
+    <string name="azure_guide_paste_title">Indsæt den med Indtast nøgle nedenfor</string>
     <string name="azure_guide_paste_action">Indtast nøgle</string>
     <string name="azure_guide_errors_title">Hvis Azure viser en fejl</string>
     <string name="azure_guide_errors_body">• Har du allerede en gratis Speech-ressource? Brug dens nøgle (kun én pr. abonnement).\n• Region ikke tilladt? Vælg en anden region.\n• Ikke registreret? Abonnementer → Ressourceudbydere → Microsoft.CognitiveServices → Registrer.</string>
@@ -706,4 +706,5 @@
     <string name="voice_preview_play">Afspil %1$s</string>
     <string name="voice_preview_stop">Stop %1$s</string>
     <string name="voice_preview_failed">Stemmen kunne ikke afspilles.</string>
+    <string name="welcome_current_voice">Nuværende stemme: %1$s</string>
 </resources>
