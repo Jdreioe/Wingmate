@@ -80,6 +80,21 @@ class WideTypingPanelPagingTest {
     }
 
     @Test
+    fun aLongerHeldMessageReplacingAShortOneKeepsTheTopEdgeOnAWholeRow() {
+        held = "Yes"
+        showPanel()
+        composeRule.onNodeWithText("More actions").performClick()
+        composeRule.waitForIdle()
+        val edge = firstVisibleRowTop()
+
+        // Swapping in a Message that wraps to two lines grows the held card above the rows.
+        composeRule.runOnIdle { held = "Could you open the window, please? And close the door behind you." }
+        composeRule.waitForIdle()
+
+        assertEquals(edge.value, firstVisibleRowTop().value, 1f)
+    }
+
+    @Test
     fun earlierUndoesMoreOnePressAtATimeAndEndsAtTheFirstRow() {
         showPanel()
 

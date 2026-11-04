@@ -254,7 +254,9 @@ private fun WideTypingPanel(
             // The app actions row (short panels) and the held card come and go above the rest,
             // which would leave the top edge between items. Once the new layout is placed, move
             // back onto the whole item at or above the current top, keeping the user's place.
-            LaunchedEffect(roomy, heldMessage != null) {
+            // Keyed on the held text (a longer one wraps and moves the rows too) and on the viewport
+            // (a taller one clamps the end of the scroll mid-item, e.g. when the keyboard hides).
+            LaunchedEffect(roomy, heldMessage, scroll.viewportSize) {
                 withFrameNanos { }
                 val top = scroll.value.toFloat()
                 val tops = items.tops()
