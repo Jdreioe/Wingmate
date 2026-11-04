@@ -31,6 +31,7 @@ import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.ui.semantics.stateDescription
@@ -118,22 +119,28 @@ fun TestVoiceScreen(
         }
     }
 
-    /** Stops a preview before leaving, so it does not keep playing over the previous page. */
-    fun stopThenBack() {
-        scope.launch {
+    /**
+     * Leaves the page once the speed is saved, stopping a preview so it does not play on over
+     * the next page. One leave at a time: Back, Continue and Change language are ignored while
+     * a save is pending (started undispatched, so a second tap in the same frame sees it).
+     */
+    fun leaveAfterSave(go: () -> Unit) {
+        if (speedSaver.flushing) return
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             if (!speedSaver.flush()) return@launch
             try {
                 speechService.stop()
             } catch (e: CancellationException) {
+                // The page has left; a cancelled tap must not move setup on again.
                 throw e
             } catch (e: Exception) {
                 OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
             }
-            onBack()
+            go()
         }
     }
     // Takes precedence over setup's own Back handling while this page is shown.
-    BackHandler(onBack = ::stopThenBack)
+    BackHandler { leaveAfterSave(onBack) }
 
     // Load selected voice
     LaunchedEffect(voiceUseCase, loadAttempt) {
@@ -215,7 +222,7 @@ fun TestVoiceScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 SetupActionButton(
                     label = stringResource(R.string.welcome_change_language),
-                    onClick = { scope.launch { if (speedSaver.flush()) onChangeLanguage() } },
+                    onClick = { leaveAfterSave(onChangeLanguage) },
                 )
             }
 
@@ -370,26 +377,13 @@ fun TestVoiceScreen(
         }
         }
         SetupBottomBar(
-            onBack = ::stopThenBack,
+            onBack = { leaveAfterSave(onBack) },
+            backEnabled = !speedSaver.flushing,
             primaryLabel = stringResource(R.string.common_continue),
             primaryEnabled = !loading && !loadFailed,
             // Waiting on a speed save before moving on: show it, so the tap is not silent.
             primaryBusy = speedSaver.flushing,
-            onPrimary = {
-                // Stop any ongoing speech before proceeding
-                scope.launch {
-                    try {
-                        speechService.stop()
-                    } catch (e: CancellationException) {
-                        // The page has left; a cancelled tap must not move setup on again.
-                        throw e
-                    } catch (e: Exception) {
-                        OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
-                    }
-                    if (!speedSaver.flush()) return@launch
-                    onNext()
-                }
-            },
+            onPrimary = { leaveAfterSave(onNext) },
         )
         }
     }
