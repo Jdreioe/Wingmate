@@ -729,4 +729,7 @@
     <string name="board_import_error_too_large">Filen er for stor til at blive importeret.</string>
     <string name="board_import_error_media">Nogle billeder eller lyde i filen kunne ikke findes, så den blev ikke importeret.</string>
     <string name="board_import_error_not_saved">Skærmen kunne ikke gemmes på denne enhed. Prøv igen.</string>
+    <string name="board_cell_menu_edit">Rediger</string>
+    <string name="board_cell_menu_resize">Tilpas størrelse</string>
+    <string name="board_cell_menu_remove">Fjern</string>
 </resources>

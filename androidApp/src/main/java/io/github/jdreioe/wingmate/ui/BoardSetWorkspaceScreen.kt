@@ -1725,6 +1725,27 @@ private fun BoardSetWorkspaceRoot(
                                 }
                             }
                         } else null,
+                        // Launcher-style: hold a Button for Edit, Resize or Remove.
+                        cellMenu = if (mode == BoardWorkspaceMode.Edit) {
+                            BoardCellMenu(
+                                onEdit = { row, column, button ->
+                                    selectedField = activeBoard.grid?.fieldAnchorAt(row, column)
+                                    editingCell = WorkspaceCellTarget(row, column, button)
+                                },
+                                // Selecting the Button shows its resize handles.
+                                onResize = { row, column -> selectedField = activeBoard.grid?.fieldAnchorAt(row, column) },
+                                // One edit, so Undo brings it back.
+                                onRemove = { row, column ->
+                                    val session = editSession
+                                    if (session != null) {
+                                        selectedField = null
+                                        workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
+                                            clearDraftCell(session.draft, activeBoard.id, row, column)
+                                        ))
+                                    }
+                                },
+                            )
+                        } else null,
                         selectedFieldAnchor = selectedField,
                         selectedFieldSpans = remember(activeBoard.grid, selectedField) {
                             selectedField?.let { (row, column) ->

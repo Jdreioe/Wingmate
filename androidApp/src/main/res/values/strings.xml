@@ -729,4 +729,7 @@
     <string name="board_import_error_too_large">This file is too large to import.</string>
     <string name="board_import_error_media">Some pictures or sounds in this file could not be found, so it was not imported.</string>
     <string name="board_import_error_not_saved">The Screen could not be saved on this device. Try again.</string>
+    <string name="board_cell_menu_edit">Edit</string>
+    <string name="board_cell_menu_resize">Resize</string>
+    <string name="board_cell_menu_remove">Remove</string>
 </resources>

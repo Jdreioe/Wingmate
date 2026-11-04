@@ -1,6 +1,10 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.FilterQuality
@@ -56,7 +60,6 @@ import kotlin.time.Clock
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.material.icons.filled.Mic
@@ -290,6 +293,8 @@ fun ObfBoardView(
     backgroundImage: ImageBitmap? = null,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
+    /** Editing: what a long press or right click on a Button offers. */
+    cellMenu: BoardCellMenu? = null,
     selectedFieldAnchor: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
@@ -337,6 +342,7 @@ fun ObfBoardView(
         onSentenceChanged = onSentenceChanged,
         onCellClick = onCellClick,
         onCellMove = onCellMove,
+        cellMenu = cellMenu,
         onResizeField = onResizeField,
         onGridHeightFractionChange = onGridHeightFractionChange,
         modifier = modifier,
@@ -362,6 +368,7 @@ internal fun ObfBoardContent(
     onGridHeightFractionChange: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
     reorder: BoardReorder? = null,
+    cellMenu: BoardCellMenu? = null,
     feedback: BoardFeedback = remember { BoardFeedback() },
     onFocusCell: (Pair<Int, Int>?) -> Unit = {},
 ) {
@@ -611,6 +618,7 @@ internal fun ObfBoardContent(
                                 items = gridItems,
                                 modifier = gridNavModifier,
                                 onMove = onCellMove,
+                                cellMenu = cellMenu,
                                 reorder = reorder,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
@@ -802,13 +810,18 @@ internal fun SpanningBoardGrid(
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
     focusedCell: Pair<Int, Int>? = null,
     reorder: BoardReorder? = null,
+    cellMenu: BoardCellMenu? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
+    // The Button whose launcher-style menu (Edit, Resize, Remove) is open, by its anchor cell.
+    var cellMenuAnchor by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
     var dragSource by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
     var dragTarget by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
     var resizeCell by remember(items) { mutableStateOf<Pair<Int, Int>?>(null) }
     var gridSizePx by remember { mutableStateOf(IntSize.Zero) }
-    var handleOffsetInGrid by remember { mutableStateOf(Offset.Zero) }
+    // Where each resize handle sits in the grid, and which one is being dragged.
+    val handleOffsets = remember { mutableStateMapOf<ResizeEdge, Offset>() }
+    var resizeEdge by remember { mutableStateOf(ResizeEdge.Corner) }
     var resizeStatus by remember { mutableStateOf<String?>(null) }
     val density = LocalDensity.current
     val horizontalGap = with(density) { 4.dp.toPx() }
@@ -830,13 +843,10 @@ internal fun SpanningBoardGrid(
         }
     }
     val allowedSpans = remember(selectedFieldSpans) { selectedFieldSpans.toSet() }
-    val previewSpan = remember(resizeCell, selectedItem) {
+    val previewSpan = remember(resizeCell, selectedItem, resizeEdge) {
         val item = selectedItem ?: return@remember null
         val cell = resizeCell ?: return@remember null
-        GridFieldSpan(
-            rows = (cell.first - item.row + 1).coerceAtLeast(1),
-            columns = (cell.second - item.column + 1).coerceAtLeast(1)
-        )
+        resizeEdge.spanTo(item, cell)
     }
     val previewValid = previewSpan?.let { it in allowedSpans } ?: true
     val showPreview = resizeCell != null && selectedItem != null
@@ -891,14 +901,11 @@ internal fun SpanningBoardGrid(
     val currentSelectedItem by rememberUpdatedState(selectedItem)
     val currentAllowedSpans by rememberUpdatedState(allowedSpans)
     val currentOnResizeField by rememberUpdatedState(onResizeField)
-    val currentCellAt: (Offset) -> Pair<Int, Int>? by rememberUpdatedState { position ->
-        cellAt(position + handleOffsetInGrid)
+    val currentCellAt: (ResizeEdge, Offset) -> Pair<Int, Int>? by rememberUpdatedState { edge, position ->
+        cellAt(position + (handleOffsets[edge] ?: Offset.Zero))
     }
 
-    val handleModifier = Modifier
-        .size(48.dp)
-        .testTag("resize-handle")
-        .onGloballyPositioned { handleOffsetInGrid = it.positionInParent() }
+    fun Modifier.resizeHandleAccess(): Modifier = this
         .focusable()
         .onKeyEvent { event ->
             if (event.type == KeyEventType.KeyDown && event.isShiftPressed) {
@@ -922,7 +929,15 @@ internal fun SpanningBoardGrid(
                 CustomAccessibilityAction(decreaseHeightLabel) { resizeBy(-1, 0) }
             )
         }
-        .pointerInput(items, allowedSpans) {
+
+    // Widget-style resizing: drag the corner, or the end or bottom edge for one direction.
+    // The corner also takes keys and screen-reader actions; the edges are extra pointer targets.
+    fun resizeHandleModifier(edge: ResizeEdge): Modifier = Modifier
+        .size(48.dp)
+        .testTag(if (edge == ResizeEdge.Corner) "resize-handle" else "resize-handle-${edge.name.lowercase()}")
+        .onGloballyPositioned { handleOffsets[edge] = it.positionInParent() }
+        .then(if (edge == ResizeEdge.Corner) Modifier.resizeHandleAccess() else Modifier.clearAndSetSemantics { })
+        .pointerInput(items, allowedSpans, edge) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val touchAnchorAdjustment = Offset(
@@ -931,27 +946,21 @@ internal fun SpanningBoardGrid(
                 )
                 val start = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
                     ?: return@awaitEachGesture
-                val startCell = currentCellAt(start.position + touchAnchorAdjustment)
+                resizeEdge = edge
+                val startCell = currentCellAt(edge, start.position + touchAnchorAdjustment)
                 resizeCell = startCell
                 var lastCell = startCell
                 var endedOutOfBounds = startCell == null
                 drag(down.id) { change ->
                     change.consume()
-                    val cell = currentCellAt(change.position + touchAnchorAdjustment)
+                    val cell = currentCellAt(edge, change.position + touchAnchorAdjustment)
                     endedOutOfBounds = cell == null
                     cell?.let { lastCell = it }
                     resizeCell = lastCell
                 }
                 val item = currentSelectedItem
                 val finalCell = lastCell
-                val span = if (item != null && finalCell != null) {
-                    GridFieldSpan(
-                        rows = (finalCell.first - item.row + 1).coerceAtLeast(1),
-                        columns = (finalCell.second - item.column + 1).coerceAtLeast(1)
-                    )
-                } else {
-                    null
-                }
+                val span = if (item != null && finalCell != null) edge.spanTo(item, finalCell) else null
                 resizeCell = null
                 if (item != null && endedOutOfBounds) {
                     resizeStatus = blockedBoundsMessage
@@ -1086,40 +1095,68 @@ internal fun SpanningBoardGrid(
     val moveLaterLabel = stringResource(R.string.phrase_move_later)
     val optionsLabel = stringResource(R.string.phrase_item_edit)
 
+    // Editing, like app icons on a launcher: hold a Button for its menu (Edit, Resize, Remove),
+    // keep holding and drag to move it. A right click opens the menu at once. Watched in the
+    // Initial pass so a tap still reaches the Button (it opens the editor) until the press
+    // becomes a long press; from then on the gesture is ours, so letting go opens nothing else.
     val dragModifier = if (onMove != null) {
-        Modifier.pointerInput(rows, columns, items, onMove) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { position ->
-                    val cell = cellAt(position)
-                    val field = cell?.let { cellAt ->
-                        items.firstOrNull { item ->
-                            cellAt.first in item.row until item.row + item.rowSpan &&
-                                cellAt.second in item.column until item.column + item.columnSpan
-                        }
-                    }?.takeIf { it.button != null }
-                    dragSource = field?.let { it.row to it.column }
-                    dragTarget = dragSource
-                },
-                onDrag = { change, _ ->
-                    if (dragSource != null) {
-                        change.consume()
-                        cellAt(change.position)?.let { dragTarget = it }
-                    }
-                },
-                onDragEnd = {
-                    val source = dragSource
-                    val target = dragTarget
-                    dragSource = null
-                    dragTarget = null
-                    if (source != null && target != null && source != target) {
-                        onMove(source.first, source.second, target.first, target.second)
-                    }
-                },
-                onDragCancel = {
-                    dragSource = null
-                    dragTarget = null
+        Modifier.pointerInput(rows, columns, items, onMove, cellMenu) {
+            val slop = viewConfiguration.touchSlop
+            fun fieldAt(position: Offset) = cellAt(position)?.let { (row, column) ->
+                items.firstOrNull { item ->
+                    row in item.row until item.row + item.rowSpan &&
+                        column in item.column until item.column + item.columnSpan
                 }
-            )
+            }?.takeIf { it.button != null }
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val field = fieldAt(down.position) ?: return@awaitEachGesture
+                val anchor = field.row to field.column
+                if (isSecondaryPress()) {
+                    if (cellMenu == null) return@awaitEachGesture
+                    down.consume()
+                    cellMenuAnchor = anchor
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        event.changes.forEach { it.consume() }
+                    } while (event.changes.any { it.pressed })
+                    return@awaitEachGesture
+                }
+                val interrupted = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed || (change.position - down.position).getDistance() > slop) {
+                            return@withTimeoutOrNull true
+                        }
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    true
+                }
+                if (interrupted == true) return@awaitEachGesture
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                cellMenuAnchor = if (cellMenu != null) anchor else null
+                var moving = false
+                while (true) {
+                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                    change.consume()
+                    if (!change.pressed) break
+                    if (!moving && (change.position - down.position).getDistance() > slop) {
+                        // Dragging turns the hold into a move, as on a launcher.
+                        moving = true
+                        cellMenuAnchor = null
+                        dragSource = anchor
+                        dragTarget = anchor
+                    }
+                    if (moving) cellAt(change.position)?.let { dragTarget = it }
+                }
+                val source = dragSource
+                val target = dragTarget
+                dragSource = null
+                dragTarget = null
+                if (moving && source != null && target != null && source != target) {
+                    onMove(source.first, source.second, target.first, target.second)
+                }
+            }
         }
     } else {
         Modifier
@@ -1233,6 +1270,15 @@ internal fun SpanningBoardGrid(
                             CompositionLocalProvider(LocalBoardCellActions provides cellActions) {
                                 content(item)
                             }
+                            val menuButtonForCell = item.button
+                            if (cellMenu != null && menuButtonForCell != null && cellMenuAnchor == (item.row to item.column)) {
+                                BoardCellMenuPopup(
+                                    menu = cellMenu,
+                                    item = item,
+                                    button = menuButtonForCell,
+                                    onDismiss = { cellMenuAnchor = null },
+                                )
+                            }
                             val menuButton = item.button
                             if (reorder != null && menuButton != null && menuButton.id == menuButtonId) {
                                 reorder.menu(menuButton) {
@@ -1272,23 +1318,35 @@ internal fun SpanningBoardGrid(
                 }
             }
             if (showHandle) {
-                key("resize-handle") {
-                    // A filled grip with a resize glyph, the size of a fingertip, so the
-                    // Supporter can see there is something to drag (also Size in the editor).
-                    Box(modifier = handleModifier, contentAlignment = Alignment.Center) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(selectionColor, CircleShape)
-                                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.OpenInFull,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f },
-                            )
+                ResizeEdge.entries.forEach { edge ->
+                    key("resize-handle", edge) {
+                        Box(modifier = resizeHandleModifier(edge), contentAlignment = Alignment.Center) {
+                            if (edge == ResizeEdge.Corner) {
+                                // A filled grip with a resize glyph, the size of a fingertip, so the
+                                // Supporter can see there is something to drag (also Size in the editor).
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(selectionColor, CircleShape)
+                                        .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Default.OpenInFull,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.surface,
+                                        modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f },
+                                    )
+                                }
+                            } else {
+                                // Edge dots, as on a home-screen widget's resize frame.
+                                Box(
+                                    Modifier
+                                        .size(20.dp)
+                                        .background(MaterialTheme.colorScheme.surface, CircleShape)
+                                        .border(3.dp, selectionColor, CircleShape)
+                                )
+                            }
                         }
                     }
                 }
@@ -1305,8 +1363,9 @@ internal fun SpanningBoardGrid(
         val previewIndex = items.size
         val handleIndex = items.size + if (showPreview) 1 else 0
         val handleSpan = previewSpan ?: selectedItem?.let { GridFieldSpan(it.rowSpan, it.columnSpan) }
+        val isHandle = { index: Int -> showHandle && index >= handleIndex }
         val placeables = measurables.mapIndexed { index, measurable ->
-            if (showHandle && index == handleIndex) {
+            if (isHandle(index)) {
                 measurable.measure(Constraints.fixed(handlePx.roundToInt(), handlePx.roundToInt()))
             } else {
                 val span = if (showPreview && index == previewIndex) {
@@ -1322,19 +1381,18 @@ internal fun SpanningBoardGrid(
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
             placeables.forEachIndexed { index, placeable ->
-                if (showHandle && index == handleIndex) {
-                    val item = selectedItem
+                if (isHandle(index)) {
+                    val item = selectedItem ?: return@forEachIndexed
                     val span = handleSpan ?: return@forEachIndexed
-                    val x = (
-                        (item.column + span.columns) * (cellWidth + horizontalGapPx) -
-                            horizontalGapPx - handlePx / 2f
-                        )
-                        .coerceIn(0f, (constraints.maxWidth - handlePx).coerceAtLeast(0f))
-                    val y = (
-                        (item.row + span.rows) * (cellHeight + verticalGapPx) -
-                            verticalGapPx - handlePx / 2f
-                        )
-                        .coerceIn(0f, (constraints.maxHeight - handlePx).coerceAtLeast(0f))
+                    val edge = ResizeEdge.entries[index - handleIndex]
+                    val left = item.column * (cellWidth + horizontalGapPx).toFloat()
+                    val top = item.row * (cellHeight + verticalGapPx).toFloat()
+                    val right = (item.column + span.columns) * (cellWidth + horizontalGapPx) - horizontalGapPx.toFloat()
+                    val bottom = (item.row + span.rows) * (cellHeight + verticalGapPx) - verticalGapPx.toFloat()
+                    val centerX = if (edge == ResizeEdge.Bottom) (left + right) / 2f else right
+                    val centerY = if (edge == ResizeEdge.End) (top + bottom) / 2f else bottom
+                    val x = (centerX - handlePx / 2f).coerceIn(0f, (constraints.maxWidth - handlePx).coerceAtLeast(0f))
+                    val y = (centerY - handlePx / 2f).coerceIn(0f, (constraints.maxHeight - handlePx).coerceAtLeast(0f))
                     placeable.placeRelative(x.roundToInt(), y.roundToInt())
                 } else {
                     val item = if (showPreview && index == previewIndex) {
@@ -2078,4 +2136,47 @@ private fun Modifier.pageBackground(color: Color, image: ImageBitmap?, fit: Page
 internal fun isShortButtonLabel(label: String): Boolean {
     val text = label.trim()
     return text.length <= 24 && text.split(Regex("\\s+")).size <= 3
+}
+
+/** A resize handle on the selected Button: the corner changes both directions, an edge one. */
+private enum class ResizeEdge {
+    Corner, End, Bottom;
+
+    /** The span [item] gets when this handle is dragged to [cell]. */
+    fun spanTo(item: BoardGridItem, cell: Pair<Int, Int>): GridFieldSpan = GridFieldSpan(
+        rows = if (this == End) item.rowSpan else (cell.first - item.row + 1).coerceAtLeast(1),
+        columns = if (this == Bottom) item.columnSpan else (cell.second - item.column + 1).coerceAtLeast(1),
+    )
+}
+
+/**
+ * What a long press (or right click) on a Button offers while editing, like a launcher's menu
+ * on an app icon. Each action is also reachable without the gesture: tap opens the editor,
+ * which has Size and Clear.
+ */
+class BoardCellMenu(
+    val onEdit: (row: Int, column: Int, button: ObfButton) -> Unit,
+    val onResize: (row: Int, column: Int) -> Unit,
+    val onRemove: (row: Int, column: Int) -> Unit,
+)
+
+@Composable
+private fun BoardCellMenuPopup(menu: BoardCellMenu, item: BoardGridItem, button: ObfButton, onDismiss: () -> Unit) {
+    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.board_cell_menu_edit)) },
+            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+            onClick = { onDismiss(); menu.onEdit(item.row, item.column, button) },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.board_cell_menu_resize)) },
+            leadingIcon = { Icon(Icons.Default.OpenInFull, contentDescription = null) },
+            onClick = { onDismiss(); menu.onResize(item.row, item.column) },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.board_cell_menu_remove), color = MaterialTheme.colorScheme.error) },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            onClick = { onDismiss(); menu.onRemove(item.row, item.column) },
+        )
+    }
 }
