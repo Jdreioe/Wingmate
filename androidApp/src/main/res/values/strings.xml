@@ -700,4 +700,5 @@
     <string name="welcome_review_speech">Speech</string>
     <string name="welcome_review_speech_online">Sent online to %1$s</string>
     <string name="welcome_review_loading">Loading</string>
+    <string name="welcome_reenter_key">Enter the key again</string>
 </resources>

@@ -700,4 +700,5 @@
     <string name="welcome_review_speech">Tale</string>
     <string name="welcome_review_speech_online">Sendes online til %1$s</string>
     <string name="welcome_review_loading">Indlæser</string>
+    <string name="welcome_reenter_key">Indtast nøglen igen</string>
 </resources>

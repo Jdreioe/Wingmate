@@ -147,6 +147,8 @@ fun WelcomeScreen(
     val step = path.last()
 
     fun push(next: WelcomeStep) { path = path + next }
+    /** Moves forward from [from] once; a second activation (dwell, tremor) is ignored. */
+    fun advance(from: WelcomeStep, to: WelcomeStep) { if (path.last() == from) push(to) }
     fun pop() { if (path.size > 1) path = path.dropLast(1) }
     /** Opens an earlier page from Review; Back and finishing that page return to Review. */
     fun change(target: WelcomeStep) {
@@ -196,12 +198,7 @@ fun WelcomeScreen(
     /** A cloud engine goes through its provider page unless its credentials are already saved. */
     fun chooseEngine(engine: TtsEngine) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to engine.name.lowercase())
-        val providerStep = when (engine) {
-            TtsEngine.SYSTEM -> return useEngine(engine, WelcomeStep.VoiceEngine)
-            TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> WelcomeStep.AzureSetup
-            TtsEngine.GOOGLE_CLOUD -> WelcomeStep.GoogleSetup
-            TtsEngine.ELEVENLABS -> WelcomeStep.ElevenLabsSetup
-        }
+        val providerStep = engine.providerStep() ?: return useEngine(engine, WelcomeStep.VoiceEngine)
         scope.launch {
             val configured = try {
                 withContext(Dispatchers.Default) {
@@ -255,7 +252,7 @@ fun WelcomeScreen(
     val pageModifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
 
     Column(Modifier.fillMaxSize()) {
-        // Start and Review have their own way out (Back) and their own busy states.
+        // Start's Back leaves setup. Review has a save in progress to protect, so leaving is one Back away, on Privacy.
         if (onExit != null && step != WelcomeStep.Start && step != WelcomeStep.Review) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = ::leave, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -276,7 +273,7 @@ fun WelcomeScreen(
                 onStartSetup = ::startSetup,
                 onEngineChosen = ::chooseEngine,
                 onUseEngine = ::useEngine,
-                onPush = ::push,
+                onAdvance = ::advance,
                 onPop = ::pop,
                 onFinishSection = ::finishSection,
                 onChange = ::change,
@@ -306,7 +303,7 @@ private fun WelcomeStepContent(
     onStartSetup: () -> Unit,
     onEngineChosen: (TtsEngine) -> Unit,
     onUseEngine: (TtsEngine, WelcomeStep) -> Unit,
-    onPush: (WelcomeStep) -> Unit,
+    onAdvance: (from: WelcomeStep, to: WelcomeStep) -> Unit,
     onPop: () -> Unit,
     onFinishSection: (WelcomeStep) -> Unit,
     onChange: (WelcomeStep) -> Unit,
@@ -334,10 +331,17 @@ private fun WelcomeStepContent(
             onDone = { onUseEngine(TtsEngine.ELEVENLABS, WelcomeStep.ElevenLabsSetup) },
             onBack = onPop,
         )
-        WelcomeStep.Voice -> PageWithBack(onBack = onPop) {
+        WelcomeStep.Voice -> PageWithBack(
+            onBack = onPop,
+            // A saved key can stop working (e.g. restored from a backup); setup is the only
+            // place to replace it before Settings is reachable.
+            secondaryLabel = chosenEngine?.takeIf { it != TtsEngine.SYSTEM }
+                ?.let { stringResource(R.string.welcome_reenter_key) },
+            onSecondary = { chosenEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
+        ) {
             VoiceSelectionPage(
                 onBack = onPop,
-                onVoiceSelected = { onPush(WelcomeStep.Language) },
+                onVoiceSelected = { onAdvance(WelcomeStep.Voice, WelcomeStep.Language) },
                 engineToSave = chosenEngine,
                 modifier = pageModifier,
             )
@@ -345,7 +349,7 @@ private fun WelcomeStepContent(
         WelcomeStep.Language -> PageWithBack(onBack = onPop) {
             LanguageSelectionPage(
                 onBack = onPop,
-                onContinue = { onPush(WelcomeStep.TestVoice) },
+                onContinue = { onAdvance(WelcomeStep.Language, WelcomeStep.TestVoice) },
                 modifier = pageModifier,
             )
         }
@@ -383,16 +387,28 @@ private fun WelcomeStepContent(
 
 // ─── Shared layout ───────────────────────────────────────────────────────────
 
-/** Adds setup's on-screen Back below a shared Settings page that has none of its own. */
+/** Adds setup's on-screen Back (and an optional second action) below a shared Settings page. */
 @Composable
-private fun PageWithBack(onBack: () -> Unit, content: @Composable () -> Unit) {
+private fun PageWithBack(
+    onBack: () -> Unit,
+    secondaryLabel: String? = null,
+    onSecondary: () -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) { content() }
-        OutlinedButton(
-            onClick = onBack,
-            modifier = Modifier.fillMaxWidth().padding(24.dp).heightIn(min = 56.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.common_back))
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
+                Text(stringResource(R.string.common_back))
+            }
+            secondaryLabel?.let {
+                OutlinedButton(onClick = onSecondary, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
+                    Text(it)
+                }
+            }
         }
     }
 }
@@ -754,6 +770,14 @@ private fun PrivacyPage(
             )
         }
     }
+}
+
+/** The setup page that saves this engine's credentials, or null for the device's own engine. */
+private fun TtsEngine.providerStep(): WelcomeStep? = when (this) {
+    TtsEngine.SYSTEM -> null
+    TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> WelcomeStep.AzureSetup
+    TtsEngine.GOOGLE_CLOUD -> WelcomeStep.GoogleSetup
+    TtsEngine.ELEVENLABS -> WelcomeStep.ElevenLabsSetup
 }
 
 /** Where the speech engine setting stands on the Privacy page. */

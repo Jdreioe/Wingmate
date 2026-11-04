@@ -57,8 +57,9 @@ fun App() {
         ) {
             // True while setup was opened from a workspace; only then may it be left unfinished.
             var welcomeReopened by rememberSaveable { mutableStateOf(false) }
-            // The setup Phrase already added in this session, so retrying Review cannot add it twice.
-            var savedSetupPhrase by rememberSaveable { mutableStateOf<String?>(null) }
+            // The setup Phrase already added in this setup, so retrying Review cannot add it twice.
+            var savedSetupPhraseId by rememberSaveable { mutableStateOf<String?>(null) }
+            var savedSetupPhraseText by rememberSaveable { mutableStateOf<String?>(null) }
             // Saveable with the reopen flag, so recreation (e.g. a font size change) keeps
             // the Communicator where they were instead of re-routing from startup.
             var currentScreen by rememberSaveable { mutableStateOf<Screen?>(null) }
@@ -82,12 +83,21 @@ fun App() {
              */
             suspend fun completeWelcomeAndNavigate(choices: WelcomeChoices): Boolean {
                 val mode = choices.startupMode
-                choices.phraseToSave?.takeIf { it != savedSetupPhrase }?.let { text ->
+                // Brings the Phrase in line with Review: a retry after a failed finish edits or
+                // removes the Phrase it already added instead of adding another.
+                val wanted = choices.phraseToSave
+                if (wanted != savedSetupPhraseText) {
                     try {
-                        withContext(Dispatchers.Default) {
-                            phraseUseCase.add(Phrase(id = "", text = text, createdAt = 0))
+                        val previousId = savedSetupPhraseId
+                        savedSetupPhraseId = withContext(Dispatchers.Default) {
+                            val previous = previousId?.let { id -> phraseUseCase.list().firstOrNull { it.id == id } }
+                            when {
+                                wanted == null -> previous?.let { phraseUseCase.delete(it.id) }.let { null }
+                                previous != null -> phraseUseCase.update(previous.copy(text = wanted)).id
+                                else -> phraseUseCase.add(Phrase(id = "", text = wanted, createdAt = 0)).id
+                            }
                         }
-                        savedSetupPhrase = text
+                        savedSetupPhraseText = wanted
                     } catch (failure: CancellationException) {
                         throw failure
                     } catch (failure: Exception) {
@@ -114,7 +124,8 @@ fun App() {
                     return false
                 }
                 settingsStateManager.applyLoadedSettings(savedSettings)
-                savedSetupPhrase = null
+                savedSetupPhraseId = null
+                savedSetupPhraseText = null
                 welcomeReopened = false
                 restoredIntoSetup = false
                 startupBoardSetId = null
@@ -168,6 +179,10 @@ fun App() {
 
             LaunchedEffect(restoreRevision) {
                 if (restoreRevision == 0L || restoreRevision == handledRestoreRevision) return@LaunchedEffect
+                // Handled up front: if loading fails, Retry runs startup, which routes when no
+                // screen is set, so the restored data is still routed.
+                handledRestoreRevision = restoreRevision
+                currentScreen = null
                 startupLoadState = StartupLoadState.Loading
                 communicationSession.reloadAfterRestore()
                 val loaded = withContext(Dispatchers.Default) {
@@ -179,7 +194,6 @@ fun App() {
                     startupBoardSetId = loaded.settings.startupBoardSetId
                     welcomeReopened = false
                     featureUsageReporter.setEnabled(loaded.settings.featureUsageReportingEnabled)
-                    handledRestoreRevision = restoreRevision
                     restoredIntoSetup = needsWelcome(loaded.settings, loaded.selectedVoice != null)
                     currentScreen = if (restoredIntoSetup) Screen.Welcome else routeFor(loaded.settings.startupMode)
                 }
