@@ -67,6 +67,8 @@ data class WelcomeChoices(
     val keepSentence: Boolean = false,
     val historyVisible: Boolean = true,
     val featureUsageReportingEnabled: Boolean = false,
+    /** A speed set on Hear your voice and not yet confirmed saved; cleared when a save succeeds. */
+    val unsavedSpeed: UnsavedSpeed? = null,
 ) {
     /** The Phrase setup adds, or null. */
     val phraseToSave: String? get() = sentence?.trim()?.takeIf { keepSentence && it.isNotEmpty() }
@@ -80,9 +82,17 @@ data class WelcomeChoices(
     }
 }
 
+/** A speed for [voiceName] that setup has not yet confirmed saved. */
+data class UnsavedSpeed(val voiceName: String, val rate: Double)
+
 /** Keeps the draft answers across activity recreation. */
 private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
-    save = { listOf(it.startupMode.name, it.sentence, it.keepSentence, it.historyVisible, it.featureUsageReportingEnabled) },
+    save = {
+        listOf(
+            it.startupMode.name, it.sentence, it.keepSentence, it.historyVisible, it.featureUsageReportingEnabled,
+            it.unsavedSpeed?.voiceName, it.unsavedSpeed?.rate,
+        )
+    },
     restore = { values ->
         WelcomeChoices(
             startupMode = StartupMode.valueOf(values[0] as String),
@@ -90,6 +100,7 @@ private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
             keepSentence = values[2] as Boolean,
             historyVisible = values[3] as Boolean,
             featureUsageReportingEnabled = values[4] as Boolean,
+            unsavedSpeed = (values[5] as String?)?.let { UnsavedSpeed(it, values[6] as Double) },
         )
     },
 )
@@ -324,6 +335,7 @@ fun WelcomeScreen(
                 onBack = { nav = nav.back(step) },
                 onFinishSection = { from, next -> nav = nav.finishSection(from, next) },
                 onChange = { target -> nav = nav.change(target) },
+                onUnsavedSpeedChange = { choices = choices.copy(unsavedSpeed = it) },
                 onFinish = { syncSetupPhrase(choices.phraseToSave) && onComplete(choices) },
                 onWorkspaceChosen = {
                     if (nav.step == WelcomeStep.Workspace) {
@@ -360,6 +372,8 @@ private fun WelcomeStepContent(
     onBack: () -> Unit,
     onFinishSection: (from: WelcomeStep, next: WelcomeStep) -> Unit,
     onChange: (WelcomeStep) -> Unit,
+    /** Applied to the current draft (it may arrive after a save, not on a fresh composition). */
+    onUnsavedSpeedChange: (UnsavedSpeed?) -> Unit,
     onFinish: suspend () -> Boolean,
     onWorkspaceChosen: () -> Unit,
 ) {
@@ -425,6 +439,8 @@ private fun WelcomeStepContent(
             keepAsPhrase = choices.keepSentence,
             onSentenceChange = { onChoicesChange(choices.copy(sentence = it)) },
             onKeepAsPhraseChange = { keep, text -> onChoicesChange(choices.copy(keepSentence = keep, sentence = text)) },
+            unsavedSpeed = choices.unsavedSpeed,
+            onUnsavedSpeedChange = onUnsavedSpeedChange,
             onChangeLanguage = { onAdvance(WelcomeStep.TestVoice, WelcomeStep.Language) },
             onNext = { onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace) },
             onBack = onBack,

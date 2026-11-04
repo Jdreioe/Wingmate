@@ -46,13 +46,6 @@ import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
 /**
- * The voice with a speed this page had not confirmed saved when it last left (e.g. after a
- * font-size change recreated it). The next instance shows that speed at once and saves it
- * again, so a change is never silently lost and the page never waits on the old save.
- */
-private var unsavedRateVoice: Voice? = null
-
-/**
  * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
  * tested (for example how they introduce themselves) as a Phrase. The sentence and that
  * choice are held by the caller, so they survive side pages. Previews are not recorded in
@@ -66,6 +59,9 @@ fun TestVoiceScreen(
     onSentenceChange: (String) -> Unit,
     /** Receives the choice and the sentence it applies to (the default text when none was typed). */
     onKeepAsPhraseChange: (keep: Boolean, sentence: String) -> Unit,
+    /** A speed not yet confirmed saved, held by setup so it survives this page going away. */
+    unsavedSpeed: UnsavedSpeed?,
+    onUnsavedSpeedChange: (UnsavedSpeed?) -> Unit,
     /** Opens language choice; offered only when the voice speaks more than one language. */
     onChangeLanguage: () -> Unit,
     onNext: () -> Unit,
@@ -91,30 +87,34 @@ fun TestVoiceScreen(
     val scope = rememberCoroutineScope()
 
     // Speed is saved once it settles, not per notch: each save is a full voice selection
-    // (analytics and, for cloud voices, re-caching Screens audio). It stays "dirty" until a
-    // save succeeds; saves run one at a time on the app's scope, so leaving cannot cut one off.
+    // (analytics and, for cloud voices, re-caching Screens audio). Setup holds the unsaved
+    // speed until a save of exactly that speed succeeds. Each save has one owner on the app's
+    // scope, so leaving cannot cut it off; callers join it only while it is still running.
     val appScope = koinInject<CoroutineScope>()
-    var rateDirty by remember { mutableStateOf(false) }
+    val currentUnsaved by rememberUpdatedState(unsavedSpeed)
+    val setUnsaved by rememberUpdatedState(onUnsavedSpeedChange)
     var rateSaveJob by remember { mutableStateOf<Job?>(null) }
-    var rateSaving by remember { mutableStateOf<Deferred<Boolean>?>(null) }
-    /** Saves the speed now, or joins a save already running; false (error shown) if it failed. */
+    var rateSaving by remember { mutableStateOf<Pair<Voice, Deferred<Boolean>>?>(null) }
+    /** Saves the speed now, or joins a save still running; false (error shown) if it failed. */
     suspend fun saveRateNow(): Boolean {
-        rateSaving?.let { return it.await() }
-        val voice = selectedVoice ?: return true
-        val save = appScope.async(Dispatchers.IO) {
-            runCatching { voiceUseCase.select(voice) }
-                .onFailure { OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = it.loggingClassName()) }
-                .isSuccess
-        }
-        rateSaving = save
-        val saved = try { save.await() } finally { rateSaving = null }
-        // A newer change made while saving keeps the speed dirty.
-        if (saved && selectedVoice == voice) rateDirty = false
+        val (voice, save) = rateSaving?.takeIf { it.second.isActive }
+            ?: (selectedVoice ?: return true).let { v ->
+                v to appScope.async(Dispatchers.IO) {
+                    runCatching { voiceUseCase.select(v) }
+                        .onFailure { OperationalLogger.warn("voice_rate.save", "failed", exceptionClass = it.loggingClassName()) }
+                        .isSuccess
+                }
+            }.also { rateSaving = it }
+        val saved = save.await()
+        if (rateSaving?.second === save) rateSaving = null
+        val unsaved = currentUnsaved
+        if (saved && unsaved != null && unsaved.voiceName == voice.name.orEmpty() && unsaved.rate == voice.rate) setUnsaved(null)
         rateSaveFailed = !saved
         return saved
     }
     fun scheduleRateSave() {
-        rateDirty = true
+        val voice = selectedVoice ?: return
+        setUnsaved(UnsavedSpeed(voice.name.orEmpty(), voice.rate ?: 1.0))
         rateSaveJob?.cancel()
         rateSaveJob = scope.launch {
             delay(800)
@@ -122,14 +122,17 @@ fun TestVoiceScreen(
         }
     }
     /**
-     * Saves a speed not yet saved; call before leaving the page. Repeated calls (a double tap
-     * on Continue) wait on the same save. Returns false if it could not be saved, so the page
-     * stays and says so.
+     * Saves a speed not yet saved; call before leaving the page. A save already running for an
+     * older speed is joined, then the current speed is saved. Returns false if it could not
+     * be saved, so the page stays and says so.
      */
     suspend fun flushRate(): Boolean {
-        if (!rateDirty) return true
-        rateSaveJob?.cancel()
-        return saveRateNow()
+        repeat(2) {
+            if (currentUnsaved == null) return true
+            rateSaveJob?.cancel()
+            if (!saveRateNow()) return false
+        }
+        return currentUnsaved == null
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -144,18 +147,12 @@ fun TestVoiceScreen(
                     }
                 }
             }
-            // Leaving another way (Leave setup, recreation) with a speed not yet saved: save it
-            // on the app's scope, and leave it for the next instance in case that fails.
-            val voice = selectedVoice
-            if (rateDirty && voice != null) {
+            // Leaving another way (Leave setup, recreation) with a speed not yet saved: finish
+            // saving it on the app's scope. Setup still holds it if that fails, so the next
+            // Hear your voice shows it and saves again; leaving setup forgets it with setup.
+            if (currentUnsaved != null && selectedVoice != null) {
                 rateSaveJob?.cancel()
-                unsavedRateVoice = voice
-                appScope.launch(Dispatchers.IO) {
-                    val saved = runCatching { voiceUseCase.select(voice) }
-                        .onFailure { OperationalLogger.warn("voice_rate.save", "failed_on_leave", exceptionClass = it.loggingClassName()) }
-                        .isSuccess
-                    if (saved && unsavedRateVoice === voice) unsavedRateVoice = null
-                }
+                appScope.launch { saveRateNow() }
             }
         }
     }
@@ -186,13 +183,11 @@ fun TestVoiceScreen(
                 voiceUseCase.selected() to settingsUseCase.get().ttsEngine
             }
             engine = savedEngine
-            // A speed the previous instance left unsaved (e.g. after a font-size change) is
-            // shown at once and saved again; if that fails, the error shows and Continue retries.
-            val unsaved = unsavedRateVoice?.takeIf { voice != null && it.name == voice.name }
-            unsavedRateVoice = null
+            // A speed setup still holds as unsaved (e.g. after a font-size change recreated this
+            // page) is shown at once and saved again; on failure the error shows and Continue retries.
+            val unsaved = currentUnsaved?.takeIf { voice != null && it.voiceName == voice.name.orEmpty() }
             if (voice != null && unsaved != null) {
                 selectedVoice = voice.copy(rate = unsaved.rate, rateForSSML = null)
-                rateDirty = true
                 scope.launch { saveRateNow() }
             } else {
                 selectedVoice = voice
@@ -338,8 +333,10 @@ fun TestVoiceScreen(
                 val range = if (engine == TtsEngine.ELEVENLABS) 0.7f..1.2f else 0.5f..2.0f
                 var rate by remember(voice.name) { mutableFloatStateOf((voice.rate ?: 1.0).toFloat().coerceIn(range)) }
                 fun commitRate(value: Float) {
-                    rate = (value * 10).roundToInt() / 10f
-                    selectedVoice = voice.copy(rate = rate.toDouble(), rateForSSML = null)
+                    val tenths = (value * 10).roundToInt()
+                    rate = tenths / 10f
+                    // From whole tenths, so 1.1 is stored as 1.1 rather than float noise.
+                    selectedVoice = voice.copy(rate = tenths / 10.0, rateForSSML = null)
                     scheduleRateSave()
                 }
                 Spacer(modifier = Modifier.height(24.dp))
