@@ -324,7 +324,13 @@ private fun List<Voice>.languages(engine: TtsEngine): List<String> =
  * failing cloud voice is never replaced by the system voice), and returns only when playback
  * has finished, since the speech service returns once audio starts. Throws if it fails.
  */
-internal suspend fun SpeechService.speakPreview(text: String, voice: Voice?, engine: TtsEngine) {
+internal suspend fun SpeechService.speakPreview(
+    text: String,
+    voice: Voice?,
+    engine: TtsEngine,
+    /** Receives the speech request id once playing, so an owner can stop only its own preview. */
+    onStarted: (requestId: Long) -> Unit = {},
+) {
     withContext(Dispatchers.IO) {
         speakWithoutHistory(
             text = text,
@@ -334,6 +340,7 @@ internal suspend fun SpeechService.speakPreview(text: String, voice: Voice?, eng
             cacheAudio = false,
             engine = engine,
         )
+        onStarted(playbackState().requestId)
         var waitedMillis = 0L
         while (isPlaying() && waitedMillis < 120_000) {
             delay(50)

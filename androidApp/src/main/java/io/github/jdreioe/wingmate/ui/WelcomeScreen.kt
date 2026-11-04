@@ -61,11 +61,16 @@ import org.koin.compose.getKoin
  */
 data class WelcomeChoices(
     val startupMode: StartupMode = StartupMode.Keyboard,
-    /** A test sentence the Communicator chose to keep as a Phrase, or null. */
-    val phraseToSave: String? = null,
+    /** The sentence typed on Hear your voice, or null for the default one. Kept across side pages. */
+    val sentence: String? = null,
+    /** Whether to keep [sentence] as a Phrase. */
+    val keepSentence: Boolean = false,
     val historyVisible: Boolean = true,
     val featureUsageReportingEnabled: Boolean = false,
 ) {
+    /** The Phrase setup adds, or null. */
+    val phraseToSave: String? get() = sentence?.trim()?.takeIf { keepSentence && it.isNotEmpty() }
+
     companion object {
         fun fromSettings(settings: Settings) = WelcomeChoices(
             startupMode = settings.startupMode,
@@ -77,13 +82,14 @@ data class WelcomeChoices(
 
 /** Keeps the draft answers across activity recreation. */
 private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
-    save = { listOf(it.startupMode.name, it.phraseToSave, it.historyVisible, it.featureUsageReportingEnabled) },
+    save = { listOf(it.startupMode.name, it.sentence, it.keepSentence, it.historyVisible, it.featureUsageReportingEnabled) },
     restore = { values ->
         WelcomeChoices(
             startupMode = StartupMode.valueOf(values[0] as String),
-            phraseToSave = values[1] as String?,
-            historyVisible = values[2] as Boolean,
-            featureUsageReportingEnabled = values[3] as Boolean,
+            sentence = values[1] as String?,
+            keepSentence = values[2] as Boolean,
+            historyVisible = values[3] as Boolean,
+            featureUsageReportingEnabled = values[4] as Boolean,
         )
     },
 )
@@ -414,12 +420,13 @@ private fun WelcomeStepContent(
             LanguageSelectionPage(onBack = onBack, modifier = pageModifier)
         }
         WelcomeStep.TestVoice -> TestVoiceScreen(
-            initialPhraseToSave = choices.phraseToSave,
+            // Held by setup, so a side trip to Change language keeps what was typed.
+            sentence = choices.sentence,
+            keepAsPhrase = choices.keepSentence,
+            onSentenceChange = { onChoicesChange(choices.copy(sentence = it)) },
+            onKeepAsPhraseChange = { keep, text -> onChoicesChange(choices.copy(keepSentence = keep, sentence = text)) },
             onChangeLanguage = { onAdvance(WelcomeStep.TestVoice, WelcomeStep.Language) },
-            onNext = { phraseToSave ->
-                onChoicesChange(choices.copy(phraseToSave = phraseToSave))
-                onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace)
-            },
+            onNext = { onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace) },
             onBack = onBack,
         )
         WelcomeStep.Workspace -> WorkspacePage(

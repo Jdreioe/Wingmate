@@ -46,15 +46,21 @@ import org.koin.compose.koinInject
 import com.hojmoseit.wingmate.R
 /**
  * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
- * tested (for example how they introduce themselves) as a Phrase; [onNext] receives that
- * text, or null when it should not be saved. Previews are not recorded in History or cached.
+ * tested (for example how they introduce themselves) as a Phrase. The sentence and that
+ * choice are held by the caller, so they survive side pages. Previews are not recorded in
+ * History or cached, and stop when the page leaves.
  */
 @Composable
 fun TestVoiceScreen(
-    initialPhraseToSave: String?,
+    /** The typed sentence, or null for the default one. */
+    sentence: String?,
+    keepAsPhrase: Boolean,
+    onSentenceChange: (String) -> Unit,
+    /** Receives the choice and the sentence it applies to (the default text when none was typed). */
+    onKeepAsPhraseChange: (keep: Boolean, sentence: String) -> Unit,
     /** Opens language choice; offered only when the voice speaks more than one language. */
     onChangeLanguage: () -> Unit,
-    onNext: (phraseToSave: String?) -> Unit,
+    onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
     val speechService = koinInject<SpeechService>()
@@ -67,8 +73,9 @@ fun TestVoiceScreen(
     var playbackFailed by remember { mutableStateOf(false) }
     var rateSaveFailed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
-    var testText by rememberSaveable(defaultTestText) { mutableStateOf(initialPhraseToSave ?: defaultTestText) }
-    var keepAsPhrase by rememberSaveable { mutableStateOf(initialPhraseToSave != null) }
+    val testText = sentence ?: defaultTestText
+    /** The speech request of a preview this page started, so leaving stops only that one. */
+    var previewRequest by remember { mutableStateOf<Long?>(null) }
     var loading by remember { mutableStateOf(true) }
     // Without the saved engine, a preview could play through the wrong one; block it instead.
     var loadFailed by remember { mutableStateOf(false) }
@@ -119,6 +126,14 @@ fun TestVoiceScreen(
     val appScope = koinInject<CoroutineScope>()
     DisposableEffect(Unit) {
         onDispose {
+            // Leaving (Change language, recreation) must not leave a preview talking with no Stop.
+            // Only this page's request is stopped, never newer speech that started meanwhile.
+            val ownRequest = previewRequest
+            if (isPlaying && ownRequest != null) {
+                appScope.launch(Dispatchers.IO) {
+                    if (speechService.playbackState().requestId == ownRequest) runCatching { speechService.stop() }
+                }
+            }
             if (rateSaveJob?.isActive == true || rateSaveFailed) {
                 val voice = selectedVoice
                 rateSaveJob?.cancel()
@@ -232,7 +247,7 @@ fun TestVoiceScreen(
             val showKeyboard = Modifier.showKeyboardOnFocus()
             OutlinedTextField(
                 value = testText,
-                onValueChange = { testText = it },
+                onValueChange = onSentenceChange,
                 label = { Text(stringResource(R.string.welcome_test_sentence)) },
                 modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 minLines = 2,
@@ -269,7 +284,7 @@ fun TestVoiceScreen(
                                 // A preview: kept out of History and the audio cache, and played
                                 // with exactly the chosen engine so a failing cloud voice is not
                                 // silently replaced by the system voice.
-                                speechService.speakPreview(testText, selectedVoice, engine)
+                                speechService.speakPreview(testText, selectedVoice, engine, onStarted = { previewRequest = it })
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
@@ -361,7 +376,7 @@ fun TestVoiceScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 56.dp)
-                    .toggleable(value = keepAsPhrase, role = Role.Switch, onValueChange = { keepAsPhrase = it }),
+                    .toggleable(value = keepAsPhrase, role = Role.Switch, onValueChange = { onKeepAsPhraseChange(it, testText) }),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -390,7 +405,7 @@ fun TestVoiceScreen(
                         OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                     }
                     if (!flushRate()) return@launch
-                    onNext(testText.trim().takeIf { keepAsPhrase && it.isNotEmpty() })
+                    onNext()
                 }
             },
         )
