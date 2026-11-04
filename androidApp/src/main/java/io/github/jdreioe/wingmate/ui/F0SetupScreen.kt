@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,7 +38,10 @@ internal const val F0_PORTAL_TEMPLATE_URL =
 internal const val AZURE_SPEECH_RESOURCES_URL =
     "https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.CognitiveServices%2Faccounts"
 
-private enum class F0Step { WELCOME, PORTAL, CREDENTIALS, SUCCESS }
+/** Microsoft's free account sign-up, the first step for someone without an Azure subscription. */
+internal const val AZURE_SIGN_UP_URL = "https://azure.microsoft.com/free/"
+
+private enum class F0Step { GUIDE, CREDENTIALS, SUCCESS }
 
 /**
  * Sets up the free Speech tier through Azure Portal instead of acquiring an ARM token.
@@ -53,7 +57,7 @@ fun F0SetupScreen(
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
 
-    var step by remember { mutableStateOf(F0Step.WELCOME) }
+    var step by remember { mutableStateOf(F0Step.GUIDE) }
     var endpoint by remember { mutableStateOf("") }
     var subscriptionKey by remember { mutableStateOf("") }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -62,7 +66,6 @@ fun F0SetupScreen(
     fun openPortal() {
         featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_PORTAL_OPENED)
         uriHandler.openUri(F0_PORTAL_TEMPLATE_URL)
-        step = F0Step.PORTAL
     }
 
     fun saveCredentials() {
@@ -115,21 +118,20 @@ fun F0SetupScreen(
                 TextButton(
                     onClick = {
                         when (step) {
-                            F0Step.WELCOME -> onBack()
-                            F0Step.PORTAL -> step = F0Step.WELCOME
-                            F0Step.CREDENTIALS -> step = F0Step.WELCOME
+                            F0Step.GUIDE -> onBack()
+                            F0Step.CREDENTIALS -> step = F0Step.GUIDE
                             F0Step.SUCCESS -> onDone()
                         }
                     }
-                ) { Text(stringResource(if (step == F0Step.WELCOME) R.string.common_cancel else R.string.common_back)) }
+                ) { Text(stringResource(R.string.common_back)) }
                 Text(stringResource(R.string.azure_setup_title), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.width(64.dp))
             }
 
             Spacer(Modifier.height(24.dp))
             when (step) {
-                F0Step.WELCOME -> WelcomeStep(onOpenPortal = ::openPortal, onEnterCredentials = { step = F0Step.CREDENTIALS })
-                F0Step.PORTAL -> PortalStep(
+                F0Step.GUIDE -> GuideStep(
+                    onSignUp = { uriHandler.openUri(AZURE_SIGN_UP_URL) },
                     onOpenPortal = ::openPortal,
                     onOpenSpeechResources = {
                         featureUsageReporter.reportEvent(FeatureUsageEvents.AZURE_F0_RESOURCES_OPENED)
@@ -158,60 +160,59 @@ fun F0SetupScreen(
     }
 }
 
+/**
+ * The whole Azure path in four numbered steps, each with the link it needs, plus the
+ * fixes for the errors Azure most often shows at "Review + create". Someone who already
+ * has a key goes straight to step 4.
+ */
 @Composable
-private fun WelcomeStep(onOpenPortal: () -> Unit, onEnterCredentials: () -> Unit) {
-    Column {
-        Text(stringResource(R.string.azure_setup_free_tier_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
+private fun GuideStep(
+    onSignUp: () -> Unit,
+    onOpenPortal: () -> Unit,
+    onOpenSpeechResources: () -> Unit,
+    onEnterCredentials: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            stringResource(R.string.azure_setup_free_tier_description),
-            style = MaterialTheme.typography.bodyMedium
+            stringResource(R.string.azure_guide_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() },
         )
-        Spacer(Modifier.height(24.dp))
-        Card(onClick = onOpenPortal, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-            Column(Modifier.padding(20.dp)) {
-                Text(stringResource(R.string.azure_setup_portal_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.azure_setup_portal_description),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        OutlinedCard(onClick = onEnterCredentials, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp)) {
-                Text(stringResource(R.string.azure_setup_existing_key_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.azure_setup_existing_key_description), style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.azure_guide_computer), style = MaterialTheme.typography.bodyLarge)
+        GuideStepCard(1, R.string.azure_guide_account_title, R.string.azure_guide_account_body, R.string.azure_guide_account_action, onSignUp)
+        GuideStepCard(2, R.string.azure_guide_resource_title, R.string.azure_guide_resource_body, R.string.azure_guide_resource_action, onOpenPortal)
+        GuideStepCard(3, R.string.azure_guide_key_title, R.string.azure_guide_key_body, R.string.azure_guide_key_action, onOpenSpeechResources)
+        GuideStepCard(4, R.string.azure_guide_paste_title, null, R.string.azure_guide_paste_action, onEnterCredentials, primary = true)
+        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.azure_guide_errors_title), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.azure_guide_errors_body), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
 }
 
 @Composable
-private fun PortalStep(
-    onOpenPortal: () -> Unit,
-    onOpenSpeechResources: () -> Unit,
-    onEnterCredentials: () -> Unit
+private fun GuideStepCard(
+    number: Int,
+    title: Int,
+    body: Int?,
+    action: Int,
+    onAction: () -> Unit,
+    primary: Boolean = false,
 ) {
-    Column {
-        Text(stringResource(R.string.azure_setup_create_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.azure_setup_in_portal), style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            stringResource(R.string.azure_setup_portal_steps),
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onOpenPortal, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.azure_setup_open_portal)) }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onOpenSpeechResources, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.azure_setup_open_resources)) }
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = onEnterCredentials, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.azure_setup_have_credentials)) }
-        Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.azure_setup_f0_limit), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("$number. ${stringResource(title)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            body?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
+            val modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            if (primary) {
+                Button(onClick = onAction, modifier = modifier) { Text(stringResource(action)) }
+            } else {
+                OutlinedButton(onClick = onAction, modifier = modifier) { Text(stringResource(action)) }
+            }
+        }
     }
 }
 

@@ -275,23 +275,10 @@
     <string name="language_no_match">No languages match filters</string>
 
     <string name="azure_setup_title">Azure TTS setup</string>
-    <string name="azure_setup_free_tier_title">High-quality voice, free tier</string>
-    <string name="azure_setup_free_tier_description">Azure Text-to-Speech offers neural voices in many languages. The F0 tier includes 500,000 characters each month.</string>
-    <string name="azure_setup_portal_title">Set up in Azure Portal</string>
-    <string name="azure_setup_portal_description">Open a prefilled F0 Speech deployment in Azure Portal. This works with personal Microsoft accounts and keeps your Azure sign-in in the portal.</string>
-    <string name="azure_setup_existing_key_title">Enter an existing key</string>
-    <string name="azure_setup_existing_key_description">Already have a Speech resource? Paste its endpoint and key.</string>
-    <string name="azure_setup_create_title">Create your free Speech resource</string>
-    <string name="azure_setup_in_portal">In Azure Portal:</string>
-    <string name="azure_setup_portal_steps">1. Choose your Azure subscription and a resource group.\n2. Choose a region, then select Create.\n3. After deployment, open Speech resources below and select the new wingmate-f0-* resource.\n4. Choose Keys and Endpoint, then copy either key and the endpoint.</string>
-    <string name="azure_setup_open_portal">Open Azure Portal</string>
-    <string name="azure_setup_open_resources">Open my Speech resources</string>
-    <string name="azure_setup_have_credentials">I have the endpoint and key</string>
-    <string name="azure_setup_f0_limit">The F0 tier permits one Speech resource per subscription.</string>
     <string name="azure_setup_credentials_title">Enter Azure credentials</string>
-    <string name="azure_setup_credentials_description">Paste the endpoint and either key from Azure Portal → your Speech resource → Keys and Endpoint.</string>
-    <string name="azure_setup_endpoint_label">Endpoint or region</string>
-    <string name="azure_setup_endpoint_placeholder">https://northeurope.api.cognitive.microsoft.com/ or northeurope</string>
+    <string name="azure_setup_credentials_description">Paste KEY 1 and the Location/Region.</string>
+    <string name="azure_setup_endpoint_label">Region or endpoint</string>
+    <string name="azure_setup_endpoint_placeholder">northeurope</string>
     <string name="azure_setup_key_label">Subscription key</string>
     <string name="azure_setup_save_credentials">Save Azure credentials</string>
     <string name="azure_setup_save_continue">Save and continue</string>
@@ -698,4 +685,19 @@
     <string name="welcome_engine_elevenlabs_desc">Personal and cloned voices. Needs a key. Sends your words online.</string>
     <string name="welcome_engine_check_failed">Wingmate could not check for a saved key. Try again.</string>
     <string name="welcome_finish_setup">Finish setup</string>
+    <string name="azure_guide_title">Get a free Azure voice</string>
+    <string name="azure_guide_computer">Easiest on a computer. Already have a key? Go to step 4.</string>
+    <string name="azure_guide_account_title">Create an Azure account</string>
+    <string name="azure_guide_account_body">Free. Microsoft asks for a card. Skip if you have a subscription.</string>
+    <string name="azure_guide_account_action">Open Azure sign-up</string>
+    <string name="azure_guide_resource_title">Create the Speech resource</string>
+    <string name="azure_guide_resource_body">In the form: pick your subscription, choose Create new resource group (for example wingmate), pick a region, then Review + create, then Create.</string>
+    <string name="azure_guide_resource_action">Open the form in Azure</string>
+    <string name="azure_guide_key_title">Copy the key</string>
+    <string name="azure_guide_key_body">Open wingmate-f0-…, then Keys and Endpoint. Copy KEY 1 and Location/Region.</string>
+    <string name="azure_guide_key_action">Open my Speech resources</string>
+    <string name="azure_guide_paste_title">Paste it into Wingmate</string>
+    <string name="azure_guide_paste_action">Enter key</string>
+    <string name="azure_guide_errors_title">If Azure shows an error</string>
+    <string name="azure_guide_errors_body">• Already have a free Speech resource? Use its key (only one per subscription).\n• Region not allowed? Pick another region.\n• Not registered? Subscriptions → Resource providers → Microsoft.CognitiveServices → Register.</string>
 </resources>

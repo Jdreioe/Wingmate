@@ -267,23 +267,10 @@
     <string name="language_no_match">Ingen sprog matcher filtrene</string>
 
     <string name="azure_setup_title">Opsætning af Azure TTS</string>
-    <string name="azure_setup_free_tier_title">Stemme i høj kvalitet, gratis niveau</string>
-    <string name="azure_setup_free_tier_description">Azure Text-to-Speech tilbyder neurale stemmer på mange sprog. F0-niveauet indeholder 500.000 tegn hver måned.</string>
-    <string name="azure_setup_portal_title">Opsæt i Azure Portal</string>
-    <string name="azure_setup_portal_description">Åbn en forudfyldt F0 Speech-installation i Azure Portal. Det virker med private Microsoft-konti og holder Azure-logon i portalen.</string>
-    <string name="azure_setup_existing_key_title">Indtast en eksisterende nøgle</string>
-    <string name="azure_setup_existing_key_description">Har du allerede en Speech-ressource? Indsæt dens endpoint og nøgle.</string>
-    <string name="azure_setup_create_title">Opret din gratis Speech-ressource</string>
-    <string name="azure_setup_in_portal">I Azure Portal:</string>
-    <string name="azure_setup_portal_steps">1. Vælg dit Azure-abonnement og en ressourcegruppe.\n2. Vælg en region, og vælg derefter Opret.\n3. Efter installationen skal du åbne Speech-ressourcerne nedenfor og vælge den nye wingmate-f0-*-ressource.\n4. Vælg Nøgler og endpoint, og kopiér en af nøglerne samt endpointet.</string>
-    <string name="azure_setup_open_portal">Åbn Azure Portal</string>
-    <string name="azure_setup_open_resources">Åbn mine Speech-ressourcer</string>
-    <string name="azure_setup_have_credentials">Jeg har endpoint og nøgle</string>
-    <string name="azure_setup_f0_limit">F0-niveauet tillader én Speech-ressource pr. abonnement.</string>
     <string name="azure_setup_credentials_title">Indtast Azure-oplysninger</string>
-    <string name="azure_setup_credentials_description">Indsæt endpointet og en af nøglerne fra Azure Portal → din Speech-ressource → Nøgler og endpoint.</string>
-    <string name="azure_setup_endpoint_label">Endpoint eller region</string>
-    <string name="azure_setup_endpoint_placeholder">https://northeurope.api.cognitive.microsoft.com/ eller northeurope</string>
+    <string name="azure_setup_credentials_description">Indsæt KEY 1 og Placering/Region.</string>
+    <string name="azure_setup_endpoint_label">Region eller slutpunkt</string>
+    <string name="azure_setup_endpoint_placeholder">northeurope</string>
     <string name="azure_setup_key_label">Abonnementsnøgle</string>
     <string name="azure_setup_save_credentials">Gem Azure-oplysninger</string>
     <string name="azure_setup_save_continue">Gem og fortsæt</string>
@@ -698,4 +685,19 @@
     <string name="welcome_engine_elevenlabs_desc">Personlige og klonede stemmer. Kræver en nøgle. Sender dine ord online.</string>
     <string name="welcome_engine_check_failed">Wingmate kunne ikke tjekke for en gemt nøgle. Prøv igen.</string>
     <string name="welcome_finish_setup">Gør opsætningen færdig</string>
+    <string name="azure_guide_title">Få en gratis Azure-stemme</string>
+    <string name="azure_guide_computer">Nemmest på en computer. Har du allerede en nøgle? Gå til trin 4.</string>
+    <string name="azure_guide_account_title">Opret en Azure-konto</string>
+    <string name="azure_guide_account_body">Gratis. Microsoft beder om et kort. Spring over, hvis du har et abonnement.</string>
+    <string name="azure_guide_account_action">Åbn Azure-tilmelding</string>
+    <string name="azure_guide_resource_title">Opret Speech-ressourcen</string>
+    <string name="azure_guide_resource_body">I formularen: vælg dit abonnement, vælg Opret ny ressourcegruppe (fx wingmate), vælg en region, og vælg derefter Gennemse + opret og Opret.</string>
+    <string name="azure_guide_resource_action">Åbn formularen i Azure</string>
+    <string name="azure_guide_key_title">Kopiér nøglen</string>
+    <string name="azure_guide_key_body">Åbn wingmate-f0-…, derefter Nøgler og slutpunkt. Kopiér KEY 1 og Placering/Region.</string>
+    <string name="azure_guide_key_action">Åbn mine Speech-ressourcer</string>
+    <string name="azure_guide_paste_title">Indsæt den i Wingmate</string>
+    <string name="azure_guide_paste_action">Indtast nøgle</string>
+    <string name="azure_guide_errors_title">Hvis Azure viser en fejl</string>
+    <string name="azure_guide_errors_body">• Har du allerede en gratis Speech-ressource? Brug dens nøgle (kun én pr. abonnement).\n• Region ikke tilladt? Vælg en anden region.\n• Ikke registreret? Abonnementer → Ressourceudbydere → Microsoft.CognitiveServices → Registrer.</string>
 </resources>
