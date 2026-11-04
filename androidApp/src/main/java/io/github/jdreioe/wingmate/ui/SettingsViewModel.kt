@@ -20,7 +20,6 @@ import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechService
-import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.SpeechPolicy
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
@@ -32,13 +31,9 @@ import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.infrastructure.ArasaacDownloadProgress
 import io.github.jdreioe.wingmate.infrastructure.ArasaacSymbolDownloadService
-import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpoint
-import io.github.jdreioe.wingmate.infrastructure.AzureSpeechEndpointResult
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,13 +75,6 @@ internal data class SettingsUiState(
     /** A settings write failed; the shown values are kept and can be retried. */
     val saveFailed: Boolean = false,
     val settings: Settings = Settings(),
-    // Azure credential drafts are transient entry state and deliberately do not
-    // survive process death.
-    val azureEndpoint: String = "",
-    val azureSubscriptionKey: String = "",
-    val azureCredentialConfigured: Boolean = false,
-    val replacingAzureCredentials: Boolean = false,
-    val azureEndpointInvalid: Boolean = false,
     val googleCredentialConfigured: Boolean = false,
     val boardSets: List<ObfBoardSet> = emptyList(),
     val arasaacAvailable: Boolean = false,
@@ -121,9 +109,6 @@ internal sealed interface SettingsAction {
     data object ElevenLabsSetupCompleted : SettingsAction
 
     data class TtsEngineSelected(val engine: TtsEngine) : SettingsAction
-    data class AzureEndpointChanged(val value: String) : SettingsAction
-    data class AzureSubscriptionKeyChanged(val value: String) : SettingsAction
-    data object ReplaceAzureCredentialsClicked : SettingsAction
     data object GoogleCredentialsCleared : SettingsAction
 
     data class FontSizeScaleChanged(val value: Float) : SettingsAction
@@ -215,9 +200,7 @@ internal interface SettingsOperations {
 
     suspend fun getSettings(): Settings
     suspend fun updateSettings(update: (Settings) -> Settings)
-    suspend fun azureStatus(): Pair<String, Boolean>
     suspend fun googleCredentialConfigured(): Boolean
-    suspend fun saveAzureCredentials(endpoint: String, subscriptionKey: String): Boolean
     suspend fun clearGoogleCredentials()
     suspend fun listBoardSets(): List<ObfBoardSet>
     suspend fun setSentenceCaching(boardSetId: String, enabled: Boolean): ObfBoardSet?
@@ -276,22 +259,8 @@ internal class DefaultSettingsOperations(
         }
     }
 
-    override suspend fun azureStatus(): Pair<String, Boolean> {
-        val status = configRepo?.getSpeechConfigStatus() ?: return "" to false
-        return status.endpoint to status.credentialConfigured
-    }
-
     override suspend fun googleCredentialConfigured(): Boolean =
         configRepo?.getGoogleSpeechConfigStatus()?.credentialConfigured == true
-
-    override suspend fun saveAzureCredentials(endpoint: String, subscriptionKey: String): Boolean {
-        val repo = configRepo ?: return false
-        return runCatching {
-            repo.saveSpeechConfig(
-                SpeechServiceConfig(endpoint = endpoint, subscriptionKey = subscriptionKey)
-            )
-        }.isSuccess
-    }
 
     override suspend fun clearGoogleCredentials() {
         runCatching { configRepo?.clearGoogleSpeechConfig() }
@@ -405,7 +374,6 @@ internal class SettingsViewModel(
 
     private val updateMutex = Mutex()
     private var lastFailedUpdate: ((Settings) -> Settings)? = null
-    private var azureSaveJob: Job? = null
     private var initialized = false
 
     fun onAction(action: SettingsAction) {
@@ -439,19 +407,6 @@ internal class SettingsViewModel(
 
             is SettingsAction.TtsEngineSelected -> persist {
                 it.copy(ttsEngine = action.engine)
-            }
-            is SettingsAction.AzureEndpointChanged -> {
-                _state.update {
-                    it.copy(azureEndpoint = action.value, azureEndpointInvalid = false)
-                }
-                scheduleAzureCredentialSave()
-            }
-            is SettingsAction.AzureSubscriptionKeyChanged -> {
-                _state.update { it.copy(azureSubscriptionKey = action.value) }
-                scheduleAzureCredentialSave()
-            }
-            SettingsAction.ReplaceAzureCredentialsClicked -> _state.update {
-                it.copy(replacingAzureCredentials = true, azureSubscriptionKey = "")
             }
             SettingsAction.GoogleCredentialsCleared -> clearGoogleCredentials()
 
@@ -633,7 +588,6 @@ internal class SettingsViewModel(
             _state.update { it.copy(isLoading = true, loadFailed = false) }
             try {
                 val settings = operations.getSettings()
-                val (endpoint, credentialConfigured) = operations.azureStatus()
                 val googleConfigured = operations.googleCredentialConfigured()
                 val boardSets = operations.listBoardSets()
                 val cachedSymbols = operations.cachedArasaacSymbolCount()
@@ -641,8 +595,6 @@ internal class SettingsViewModel(
                     it.copy(
                         isLoading = false,
                         settings = settings,
-                        azureEndpoint = endpoint,
-                        azureCredentialConfigured = credentialConfigured,
                         googleCredentialConfigured = googleConfigured,
                         boardSets = boardSets,
                         arasaacAvailable = operations.arasaacAvailable,
@@ -744,17 +696,6 @@ internal class SettingsViewModel(
 
     private fun completeF0Setup() {
         persist { it.copy(ttsEngine = TtsEngine.AZURE_USER_RESOURCE) }
-        viewModelScope.launch {
-            val (endpoint, configured) = operations.azureStatus()
-            _state.update {
-                it.copy(
-                    azureEndpoint = endpoint,
-                    azureCredentialConfigured = configured,
-                    replacingAzureCredentials = false,
-                    azureSubscriptionKey = "",
-                )
-            }
-        }
         setRoute(SettingsRoute.Category(SettingsTab.Speech))
     }
 
@@ -772,37 +713,6 @@ internal class SettingsViewModel(
         viewModelScope.launch {
             operations.clearGoogleCredentials()
             _state.update { it.copy(googleCredentialConfigured = false) }
-        }
-    }
-
-    /**
-     * Persists Azure credentials once typing pauses, mirroring the previous debounced
-     * text-field behaviour without waiting for an explicit save button.
-     */
-    private fun scheduleAzureCredentialSave() {
-        azureSaveJob?.cancel()
-        val current = _state.value
-        if (current.azureCredentialConfigured && !current.replacingAzureCredentials) return
-        val endpoint = current.azureEndpoint
-        val key = current.azureSubscriptionKey
-        if (endpoint.isBlank() || key.isBlank()) return
-        azureSaveJob = viewModelScope.launch {
-            delay(AZURE_SAVE_DEBOUNCE_MS)
-            if (AzureSpeechEndpoint.parse(endpoint) is AzureSpeechEndpointResult.Invalid) {
-                _state.update { it.copy(azureEndpointInvalid = true) }
-                return@launch
-            }
-            val saved = operations.saveAzureCredentials(endpoint, key)
-            if (saved) {
-                _state.update {
-                    it.copy(
-                        azureEndpointInvalid = false,
-                        azureCredentialConfigured = true,
-                        replacingAzureCredentials = false,
-                        azureSubscriptionKey = "",
-                    )
-                }
-            }
         }
     }
 
@@ -962,7 +872,6 @@ internal class SettingsViewModel(
     }
 
     private companion object {
-        const val AZURE_SAVE_DEBOUNCE_MS = 400L
         const val ROUTE_KEY = "settings.route"
         const val ROUTE_CATEGORY_PREFIX = "category:"
         const val ROUTE_DICTIONARY = "pronunciation_dictionary"

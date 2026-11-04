@@ -449,16 +449,6 @@ private fun CategoryContent(
             SettingsTab.Speech -> SpeechSection(
                 ttsEngine = settings.ttsEngine,
                 onTtsEngineChange = { engine -> onAction(SettingsAction.TtsEngineSelected(engine)) },
-                endpoint = state.azureEndpoint,
-                onEndpointChange = { onAction(SettingsAction.AzureEndpointChanged(it)) },
-                subscriptionKey = state.azureSubscriptionKey,
-                onSubscriptionKeyChange = { onAction(SettingsAction.AzureSubscriptionKeyChanged(it)) },
-                endpointError = if (state.azureEndpointInvalid) {
-                    stringResource(R.string.azure_setup_error_endpoint)
-                } else null,
-                credentialConfigured = state.azureCredentialConfigured,
-                replacingCredentials = state.replacingAzureCredentials,
-                onReplaceCredentials = { onAction(SettingsAction.ReplaceAzureCredentialsClicked) },
                 googleCredentialConfigured = state.googleCredentialConfigured,
                 onOpenElevenLabsSetup = { onAction(SettingsAction.ElevenLabsSetupOpened) },
                 onOpenGoogleSetup = { onAction(SettingsAction.GoogleSetupOpened) },
@@ -1149,14 +1139,6 @@ private fun SettingsCategoryRow(
 private fun SpeechSection(
     ttsEngine: TtsEngine,
     onTtsEngineChange: (TtsEngine) -> Unit,
-    endpoint: String,
-    onEndpointChange: (String) -> Unit,
-    subscriptionKey: String,
-    onSubscriptionKeyChange: (String) -> Unit,
-    endpointError: String?,
-    credentialConfigured: Boolean,
-    replacingCredentials: Boolean,
-    onReplaceCredentials: () -> Unit,
     googleCredentialConfigured: Boolean,
     onOpenElevenLabsSetup: () -> Unit,
     onOpenGoogleSetup: () -> Unit,
@@ -1202,17 +1184,9 @@ private fun SpeechSection(
         }
         if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
             SettingsGroupDivider()
-            AzureCredentialEditor(
-                credentialConfigured = credentialConfigured,
-                replacingCredentials = replacingCredentials,
-                endpoint = endpoint,
-                onEndpointChange = onEndpointChange,
-                subscriptionKey = subscriptionKey,
-                onSubscriptionKeyChange = onSubscriptionKeyChange,
-                endpointError = endpointError,
-                onReplaceCredentials = onReplaceCredentials,
-                modifier = Modifier.padding(vertical = 12.dp)
-            )
+            Button(onClick = onOpenF0Setup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.ui_settings_azure_setup))
+            }
         }
 
         if (ttsEngine == TtsEngine.ELEVENLABS) {
@@ -1236,23 +1210,14 @@ private fun SpeechSection(
                         Text(stringResource(R.string.google_tts_clear_key))
                     }
                 } else {
-                    Text(stringResource(R.string.google_tts_api_key_help))
                     Button(onClick = onOpenGoogleSetup, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.google_setup_guided_title))
+                        Text(stringResource(R.string.ui_settings_google_setup))
                     }
                 }
             }
         }
 
         Spacer(Modifier.height(12.dp))
-        if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
-            OutlinedButton(
-                onClick = onOpenF0Setup,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.ui_settings_azure_free_tier))
-            }
-        }
     }
 
     SettingsGroup(title = stringResource(R.string.phrase_screen_voice_settings)) {

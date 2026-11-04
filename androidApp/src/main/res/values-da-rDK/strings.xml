@@ -272,8 +272,6 @@
     <string name="azure_setup_endpoint_label">Placering/Region</string>
     <string name="azure_setup_endpoint_placeholder">northeurope</string>
     <string name="azure_setup_key_label">KEY 1</string>
-    <string name="azure_credentials_configured">Azure Speech-oplysningerne er konfigureret sikkert på denne enhed.</string>
-    <string name="azure_credentials_replace">Erstat Azure-oplysninger</string>
     <string name="azure_setup_error_endpoint">Indtast en gyldig Azure Speech-region eller et officielt HTTPS-endpoint.</string>
     <string name="azure_setup_error_key">Indtast en Speech-abonnementsnøgle.</string>
     <string name="azure_setup_error_save">Nøglen kunne ikke gemmes. Prøv igen.</string>
@@ -544,7 +542,6 @@
     <string name="ui_settings_azure_tts">Azure TTS</string>
     <string name="ui_settings_google_tts">Google Cloud TTS</string>
     <string name="google_tts_api_key">Google Cloud API-nøgle</string>
-    <string name="google_tts_api_key_help">Aktivér Cloud Text-to-Speech, og begræns nøglen til denne API. Nøglen forbliver på denne enhed.</string>
     <string name="google_tts_configured">Google Cloud API-nøgle er konfigureret</string>
     <string name="google_tts_replace_key">Erstat API-nøgle</string>
     <string name="google_tts_clear_key">Slet API-nøgle</string>
@@ -568,10 +565,6 @@
     <string name="google_setup_error_validation">Wingmate kunne ikke bekræfte nøglen. Kontrollér nøgle, forbindelse, fakturering, API-adgang og begrænsninger. Din tidligere opsætning er bevaret.</string>
     <string name="google_setup_complete_title">Google TTS er klar</string>
     <string name="google_setup_complete_description">Nøglen er bekræftet og gemt sikkert på denne enhed. Google Cloud-stemmer er nu tilgængelige.</string>
-    <string name="ui_settings_region_endpoint">Område/endpoint</string>
-    <string name="ui_settings_region_example">f.eks. northeurope</string>
-    <string name="ui_settings_subscription_key">Abonnementsnøgle</string>
-    <string name="ui_settings_azure_free_tier">Opsæt gratis niveau i Azure Portal</string>
     <string name="ui_settings_grid_layout">Gitterlayout</string>
     <string name="ui_settings_scaling">Skalering af brugerfladen</string>
     <string name="ui_settings_font_size">Skriftstørrelse</string>
@@ -604,7 +597,6 @@
     <string name="voice_settings_keep_current">Behold den aktuelle</string>
     <string name="dictionary_easy_help">Brug velkendte bogstaver og bindestreger til at vise lyden. Du behøver ikke kende IPA.</string>
     <string name="dictionary_advanced_options">Avancerede fonetiske indstillinger</string>
-    <string name="azure_config_key_placeholder">Din Azure Speech-tjenestenøgle</string>
     <string name="update_dismiss">Afvis</string>
     <string name="speech_import_title">Importér tale</string>
     <string name="speech_import_help">Indsæt din tale. En tom linje starter en ny knap; fjern en tom linje for at samle afsnit. Markdown-overskrifter navngiver sider og læses ikke op. Tryk på en knap for at læse hele afsnittet op.</string>
@@ -714,4 +706,6 @@
     <string name="welcome_test_slower">Langsommere</string>
     <string name="welcome_test_faster">Hurtigere</string>
     <string name="welcome_review_speed">Hastighed %1$.1f×</string>
+    <string name="ui_settings_azure_setup">Opsæt Azure</string>
+    <string name="ui_settings_google_setup">Opsæt Google Cloud TTS</string>
 </resources>

@@ -280,8 +280,6 @@
     <string name="azure_setup_endpoint_label">Location/Region</string>
     <string name="azure_setup_endpoint_placeholder">northeurope</string>
     <string name="azure_setup_key_label">KEY 1</string>
-    <string name="azure_credentials_configured">Azure Speech credentials are securely configured on this device.</string>
-    <string name="azure_credentials_replace">Replace Azure credentials</string>
     <string name="azure_setup_error_endpoint">Enter a valid Azure Speech region or official HTTPS endpoint.</string>
     <string name="azure_setup_error_key">Enter a Speech subscription key.</string>
     <string name="azure_setup_error_save">The key could not be saved. Try again.</string>
@@ -546,7 +544,6 @@
     <string name="ui_settings_azure_tts">Azure TTS</string>
     <string name="ui_settings_google_tts">Google Cloud TTS</string>
     <string name="google_tts_api_key">Google Cloud API key</string>
-    <string name="google_tts_api_key_help">Enable Cloud Text-to-Speech and restrict this key to that API. The key stays on this device.</string>
     <string name="google_tts_configured">Google Cloud API key configured</string>
     <string name="google_tts_replace_key">Replace API key</string>
     <string name="google_tts_clear_key">Clear API key</string>
@@ -570,10 +567,6 @@
     <string name="google_setup_error_validation">Wingmate could not verify this key. Check the key, connection, billing, API access, and restrictions. Your previous setup was kept.</string>
     <string name="google_setup_complete_title">Google TTS is ready</string>
     <string name="google_setup_complete_description">The key was verified and stored securely on this device. Google Cloud voices are now available.</string>
-    <string name="ui_settings_region_endpoint">Region / endpoint</string>
-    <string name="ui_settings_region_example">e.g., eastus</string>
-    <string name="ui_settings_subscription_key">Subscription key</string>
-    <string name="ui_settings_azure_free_tier">Set up free tier in Azure Portal</string>
     <string name="ui_settings_grid_layout">Grid layout</string>
     <string name="ui_settings_scaling">UI scaling</string>
     <string name="ui_settings_font_size">Font size</string>
@@ -604,7 +597,6 @@
     <string name="voice_settings_recommendation_title">💡 Recommendation:</string>
     <string name="voice_settings_recommendation">Choose Azure TTS for the best quality and language support, or System TTS for offline use and privacy.</string>
     <string name="voice_settings_keep_current">Keep current</string>
-    <string name="azure_config_key_placeholder">Your Azure Speech service key</string>
     <string name="update_dismiss">Dismiss</string>
     <string name="speech_import_title">Import speech</string>
     <string name="speech_import_help">Paste your speech. A blank line starts a new Button; remove a blank line to merge paragraphs. Markdown headings name Pages and are not spoken. Tap a Button to speak its full paragraph.</string>
@@ -714,4 +706,6 @@
     <string name="welcome_test_slower">Slower</string>
     <string name="welcome_test_faster">Faster</string>
     <string name="welcome_review_speed">Speed %1$.1f×</string>
+    <string name="ui_settings_azure_setup">Set up Azure</string>
+    <string name="ui_settings_google_setup">Set up Google Cloud TTS</string>
 </resources>
