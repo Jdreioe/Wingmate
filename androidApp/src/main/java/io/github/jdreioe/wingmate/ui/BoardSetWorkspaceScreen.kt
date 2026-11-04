@@ -487,14 +487,7 @@ private fun BoardSetLibraryScreen(
                         .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                 ) {
-                    FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Text(stringResource(R.string.speech_import_title))
-                    }
-                    Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.board_sets_new))
-                    }
+                    BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
                 }
             }
             Box(Modifier.widthIn(max = if (large) BoardSetLibraryMaxWidth else Dp.Unspecified).fillMaxSize()) {
@@ -526,18 +519,14 @@ private fun BoardSetLibraryScreen(
                         if (large) {
                             // Without floating buttons, the empty library always offers both ways to
                             // start, also after a failure (e.g. a failed import or the last delete).
+                            // The same buttons, in the same order, as above a list.
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
-                                    Text(stringResource(R.string.board_sets_create))
-                                }
-                                FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
-                                    Text(stringResource(R.string.speech_import_title))
-                                }
                                 if (statusMessage != null) {
                                     TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 56.dp)) {
                                         Text(stringResource(R.string.common_retry))
                                     }
                                 }
+                                BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
                             }
                         } else if (statusMessage != null) {
                             Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
@@ -568,6 +557,19 @@ private fun BoardSetLibraryScreen(
                 }
             }
         }
+    }
+}
+
+/** Import speech and New screen, as a large window shows them in both library states. */
+@Composable
+private fun BoardSetLibraryActions(onImportSpeech: () -> Unit, onCreate: () -> Unit) {
+    FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
+        Text(stringResource(R.string.speech_import_title))
+    }
+    Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
+        Icon(Icons.Default.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.board_sets_new))
     }
 }
 
