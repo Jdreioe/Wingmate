@@ -675,7 +675,7 @@
     <string name="welcome_privacy_speech_title">Speech</string>
     <string name="welcome_privacy_speech_system">Wingmate gives the text you speak to the speech engine installed on this device and does not send it online itself. Some engines can use the internet; check the engine\'s own settings.</string>
     <string name="welcome_privacy_speech_cloud">Text you speak is sent to %1$s to create audio. Audio for whole messages may be saved on this device so they can play again without being sent.</string>
-    <string name="welcome_privacy_history_desc">Messages you speak are listed in History so you can say them again, and word predictions learn from them. Hiding History only hides them and keeps them out of predictions: the messages are still saved on this device and included in backups you make.</string>
+    <string name="welcome_privacy_history_desc">Messages you speak are listed in History so you can say them again, and word predictions learn from them. While History is hidden, newly spoken messages are not listed or used for predictions, but they are still saved on this device and included in backups you make.</string>
     <string name="welcome_review_title">Ready to communicate</string>
     <string name="welcome_review_subtitle">Check your choices. You can change any of them now or later in Settings.</string>
     <string name="welcome_review_voice">Voice</string>
@@ -692,7 +692,9 @@
     <string name="test_voice_keep_as_phrase">Keep this sentence as a Phrase</string>
     <string name="welcome_review_save_failed">Your choices could not be saved. They are still here, so you can try again.</string>
     <string name="test_voice_failed">This voice could not play. Check your internet connection or choose another voice.</string>
-    <string name="welcome_exit_failed">Your previous voice settings could not be put back. Try again.</string>
     <string name="welcome_privacy_speech_unknown">Wingmate could not read which speech service you chose, so it cannot say where your words go.</string>
     <string name="welcome_privacy_online_when_on">Sent online only if turned on</string>
+    <string name="welcome_leave_setup">Leave setup</string>
+    <string name="welcome_start_failed">Wingmate could not save that setup has started. Try again.</string>
+    <string name="welcome_engine_save_failed">This speech engine could not be saved. Try again.</string>
 </resources>

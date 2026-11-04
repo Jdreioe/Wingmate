@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,9 +56,9 @@ fun App() {
             color = MaterialTheme.colorScheme.background
         ) {
             // True while setup was opened from a workspace; only then may it be left unfinished.
-            var welcomeReopened by remember { mutableStateOf(false) }
+            var welcomeReopened by rememberSaveable { mutableStateOf(false) }
             // The setup Phrase already added in this session, so retrying Review cannot add it twice.
-            var savedSetupPhrase by remember { mutableStateOf<String?>(null) }
+            var savedSetupPhrase by rememberSaveable { mutableStateOf<String?>(null) }
             var currentScreen by remember { mutableStateOf<Screen?>(null) }
             var startupLoadState by remember { mutableStateOf<StartupLoadState>(StartupLoadState.Loading) }
             var startupRetryKey by remember { mutableIntStateOf(0) }

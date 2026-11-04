@@ -675,7 +675,7 @@
     <string name="welcome_privacy_speech_title">Tale</string>
     <string name="welcome_privacy_speech_system">Wingmate giver den tekst, du siger, til talemotoren på denne enhed og sender den ikke selv online. Nogle talemotorer kan bruge internettet; se talemotorens egne indstillinger.</string>
     <string name="welcome_privacy_speech_cloud">Tekst, du siger, sendes til %1$s for at lave lyd. Lyd for hele beskeder kan gemmes på denne enhed, så de kan afspilles igen uden at blive sendt.</string>
-    <string name="welcome_privacy_history_desc">Beskeder, du siger, vises i Historik, så du kan sige dem igen, og ordforslag lærer af dem. At skjule Historik skjuler dem kun og holder dem ude af ordforslag: beskederne gemmes stadig på denne enhed og kommer med i de sikkerhedskopier, du laver.</string>
+    <string name="welcome_privacy_history_desc">Beskeder, du siger, vises i Historik, så du kan sige dem igen, og ordforslag lærer af dem. Mens Historik er skjult, vises nye beskeder ikke og bruges ikke til ordforslag, men de gemmes stadig på denne enhed og kommer med i de sikkerhedskopier, du laver.</string>
     <string name="welcome_review_title">Klar til at kommunikere</string>
     <string name="welcome_review_subtitle">Tjek dine valg. Du kan ændre dem nu eller senere i Indstillinger.</string>
     <string name="welcome_review_voice">Stemme</string>
@@ -692,7 +692,9 @@
     <string name="test_voice_keep_as_phrase">Gem sætningen som en frase</string>
     <string name="welcome_review_save_failed">Dine valg kunne ikke gemmes. De er her stadig, så du kan prøve igen.</string>
     <string name="test_voice_failed">Stemmen kunne ikke afspilles. Tjek din internetforbindelse, eller vælg en anden stemme.</string>
-    <string name="welcome_exit_failed">Dine tidligere stemmeindstillinger kunne ikke sættes tilbage. Prøv igen.</string>
     <string name="welcome_privacy_speech_unknown">Wingmate kunne ikke læse, hvilken taletjeneste du valgte, så den kan ikke sige, hvor dine ord bliver af.</string>
     <string name="welcome_privacy_online_when_on">Sendes kun online, hvis det er slået til</string>
+    <string name="welcome_leave_setup">Forlad opsætning</string>
+    <string name="welcome_start_failed">Wingmate kunne ikke gemme, at opsætningen er startet. Prøv igen.</string>
+    <string name="welcome_engine_save_failed">Talemotoren kunne ikke gemmes. Prøv igen.</string>
 </resources>

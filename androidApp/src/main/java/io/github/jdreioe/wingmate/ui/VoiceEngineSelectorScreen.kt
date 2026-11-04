@@ -7,30 +7,34 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import androidx.compose.ui.res.stringResource
 
 import com.hojmoseit.wingmate.R
+/**
+ * Setup page for choosing a speech engine. It saves nothing: setup saves the engine once
+ * the device voice is chosen or the cloud provider is set up, so backing out of a provider
+ * never leaves an engine without credentials.
+ */
 @Composable
 fun VoiceEngineSelectorScreen(
-    onNext: () -> Unit, 
-    onCancel: () -> Unit,
-    onAzureSelected: () -> Unit = {},
-    onGoogleSelected: () -> Unit = {},
-    onElevenLabsSelected: () -> Unit = {},
+    onEngineChosen: (TtsEngine) -> Unit,
+    onBack: () -> Unit,
+    errorMessage: String? = null,
 ) {
     val settingsUseCase = koinInject<SettingsUseCase>()
 
     var ttsEngine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var loading by remember { mutableStateOf(true) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(settingsUseCase) {
         val settings = withContext(Dispatchers.Default) {
@@ -262,6 +266,16 @@ fun VoiceEngineSelectorScreen(
                     }
                 }
 
+                errorMessage?.let {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Action Buttons
@@ -270,33 +284,15 @@ fun VoiceEngineSelectorScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     OutlinedButton(
-                        onClick = onCancel,
-                        modifier = Modifier.weight(1f)
+                        onClick = onBack,
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp)
                     ) {
-                        Text(stringResource(R.string.common_cancel))
+                        Text(stringResource(R.string.common_back))
                     }
 
                     Button(
-                        onClick = {
-                            scope.launch {
-                                // Save the selected TTS engine setting
-                                val currentSettings: Settings = withContext(Dispatchers.Default) {
-                                    runCatching { settingsUseCase.get() }.getOrNull() ?: Settings()
-                                }
-                                runCatching {
-                                    settingsUseCase.update(currentSettings.copy(ttsEngine = ttsEngine))
-                                }
-
-                                // Navigate to appropriate next screen based on selection
-                                when (ttsEngine) {
-                                    TtsEngine.SYSTEM -> onNext()
-                                    TtsEngine.ELEVENLABS -> onElevenLabsSelected()
-                                    TtsEngine.GOOGLE_CLOUD -> onGoogleSelected()
-                                    TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> onAzureSelected()
-                                }
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
+                        onClick = { onEngineChosen(ttsEngine) },
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp)
                     ) {
                         Text(stringResource(R.string.common_next))
                     }

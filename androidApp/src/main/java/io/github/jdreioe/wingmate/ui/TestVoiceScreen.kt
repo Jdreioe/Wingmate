@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -57,6 +58,22 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
     var loadAttempt by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
+    /** Stops a preview before leaving, so it does not keep playing over the previous page. */
+    fun stopThenBack() {
+        scope.launch {
+            try {
+                speechService.stop()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
+            }
+            onBack()
+        }
+    }
+    // Takes precedence over setup's own Back handling while this page is shown.
+    BackHandler(onBack = ::stopThenBack)
+
     // Load selected voice
     LaunchedEffect(voiceUseCase, loadAttempt) {
         loading = true
@@ -110,7 +127,7 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 Text(stringResource(R.string.common_retry))
             }
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            OutlinedButton(onClick = ::stopThenBack, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text(stringResource(R.string.common_back))
             }
         } else {
@@ -268,17 +285,7 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 OutlinedButton(
-                    onClick = {
-                        // Stop any ongoing speech before going back
-                        scope.launch {
-                            try {
-                                    speechService.stop()
-                            } catch (e: Exception) {
-                                OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
-                            }
-                            onBack()
-                        }
-                    },
+                    onClick = ::stopThenBack,
                     modifier = Modifier.weight(1f).heightIn(min = 56.dp)
                 ) {
                     Text(stringResource(R.string.common_back))
