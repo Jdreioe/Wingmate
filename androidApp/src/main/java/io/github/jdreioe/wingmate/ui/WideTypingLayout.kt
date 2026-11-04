@@ -172,9 +172,9 @@ private fun WideTypingPanel(
     val actionRow = 56.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)
     BoxWithConstraints(Modifier.fillMaxSize().padding(12.dp)) {
     // A short panel (a foldable or laptop window with the on-screen keyboard up, or large
-    // scaling) drops Speak, Stop and Keyboard to a still-large 56dp and leaves out the app
-    // actions (Screens, fullscreen, Settings; back once the keyboard is hidden), so at least one
-    // row of the area below and its Earlier/More buttons stay on screen.
+    // scaling) drops Speak, Stop and Keyboard to a still-large 56dp and moves the app actions
+    // (Screens, fullscreen, Settings) to the top of the scroll area, so at least one row of it
+    // and its Earlier/More buttons stay on screen and every action stays reachable.
     val roomy = maxHeight >= 48.dp + 88.dp * controlScale + 72.dp * controlScale + actionRow + 56.dp + 8.dp * 6
     val speakHeight = if (roomy) 88.dp * controlScale else 56.dp
     val controlHeight = if (roomy) 72.dp * controlScale else 56.dp
@@ -260,7 +260,13 @@ private fun WideTypingPanel(
                 .padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (heldMessage != null) HeldMessageCard(heldMessage, onSwapHeld, settings, Modifier.then(items.item("held")))
+            if (!roomy) {
+                Row(items.item("app").fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
+            }
+            if (heldMessage != null) {
+                // Swap is its own stop, so a long held Message never leaves it half shown.
+                HeldMessageCard(heldMessage, onSwapHeld, settings, items.item("held"), swapModifier = items.item("swap"))
+            }
             actions { row -> items.item(row) }
             // Room after the last row, so the last page also starts at a whole item.
             Spacer(Modifier.height(with(LocalDensity.current) { items.endPadding.toDp() }))
@@ -369,7 +375,13 @@ private fun StackedLabel(icon: ImageVector, label: String) {
 }
 
 @Composable
-private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settings: Settings, modifier: Modifier = Modifier) {
+private fun ColumnScope.HeldMessageCard(
+    text: String,
+    onSwap: () -> Unit,
+    settings: Settings,
+    modifier: Modifier = Modifier,
+    swapModifier: Modifier = Modifier,
+) {
     Column(
         modifier
             .fillMaxWidth()
@@ -390,7 +402,7 @@ private fun ColumnScope.HeldMessageCard(text: String, onSwap: () -> Unit, settin
         }
         TextButton(
             onClick = onSwap,
-            modifier = Modifier
+            modifier = swapModifier
                 .align(Alignment.End)
                 .heightIn(min = 56.dp)
                 .typingAccessTarget("typing:swap-held", enabled = true, shape = ButtonDefaults.textShape, action = onSwap)
