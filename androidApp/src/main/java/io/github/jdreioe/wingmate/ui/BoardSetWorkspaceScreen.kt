@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.material.icons.filled.CheckCircle
@@ -601,6 +602,36 @@ private fun BoardSetLibraryActions(onImportSpeech: () -> Unit, onCreate: () -> U
     }
 }
 
+/**
+ * The edit top bar while a Button is selected, as Android shows a selection: what is selected,
+ * and labelled actions for it. The non-gesture way to edit or remove a Button.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectedButtonTopBar(label: String, onEdit: () -> Unit, onRemove: () -> Unit, onDeselect: () -> Unit) {
+    TopAppBar(
+        title = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        navigationIcon = {
+            IconButton(onClick = onDeselect) {
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.board_selection_done))
+            }
+        },
+        actions = {
+            TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.board_cell_menu_edit))
+            }
+            TextButton(onClick = onRemove, modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.board_cell_menu_remove), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    )
+}
+
 /** How wide the Screens library grows on a large window. */
 private val BoardSetLibraryMaxWidth = 840.dp
 
@@ -1107,10 +1138,35 @@ private fun BoardSetWorkspaceRoot(
 
     BackHandler(enabled = true, onBack = ::navigateBack)
     PlatformBackgroundEffect { editingAccessController?.lock() }
+    // The selected Button while editing, if any; Back deselects it before leaving.
+    val selectedButton = if (mode == BoardWorkspaceMode.Edit) {
+        selectedField?.let { (row, column) ->
+            activeBoard?.grid?.normalizedOrder()?.getOrNull(row)?.getOrNull(column)
+                ?.let { id -> activeBoard.buttons.firstOrNull { it.id == id } }
+        }
+    } else null
+    BackHandler(enabled = selectedButton != null) { selectedField = null }
 
     Scaffold(
         topBar = {
-            if (!isFullscreen) BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val selection = selectedField
+            if (!isFullscreen && selectedButton != null && selection != null) {
+                SelectedButtonTopBar(
+                    label = selectedButton.label ?: selectedButton.vocalization.orEmpty(),
+                    onEdit = { editingCell = WorkspaceCellTarget(selection.first, selection.second, selectedButton) },
+                    onRemove = {
+                        val session = editSession
+                        val boardId = activeBoard?.id
+                        if (session != null && boardId != null) {
+                            selectedField = null
+                            workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(
+                                clearDraftCell(session.draft, boardId, selection.first, selection.second)
+                            ))
+                        }
+                    },
+                    onDeselect = { selectedField = null },
+                )
+            } else if (!isFullscreen) BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val useOverflowMenu = maxWidth < if (mode == BoardWorkspaceMode.Edit) 720.dp else 560.dp
                 TopAppBar(
                 title = {
@@ -1698,10 +1754,16 @@ private fun BoardSetWorkspaceRoot(
                                     )
                                 ) {
                                     is CellTapResult.OpenDialog -> {
-                                        selectedField = result.button?.let {
-                                            activeBoard.grid?.fieldAnchorAt(result.row, result.column)
+                                        // Like a launcher: a tap selects a Button (Edit and Remove in the
+                                        // top bar, resize handles on it); tapping it again deselects. An
+                                        // empty cell has nothing to select, so a tap adds a Button there.
+                                        if (result.button != null) {
+                                            val anchor = activeBoard.grid?.fieldAnchorAt(result.row, result.column)
+                                            selectedField = anchor.takeUnless { it == selectedField }
+                                        } else {
+                                            selectedField = null
+                                            editingCell = WorkspaceCellTarget(result.row, result.column, null)
                                         }
-                                        editingCell = WorkspaceCellTarget(result.row, result.column, result.button)
                                     }
                                 }
                             }

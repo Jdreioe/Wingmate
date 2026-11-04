@@ -732,4 +732,5 @@
     <string name="board_cell_menu_edit">Edit</string>
     <string name="board_cell_menu_resize">Resize</string>
     <string name="board_cell_menu_remove">Remove</string>
+    <string name="board_selection_done">Done selecting</string>
 </resources>

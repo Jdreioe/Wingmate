@@ -732,4 +732,5 @@
     <string name="board_cell_menu_edit">Rediger</string>
     <string name="board_cell_menu_resize">Tilpas størrelse</string>
     <string name="board_cell_menu_remove">Fjern</string>
+    <string name="board_selection_done">Færdig med at vælge</string>
 </resources>
