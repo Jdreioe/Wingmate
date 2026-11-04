@@ -1,397 +1,348 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import io.github.jdreioe.wingmate.application.FeatureUsageEvents
-import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.CompleteBackupManager
+import io.github.jdreioe.wingmate.application.FeatureUsageEvents
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsUseCase
 import io.github.jdreioe.wingmate.application.VoiceUseCase
+import io.github.jdreioe.wingmate.application.reportEvent
+import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
-import io.github.jdreioe.wingmate.domain.Voice
-import io.github.jdreioe.wingmate.application.reportEvent
-import io.github.jdreioe.wingmate.infrastructure.BoardImportService
-import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.platform.FilePicker
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.res.stringResource
 import org.koin.compose.getKoin
 
-import com.hojmoseit.wingmate.BuildConfig
-import com.hojmoseit.wingmate.R
+/**
+ * The answers collected during first-run setup. Voice and language choices are saved
+ * by their own pages as before; everything here is saved only when the Communicator
+ * presses "Start communicating", so abandoning setup leaves no partial workspace choices.
+ */
+data class WelcomeChoices(
+    val startupMode: StartupMode = StartupMode.Keyboard,
+    /** Only meaningful for [StartupMode.Screens]: open a new blank Screen on arrival. */
+    val createBlankScreen: Boolean = true,
+    /** A test sentence the Communicator chose to keep as a Phrase, or null. */
+    val phraseToSave: String? = null,
+    val historyVisible: Boolean = true,
+    val featureUsageReportingEnabled: Boolean = false,
+)
+
+/** One page of setup. [analyticsName] is stable across R8 renaming. */
+private sealed class WelcomeStep(val analyticsName: String) {
+    data object Start : WelcomeStep("start")
+    data object VoiceEngine : WelcomeStep("voice_engine")
+    data object AzureSetup : WelcomeStep("azure_setup")
+    data object GoogleSetup : WelcomeStep("google_setup")
+    data object ElevenLabsSetup : WelcomeStep("elevenlabs_setup")
+    data object Voice : WelcomeStep("voice")
+    data object Language : WelcomeStep("language")
+    data object TestVoice : WelcomeStep("test_voice")
+    data object Workspace : WelcomeStep("workspace")
+    data object Privacy : WelcomeStep("privacy")
+    data object Review : WelcomeStep("review")
+}
+
+/**
+ * First-run setup: voice first (so the Communicator hears themselves early), then how
+ * they communicate, then what stays on the device, then a review with one finish button.
+ * Navigation is a back stack, so system Back and on-screen Back always return to the
+ * page that was actually shown before.
+ */
 @Composable
 fun WelcomeScreen(
-    onComplete: (startupMode: StartupMode, createScreen: Boolean, analyticsEnabled: Boolean) -> Unit,
+    onComplete: (WelcomeChoices) -> Unit,
     onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit
 ) {
     val koin = getKoin()
-    val boardImportService = remember(koin) {
-        if (BuildConfig.DEBUG) koin.getOrNull<BoardImportService>() else null
-    }
-    val enableBoardImport = boardImportService != null
-    val featureUsageReporter = remember(koin) {
-        koin.getOrNull<FeatureUsageReporter>()
-    }
-    val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
-    val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
+    val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
 
-    var step by remember { mutableStateOf(0) }
-    var startupMode by remember { mutableStateOf(StartupMode.Keyboard) }
-    var modeTour by remember { mutableStateOf<StartupMode?>(StartupMode.Keyboard) }
-    var createScreenOnComplete by remember { mutableStateOf(false) }
-    var voiceSelectorSetupStep by remember { mutableStateOf<Int?>(null) }
-    var analyticsEnabled by remember { mutableStateOf(false) }
-    var pendingRestorePath by remember { mutableStateOf<String?>(null) }
-    var restoreStatus by remember { mutableStateOf<String?>(null) }
-    var isRestoring by remember { mutableStateOf(false) }
-    
-    // Import state
-    var isImporting by remember { mutableStateOf(false) }
-    var importError by remember { mutableStateOf<String?>(null) }
-    val importUnreadable = stringResource(R.string.welcome_import_unreadable)
-    val importPersistenceFailed = stringResource(R.string.welcome_import_persistence_failed)
-    val importInvalid = stringResource(R.string.welcome_import_invalid)
-    val importUnexpected = stringResource(R.string.welcome_import_unexpected)
-    val backupPickerFailed = stringResource(R.string.backup_picker_failed)
-    val backupRestoreUnavailable = stringResource(R.string.backup_restore_unavailable)
-    val backupRestoreTitle = stringResource(R.string.backup_restore)
-    val scope = rememberCoroutineScope()
+    var path by remember { mutableStateOf(listOf<WelcomeStep>(WelcomeStep.Start)) }
+    var choices by remember { mutableStateOf(WelcomeChoices()) }
+    val step = path.last()
 
-    fun importFailureMessage(result: BoardImportResult.Failure): String = when (result.code) {
-        io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode.FILE_UNREADABLE -> importUnreadable
-        io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode.PERSISTENCE_FAILED -> importPersistenceFailed
-        else -> importInvalid
-    }
+    fun push(next: WelcomeStep) { path = path + next }
+    fun pop() { if (path.size > 1) path = path.dropLast(1) }
+    /** Return to an earlier page from Review; following pages are rebuilt on the way forward. */
+    fun revisit(target: WelcomeStep) { path = path.takeWhile { it != target } + target }
 
     LaunchedEffect(Unit) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STARTED)
     }
     LaunchedEffect(step) {
-        featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.toString())
+        featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.analyticsName)
     }
+    BackHandler(enabled = path.size > 1) { pop() }
 
-    BackHandler(enabled = step > 0) {
-        when (step) {
-            1 -> if (modeTour != null) modeTour = null else step = 0
-            2 -> step = 1
-            3 -> step = if (enableBoardImport) 2 else 1
-            4 -> step = 3
-            5 -> step = 6
-            6 -> step = voiceSelectorSetupStep ?: 3
-            7 -> step = 6
-            8 -> step = 7
-            9 -> step = 3
-        }
-    }
+    val pageModifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)
 
     when (step) {
-        0 -> {
-            // Intro
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .safeDrawingPadding()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        stringResource(R.string.welcome_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        stringResource(R.string.welcome_subtitle),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = { step = 1 }) { Text(stringResource(R.string.common_next)) }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        enabled = !isRestoring && backupManager != null && backupFilePicker != null,
-                        onClick = {
-                            scope.launch {
-                                restoreStatus = null
-                                try {
-                                    pendingRestorePath = backupFilePicker?.pickFile(
-                                        title = backupRestoreTitle,
-                                        extensions = listOf("wingmate-backup", "zip")
-                                    )
-                                } catch (failure: CancellationException) {
-                                    throw failure
-                                } catch (_: Exception) {
-                                    restoreStatus = backupPickerFailed
-                                }
-                            }
-                        }
-                    ) {
-                        if (isRestoring) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Text(stringResource(R.string.backup_restore))
-                    }
-                    restoreStatus?.let {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
-        }
-        1 -> {
-            val selectMode: (StartupMode) -> Unit = { mode ->
-                startupMode = mode
-                createScreenOnComplete = false
+        WelcomeStep.Start -> StartPage(
+            onSetUp = { push(WelcomeStep.VoiceEngine) },
+            onBackupRestored = onBackupRestored,
+        )
+        WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(
+            onNext = {
+                featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "system")
+                push(WelcomeStep.Voice)
+            },
+            onCancel = ::pop,
+            onAzureSelected = {
+                featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "azure")
+                push(WelcomeStep.AzureSetup)
+            },
+            onGoogleSelected = {
+                featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "google")
+                push(WelcomeStep.GoogleSetup)
+            },
+            onElevenLabsSelected = {
+                featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "elevenlabs")
+                push(WelcomeStep.ElevenLabsSetup)
+            },
+        )
+        WelcomeStep.AzureSetup -> F0SetupScreen(onDone = { push(WelcomeStep.Voice) }, onBack = ::pop)
+        WelcomeStep.GoogleSetup -> GoogleTtsSetupScreen(onDone = { push(WelcomeStep.Voice) }, onBack = ::pop)
+        WelcomeStep.ElevenLabsSetup -> ElevenLabsSetupScreen(onDone = { push(WelcomeStep.Voice) }, onBack = ::pop)
+        WelcomeStep.Voice -> VoiceSelectionPage(
+            onBack = ::pop,
+            onVoiceSelected = { push(WelcomeStep.Language) },
+            modifier = pageModifier,
+        )
+        WelcomeStep.Language -> LanguageSelectionPage(
+            onBack = ::pop,
+            onContinue = { push(WelcomeStep.TestVoice) },
+            modifier = pageModifier,
+        )
+        WelcomeStep.TestVoice -> TestVoiceScreen(
+            initialPhraseToSave = choices.phraseToSave,
+            onNext = { phraseToSave ->
+                choices = choices.copy(phraseToSave = phraseToSave)
+                push(WelcomeStep.Workspace)
+            },
+            onBack = ::pop,
+        )
+        WelcomeStep.Workspace -> WorkspacePage(
+            choices = choices,
+            onChoicesChange = { choices = it },
+            onBack = ::pop,
+            onContinue = {
                 featureUsageReporter?.reportEvent(
                     FeatureUsageEvents.STARTUP_MODE_SELECTED,
-                    "mode" to mode.name.lowercase()
+                    "mode" to choices.startupMode.name.lowercase()
                 )
-                step = if (enableBoardImport) 2 else 3
+                push(WelcomeStep.Privacy)
+            },
+        )
+        WelcomeStep.Privacy -> PrivacyPage(
+            choices = choices,
+            onChoicesChange = { choices = it },
+            onBack = ::pop,
+            onContinue = { push(WelcomeStep.Review) },
+        )
+        WelcomeStep.Review -> ReviewPage(
+            choices = choices,
+            onChangeVoice = { revisit(WelcomeStep.VoiceEngine) },
+            onChangePhrase = { revisit(WelcomeStep.TestVoice) },
+            onChangeWorkspace = { revisit(WelcomeStep.Workspace) },
+            onChangePrivacy = { revisit(WelcomeStep.Privacy) },
+            onBack = ::pop,
+            onFinish = { onComplete(choices) },
+        )
+    }
+}
+
+// ─── Shared layout ───────────────────────────────────────────────────────────
+
+/**
+ * Common frame for setup pages: a heading, scrollable content, and large Back and
+ * primary buttons that stay in the same place on every page.
+ */
+@Composable
+private fun WelcomePage(
+    title: String,
+    subtitle: String?,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    onBack: (() -> Unit)?,
+    primaryEnabled: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp)) {
+            Column(
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.semantics { heading() },
+                )
+                subtitle?.let {
+                    Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                content()
             }
-            modeTour?.let { mode ->
-                StartupModeTourScreen(
-                    mode = mode,
-                    onContinue = {
-                        modeTour = if (mode == StartupMode.Keyboard) StartupMode.Screens else null
-                    },
-                    onBack = { modeTour = null }
-                )
-            } ?: StartupModeSelectionScreen(
-                onKeyboard = { selectMode(StartupMode.Keyboard) },
-                onScreens = { selectMode(StartupMode.Screens) },
-                onBack = { step = 0 }
-            )
-        }
-        2 -> {
-            // Import Board Options
-            if (isImporting) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(Modifier.height(16.dp))
-                            Text(stringResource(R.string.welcome_importing_board))
-                        }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (onBack != null) {
+                    OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
+                        Text(stringResource(R.string.common_back))
                     }
                 }
-            } else {
-                ImportOptionsScreen(
-                    onImportClassic = { 
-                        scope.launch {
-                            isImporting = true
-                            importError = null
-                            featureUsageReporter?.reportEvent(
-                                FeatureUsageEvents.BOARD_IMPORT_STARTED,
-                                "mode" to "classic"
-                            )
-                            try {
-                                when (val result = boardImportService?.importBoardSetResult()) {
-                                  is BoardImportResult.Success -> {
-                                    featureUsageReporter?.reportEvent(
-                                        FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
-                                        "mode" to "classic"
-                                    )
-                                    // Move to next step if successful
-                                    step = 3
-                                  }
-                                  is BoardImportResult.Failure -> {
-                                    importError = importFailureMessage(result)
-                                    featureUsageReporter?.reportEvent(
-                                        FeatureUsageEvents.BOARD_IMPORT_FAILED,
-                                        "mode" to "classic",
-                                        "reason" to result.code.name.lowercase()
-                                    )
-                                  }
-                                  BoardImportResult.Cancelled, null -> Unit
-                                }
-                            } catch (error: CancellationException) {
-                                throw error
-                            } catch (_: Exception) {
-                                importError = importUnexpected
-                                featureUsageReporter?.reportEvent(
-                                    FeatureUsageEvents.BOARD_IMPORT_FAILED,
-                                    "mode" to "classic",
-                                    "reason" to "exception"
-                                )
-                            } finally {
-                                isImporting = false
-                            }
-                        }
-                    },
-                    onImportModern = {
-                         scope.launch {
-                            isImporting = true
-                            importError = null
-                            featureUsageReporter?.reportEvent(
-                                FeatureUsageEvents.BOARD_IMPORT_STARTED,
-                                "mode" to "modern"
-                            )
-                            try {
-                                when (val result = boardImportService?.importBoardSetResult()) {
-                                  is BoardImportResult.Success -> {
-                                    featureUsageReporter?.reportEvent(
-                                        FeatureUsageEvents.BOARD_IMPORT_COMPLETED,
-                                        "mode" to "modern"
-                                    )
-                                    step = 3
-                                  }
-                                  is BoardImportResult.Failure -> {
-                                    importError = importFailureMessage(result)
-                                    featureUsageReporter?.reportEvent(
-                                        FeatureUsageEvents.BOARD_IMPORT_FAILED,
-                                        "mode" to "modern",
-                                        "reason" to result.code.name.lowercase()
-                                    )
-                                  }
-                                  BoardImportResult.Cancelled, null -> Unit
-                                }
-                            } catch (error: CancellationException) {
-                                throw error
-                            } catch (_: Exception) {
-                                importError = importUnexpected
-                                featureUsageReporter?.reportEvent(
-                                    FeatureUsageEvents.BOARD_IMPORT_FAILED,
-                                    "mode" to "modern",
-                                    "reason" to "exception"
-                                )
-                            } finally {
-                                isImporting = false
-                            }
-                        }
-                    },
-                    onCreateFromScratch = {
-                        featureUsageReporter?.reportEvent(
-                            FeatureUsageEvents.BOARD_SETUP_CHOICE,
-                            "mode" to "scratch"
-                        )
-                        createScreenOnComplete = true
-                        step = 3
-                    },
-                    onSkip = {
-                        featureUsageReporter?.reportEvent(
-                            FeatureUsageEvents.BOARD_SETUP_CHOICE,
-                            "mode" to "skip"
-                        )
-                        step = 3
-                    },
-                    errorMessage = importError,
-                    showClassic = startupMode == StartupMode.Screens,
-                    showModern = startupMode == StartupMode.Keyboard,
-                    showCreateFromScratch = startupMode == StartupMode.Screens
+                Button(
+                    onClick = onPrimary,
+                    enabled = primaryEnabled,
+                    modifier = Modifier.weight(if (onBack != null) 2f else 1f).heightIn(min = 56.dp),
+                ) {
+                    Text(primaryLabel)
+                }
+            }
+        }
+    }
+}
+
+/** A large, single-choice card. Selection is shown by border, icon, and semantics, not colour alone. */
+@Composable
+private fun ChoiceCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+        border = BorderStroke(
+            if (selected) 3.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp).heightIn(min = 56.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(32.dp))
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                Text(description, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (selected) {
+                Spacer(Modifier.width(12.dp))
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
                 )
             }
         }
-        3 -> {
-            // Voice engine selector screen
-            VoiceEngineSelectorScreen(
-                onNext = {
-                    voiceSelectorSetupStep = null
-                    featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "system")
-                    step = 6
-                },
-                onCancel = { step = if (enableBoardImport) 2 else 1 },
-                onAzureSelected = {
-                    featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "azure")
-                    step = 4
-                },
-                onElevenLabsSelected = { step = 10 },
-                onGoogleSelected = {
-                    featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to "google")
-                    step = 9
+    }
+}
+
+/** A labelled switch whose whole row is the touch target. */
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+// ─── Pages ───────────────────────────────────────────────────────────────────
+
+@Composable
+private fun StartPage(
+    onSetUp: () -> Unit,
+    onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit,
+) {
+    val koin = getKoin()
+    val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
+    val backupFilePicker = remember(koin) { koin.getOrNull<FilePicker>() }
+    var pendingRestorePath by remember { mutableStateOf<String?>(null) }
+    var restoreStatus by remember { mutableStateOf<String?>(null) }
+    var isRestoring by remember { mutableStateOf(false) }
+    val backupPickerFailed = stringResource(R.string.backup_picker_failed)
+    val backupRestoreUnavailable = stringResource(R.string.backup_restore_unavailable)
+    val backupRestoreTitle = stringResource(R.string.backup_restore)
+    val scope = rememberCoroutineScope()
+
+    WelcomePage(
+        title = stringResource(R.string.welcome_title),
+        subtitle = stringResource(R.string.welcome_subtitle),
+        primaryLabel = stringResource(R.string.welcome_set_up),
+        onPrimary = onSetUp,
+        onBack = null,
+    ) {
+        Text(stringResource(R.string.welcome_supporter_note), style = MaterialTheme.typography.bodyMedium)
+        OutlinedButton(
+            enabled = !isRestoring && backupManager != null && backupFilePicker != null,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            onClick = {
+                scope.launch {
+                    restoreStatus = null
+                    try {
+                        pendingRestorePath = backupFilePicker?.pickFile(
+                            title = backupRestoreTitle,
+                            extensions = listOf("wingmate-backup", "zip")
+                        )
+                    } catch (failure: CancellationException) {
+                        throw failure
+                    } catch (_: Exception) {
+                        restoreStatus = backupPickerFailed
+                    }
                 }
-            )
+            }
+        ) {
+            if (isRestoring) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stringResource(R.string.welcome_restore_backup))
         }
-        4 -> {
-            // Azure F0 portal-assisted setup flow
-            F0SetupScreen(
-                onDone = {
-                    voiceSelectorSetupStep = 4
-                    step = 6
-                },
-                onBack = { step = 3 }
-            )
+        restoreStatus?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
-        5 -> {
-            // Choose languages for the selected voice before testing it.
-            LanguageSelectionPage(
-                onBack = { step = 6 },
-                onContinue = { step = 7 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(horizontal = 24.dp)
-            )
-        }
-        6 -> {
-            // Newer searchable voice selector, before language and test-voice steps.
-            VoiceSelectionPage(
-                onBack = { step = voiceSelectorSetupStep ?: 3 },
-                onVoiceSelected = { step = 5 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(horizontal = 24.dp)
-            )
-        }
-        7 -> {
-            // Test voice screen
-            TestVoiceScreen(
-                onNext = { step = 8 },
-                onBack = { step = 6 }
-            )
-        }
-        8 -> AnalyticsConsentScreen(
-            enabled = analyticsEnabled,
-            onEnabledChange = { analyticsEnabled = it },
-            onBack = { step = 7 },
-            onContinue = { onComplete(startupMode, createScreenOnComplete, analyticsEnabled) }
-        )
-        10 -> ElevenLabsSetupScreen(
-            onDone = { voiceSelectorSetupStep = 10; step = 6 },
-            onBack = { step = 3 },
-        )
-        9 -> GoogleTtsSetupScreen(
-            onDone = {
-                voiceSelectorSetupStep = 9
-                step = 6
-            },
-            onBack = { step = 3 },
-        )
     }
 
     val restorePath = pendingRestorePath
@@ -428,222 +379,229 @@ fun WelcomeScreen(
 }
 
 @Composable
-private fun AnalyticsConsentScreen(
-    enabled: Boolean,
-    onEnabledChange: (Boolean) -> Unit,
+private fun WorkspacePage(
+    choices: WelcomeChoices,
+    onChoicesChange: (WelcomeChoices) -> Unit,
     onBack: () -> Unit,
-    onContinue: () -> Unit
-) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(stringResource(R.string.welcome_analytics_title), style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.welcome_analytics_description), style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(24.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.welcome_analytics_opt_in), modifier = Modifier.weight(1f))
-                Switch(checked = enabled, onCheckedChange = onEnabledChange)
-            }
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.common_continue))
-            }
-            TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text(stringResource(R.string.common_back))
-            }
-        }
-    }
-}
-
-@Composable
-private fun StartupModeSelectionScreen(
-    onKeyboard: () -> Unit,
-    onScreens: () -> Unit,
-    onBack: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                stringResource(R.string.welcome_start_mode_title),
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                stringResource(R.string.welcome_start_mode_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(32.dp))
-            ImportOptionCard(
-                title = stringResource(R.string.welcome_start_mode_keyboard_title),
-                description = stringResource(R.string.welcome_start_mode_keyboard_desc),
-                icon = Icons.Default.Keyboard,
-                onClick = onKeyboard
-            )
-            Spacer(Modifier.height(16.dp))
-            ImportOptionCard(
-                title = stringResource(R.string.welcome_start_mode_screens_title),
-                description = stringResource(R.string.welcome_start_mode_screens_desc),
-                icon = Icons.Default.GridView,
-                onClick = onScreens
-            )
-            Spacer(Modifier.height(24.dp))
-            TextButton(onClick = onBack) {
-                Text(stringResource(R.string.common_back))
-            }
-        }
-    }
-}
-
-@Composable
-private fun StartupModeTourScreen(
-    mode: StartupMode,
     onContinue: () -> Unit,
-    onBack: () -> Unit
 ) {
-    val isKeyboard = mode == StartupMode.Keyboard
-    val title = stringResource(
-        if (isKeyboard) R.string.welcome_mode_tour_keyboard_title else R.string.welcome_mode_tour_boardsets_title
-    )
-    val subtitle = stringResource(
-        if (isKeyboard) R.string.welcome_mode_tour_keyboard_subtitle else R.string.welcome_mode_tour_boardsets_subtitle
-    )
-    val steps = if (isKeyboard) {
-        listOf(
-            stringResource(R.string.welcome_mode_tour_keyboard_step_1),
-            stringResource(R.string.welcome_mode_tour_keyboard_step_2),
-            stringResource(R.string.welcome_mode_tour_keyboard_step_3)
+    WelcomePage(
+        title = stringResource(R.string.welcome_start_mode_title),
+        subtitle = stringResource(R.string.welcome_start_mode_subtitle),
+        primaryLabel = stringResource(R.string.common_continue),
+        onPrimary = onContinue,
+        onBack = onBack,
+    ) {
+        ChoiceCard(
+            title = stringResource(R.string.welcome_start_mode_keyboard_title),
+            description = stringResource(R.string.welcome_start_mode_keyboard_desc),
+            icon = Icons.Default.Keyboard,
+            selected = choices.startupMode == StartupMode.Keyboard,
+            onSelect = { onChoicesChange(choices.copy(startupMode = StartupMode.Keyboard)) },
         )
-    } else {
-        listOf(
-            stringResource(R.string.welcome_mode_tour_boardsets_step_1),
-            stringResource(R.string.welcome_mode_tour_boardsets_step_2),
-            stringResource(R.string.welcome_mode_tour_boardsets_step_3)
+        ChoiceCard(
+            title = stringResource(R.string.welcome_start_mode_screens_title),
+            description = stringResource(R.string.welcome_start_mode_screens_desc),
+            icon = Icons.Default.GridView,
+            selected = choices.startupMode == StartupMode.Screens,
+            onSelect = { onChoicesChange(choices.copy(startupMode = StartupMode.Screens)) },
         )
+        if (choices.startupMode == StartupMode.Screens) {
+            SwitchRow(
+                label = stringResource(R.string.welcome_create_blank_screen),
+                checked = choices.createBlankScreen,
+                onCheckedChange = { onChoicesChange(choices.copy(createBlankScreen = it)) },
+            )
+        }
+    }
+}
+
+/** Where a privacy card's data goes. Shown as text and icon so it never relies on colour. */
+private enum class DataLocation(val label: Int, val icon: ImageVector) {
+    OnDevice(R.string.welcome_privacy_on_device, Icons.Default.PhoneAndroid),
+    /** The installed system speech engine; Wingmate cannot promise it never uses the network. */
+    DeviceEngine(R.string.welcome_privacy_device_engine, Icons.Default.PhoneAndroid),
+    Online(R.string.welcome_privacy_online, Icons.Default.Cloud),
+}
+
+@Composable
+private fun PrivacyCard(
+    title: String,
+    location: DataLocation,
+    description: String,
+    toggle: (@Composable () -> Unit)? = null,
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(location.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(location.label), style = MaterialTheme.typography.labelLarge)
+            }
+            Text(description, style = MaterialTheme.typography.bodyMedium)
+            toggle?.invoke()
+        }
+    }
+}
+
+@Composable
+private fun PrivacyPage(
+    choices: WelcomeChoices,
+    onChoicesChange: (WelcomeChoices) -> Unit,
+    onBack: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    val settingsUseCase = getKoin().getOrNull<SettingsUseCase>()
+    // The voice engine was saved by the voice pages; read it so the speech card names
+    // the provider that actually receives text.
+    val engine by produceState<TtsEngine?>(null, settingsUseCase) {
+        value = try {
+            withContext(Dispatchers.Default) { settingsUseCase?.get()?.ttsEngine } ?: TtsEngine.SYSTEM
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            OperationalLogger.warn("welcome.privacy", "settings_load_failed", exceptionClass = failure.loggingClassName())
+            TtsEngine.SYSTEM
+        }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
+    WelcomePage(
+        title = stringResource(R.string.welcome_privacy_title),
+        subtitle = stringResource(R.string.welcome_privacy_subtitle),
+        primaryLabel = stringResource(R.string.common_continue),
+        onPrimary = onContinue,
+        onBack = onBack,
+    ) {
+        when (val current = engine) {
+            null -> CircularProgressIndicator()
+            TtsEngine.SYSTEM -> PrivacyCard(
+                title = stringResource(R.string.welcome_privacy_speech_title),
+                location = DataLocation.DeviceEngine,
+                description = stringResource(R.string.welcome_privacy_speech_system),
+            )
+            else -> PrivacyCard(
+                title = stringResource(R.string.welcome_privacy_speech_title),
+                location = DataLocation.Online,
+                description = stringResource(R.string.welcome_privacy_speech_cloud, current.providerName()),
+            )
+        }
+        PrivacyCard(
+            title = stringResource(R.string.category_history),
+            location = DataLocation.OnDevice,
+            description = stringResource(R.string.welcome_privacy_history_desc),
         ) {
-            Icon(
-                imageVector = if (isKeyboard) Icons.Default.Keyboard else Icons.Default.GridView,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary
+            SwitchRow(
+                label = stringResource(R.string.ui_settings_history_visible_title),
+                checked = choices.historyVisible,
+                onCheckedChange = { onChoicesChange(choices.copy(historyVisible = it)) },
             )
-            Spacer(Modifier.height(20.dp))
-            Text(stringResource(R.string.welcome_mode_tour_title), style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        PrivacyCard(
+            title = stringResource(R.string.welcome_analytics_title),
+            location = DataLocation.Online,
+            description = stringResource(R.string.welcome_analytics_description),
+        ) {
+            SwitchRow(
+                label = stringResource(R.string.welcome_analytics_opt_in),
+                checked = choices.featureUsageReportingEnabled,
+                onCheckedChange = { onChoicesChange(choices.copy(featureUsageReportingEnabled = it)) },
             )
-            Spacer(Modifier.height(24.dp))
-            if (isKeyboard) {
-                PhraseScreenTourPreview()
-                Spacer(Modifier.height(24.dp))
-            }
-            steps.forEachIndexed { index, description ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("${index + 1}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(16.dp))
-                        Text(description, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                if (index < steps.lastIndex) Spacer(Modifier.height(12.dp))
-            }
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.welcome_mode_tour_continue))
-            }
-            TextButton(onClick = onBack) {
-                Text(stringResource(R.string.welcome_mode_tour_back_to_choices))
-            }
+        }
+    }
+}
+
+/** Provider names are brands and stay untranslated. Only called for cloud engines. */
+private fun TtsEngine.providerName(): String = when (this) {
+    TtsEngine.SYSTEM -> ""
+    TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> "Microsoft Azure"
+    TtsEngine.GOOGLE_CLOUD -> "Google Cloud"
+    TtsEngine.ELEVENLABS -> "ElevenLabs"
+}
+
+@Composable
+private fun ReviewRow(label: String, value: String, onChange: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, style = MaterialTheme.typography.titleMedium)
+        }
+        val changeLabel = stringResource(R.string.welcome_review_change_label, label)
+        OutlinedButton(
+            onClick = onChange,
+            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = changeLabel },
+        ) {
+            Text(stringResource(R.string.welcome_review_change))
         }
     }
 }
 
 @Composable
-private fun PhraseScreenTourPreview() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                stringResource(R.string.welcome_mode_tour_phrase_preview_title),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Text(
-                    stringResource(R.string.welcome_mode_tour_phrase_preview_message),
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TourPhraseButton(stringResource(R.string.welcome_tour_phrase_hello), Modifier.weight(1f))
-                TourPhraseButton(stringResource(R.string.welcome_tour_phrase_yes), Modifier.weight(1f))
-                TourPhraseButton(stringResource(R.string.welcome_tour_phrase_help), Modifier.weight(1f))
-            }
+private fun ReviewPage(
+    choices: WelcomeChoices,
+    onChangeVoice: () -> Unit,
+    onChangePhrase: () -> Unit,
+    onChangeWorkspace: () -> Unit,
+    onChangePrivacy: () -> Unit,
+    onBack: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    val voiceUseCase = getKoin().getOrNull<VoiceUseCase>()
+    val unknownVoice = stringResource(R.string.test_voice_unknown_voice)
+    val voiceName by produceState(unknownVoice, voiceUseCase) {
+        value = try {
+            withContext(Dispatchers.IO) { voiceUseCase?.selected() }
+                ?.let { it.displayName ?: it.name }
+                ?: unknownVoice
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            OperationalLogger.warn("welcome.review", "voice_load_failed", exceptionClass = failure.loggingClassName())
+            unknownVoice
         }
     }
-}
+    var finishing by remember { mutableStateOf(false) }
 
-@Composable
-private fun TourPhraseButton(label: String, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.primaryContainer
+    val workspace = when (choices.startupMode) {
+        StartupMode.Keyboard -> stringResource(R.string.welcome_start_mode_keyboard_title)
+        StartupMode.Screens -> if (choices.createBlankScreen) {
+            stringResource(R.string.welcome_review_screens_blank)
+        } else {
+            stringResource(R.string.welcome_start_mode_screens_title)
+        }
+    }
+    val on = stringResource(R.string.welcome_review_on)
+    val off = stringResource(R.string.welcome_review_off)
+    val privacy = stringResource(
+        R.string.welcome_review_privacy_value,
+        if (choices.historyVisible) on else off,
+        if (choices.featureUsageReportingEnabled) on else off,
+    )
+
+    WelcomePage(
+        title = stringResource(R.string.welcome_review_title),
+        subtitle = stringResource(R.string.welcome_review_subtitle),
+        primaryLabel = stringResource(R.string.welcome_review_finish),
+        primaryEnabled = !finishing,
+        onPrimary = {
+            finishing = true
+            onFinish()
+        },
+        onBack = onBack,
     ) {
-        Text(
-            label,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+        ReviewRow(stringResource(R.string.welcome_review_voice), voiceName, onChangeVoice)
+        HorizontalDivider()
+        ReviewRow(
+            stringResource(R.string.welcome_review_phrase),
+            choices.phraseToSave ?: stringResource(R.string.welcome_review_none),
+            onChangePhrase,
         )
+        HorizontalDivider()
+        ReviewRow(stringResource(R.string.welcome_review_workspace), workspace, onChangeWorkspace)
+        HorizontalDivider()
+        ReviewRow(stringResource(R.string.welcome_review_privacy), privacy, onChangePrivacy)
     }
 }

@@ -1,6 +1,9 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -8,6 +11,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.SpeechService
@@ -22,15 +26,21 @@ import androidx.compose.ui.res.stringResource
 import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
+/**
+ * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
+ * tested (for example how they introduce themselves) as a Phrase; [onNext] receives that
+ * text, or null when it should not be saved. Nothing is saved here.
+ */
 @Composable
-fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
+fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?) -> Unit, onBack: () -> Unit) {
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val defaultTestText = stringResource(R.string.test_voice_default_text)
     
     var selectedVoice by remember { mutableStateOf<Voice?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
-    var testText by remember(defaultTestText) { mutableStateOf(defaultTestText) }
+    var testText by remember(defaultTestText) { mutableStateOf(initialPhraseToSave ?: defaultTestText) }
+    var keepAsPhrase by remember { mutableStateOf(initialPhraseToSave != null) }
     var loading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
@@ -54,8 +64,9 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .padding(24.dp),
+                .safeDrawingPadding()
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -168,7 +179,24 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
             }
             
             Spacer(modifier = Modifier.height(16.dp))
-            
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .toggleable(value = keepAsPhrase, role = Role.Switch, onValueChange = { keepAsPhrase = it }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.test_voice_keep_as_phrase),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = keepAsPhrase, onCheckedChange = null)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Info text
             Text(
                 stringResource(R.string.test_voice_info),
@@ -178,8 +206,8 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
             
-            Spacer(modifier = Modifier.weight(1f))
-            
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Navigation buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -197,7 +225,7 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             onBack()
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).heightIn(min = 56.dp)
                 ) {
                     Text(stringResource(R.string.common_back))
                 }
@@ -211,10 +239,10 @@ fun TestVoiceScreen(onNext: () -> Unit, onBack: () -> Unit) {
                             } catch (e: Exception) {
                                 OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                             }
-                            onNext()
+                            onNext(testText.trim().takeIf { keepAsPhrase && it.isNotEmpty() })
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(2f).heightIn(min = 56.dp)
                 ) {
                     Text(stringResource(R.string.common_continue))
                 }

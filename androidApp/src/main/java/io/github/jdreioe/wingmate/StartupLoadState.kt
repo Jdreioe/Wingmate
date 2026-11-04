@@ -23,3 +23,11 @@ internal suspend fun loadStartupState(
 } catch (_: Exception) {
     StartupLoadState.Failed
 }
+
+/**
+ * Setup is shown only to people who have never finished it. Installs from before
+ * [Settings.welcomeFlowCompleted] decided routing are recognised by their selected voice,
+ * so an existing Communicator is never sent back through setup.
+ */
+internal fun needsWelcome(settings: Settings, hasSelectedVoice: Boolean): Boolean =
+    !settings.welcomeFlowCompleted && !hasSelectedVoice

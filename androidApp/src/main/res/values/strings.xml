@@ -31,10 +31,6 @@
     <string name="communication_playback_failed">Speech could not finish. Your Message is still available; try speaking again.</string>
     <string name="communication_speech_fallback">The cloud voice was unavailable, so your device voice spoke instead.</string>
     <string name="startup_load_failed">Wingmate could not load your settings. Your existing configuration has not been changed.</string>
-    <string name="welcome_import_unreadable">The selected file could not be read. Tap the import option to retry.</string>
-    <string name="welcome_import_persistence_failed">The screen could not be saved. Your current screens were kept; tap to retry.</string>
-    <string name="welcome_import_invalid">This screen file is not valid or supported. Choose another file or retry.</string>
-    <string name="welcome_import_unexpected">Unable to import this screen. Tap the import option to retry.</string>
     <string name="voice_load_failed">Voices could not be loaded. Check your connection or device voice settings, then retry.</string>
     <string name="voice_save_failed">The voice could not be saved. Your current communication setup was kept; tap the voice to retry.</string>
     <string name="backup_picker_failed">The file picker could not be opened. Try again.</string>
@@ -376,17 +372,6 @@
     <string name="color_picker_title">Pick color</string>
     <string name="color_picker_brightness">Bright</string>
 
-    <string name="import_options_title">Import Pages</string>
-    <string name="import_options_subtitle">Do you have existing communication pages? Import them now to get started.</string>
-    <string name="import_options_classic_title">Classic Mode</string>
-    <string name="import_options_classic_desc">Exact replica of your existing pages. Preserves the original layout and navigation structure. Best if you want to keep everything familiar.</string>
-    <string name="import_options_modern_title">Modern Mode</string>
-    <string name="import_options_modern_desc">Optimized for Wingmate. Converts your pages into Category Chips for faster navigation and a cleaner look.</string>
-    <string name="import_options_scratch_title">Create From Scratch</string>
-    <string name="import_options_scratch_desc">Start with a new screen and build your own pages in Wingmate.</string>
-    <string name="import_options_skip">Skip for now</string>
-    <string name="import_options_recommended">Recommended</string>
-
     <string name="opensymbols_search_title">Search symbols</string>
     <string name="symbol_package_all">All</string>
     <string name="opensymbols_search_label">Search for pictogram...</string>
@@ -459,7 +444,7 @@
     <string name="test_voice_stop">Stop</string>
     <string name="test_voice_play">Play</string>
     <string name="test_voice_test_button">Test Voice</string>
-    <string name="test_voice_info">Listen to how your selected voice sounds. You can change the test message above and try different phrases.</string>
+    <string name="test_voice_info">Try a sentence you will use often, like how you introduce yourself. Keep it as a Phrase to say it again with one tap.</string>
 
     <string name="dictionary_title">Pronunciation Dictionary</string>
     <string name="dictionary_back_cd">Back</string>
@@ -485,29 +470,13 @@
     <string name="dictionary_global_entries_note">Global entries apply to all speech synthesis</string>
 
     <string name="welcome_title">Welcome to Wingmate</string>
-    <string name="welcome_subtitle">Congratulations on your new voice! </string>
+    <string name="welcome_subtitle">First you choose and hear your voice, then how you communicate. It takes a few minutes, and everything can be changed later in Settings.</string>
     <string name="welcome_start_mode_title">How do you want to communicate?</string>
-    <string name="welcome_start_mode_subtitle">Choose what Wingmate opens. You can change this later in Settings.</string>
-    <string name="welcome_start_mode_keyboard_title">Keyboard and phrases</string>
-    <string name="welcome_start_mode_keyboard_desc">Type messages and communicate with saved phrases and categories.</string>
+    <string name="welcome_start_mode_subtitle">Choose what Wingmate opens first. Typing and Screens are always both available.</string>
+    <string name="welcome_start_mode_keyboard_title">Typing</string>
+    <string name="welcome_start_mode_keyboard_desc">Type messages and use saved Phrases and Categories.</string>
     <string name="welcome_start_mode_screens_title">Screens</string>
     <string name="welcome_start_mode_screens_desc">Communicate with linked pages, fields, and symbols.</string>
-    <string name="welcome_mode_tour_title">A quick tour</string>
-    <string name="welcome_mode_tour_continue">Continue</string>
-    <string name="welcome_mode_tour_back_to_choices">Back to choices</string>
-    <string name="welcome_mode_tour_keyboard_title">Keyboard and phrases</string>
-    <string name="welcome_mode_tour_keyboard_subtitle">Build a message with typing, then keep useful phrases close at hand.</string>
-    <string name="welcome_mode_tour_phrase_preview_title">Phrase screen</string>
-    <string name="welcome_mode_tour_phrase_preview_message">I would like some water, please.</string>
-    <string name="welcome_mode_tour_keyboard_step_1">Type the message you want to say in the message field.</string>
-    <string name="welcome_mode_tour_keyboard_step_2">Tap saved phrases and categories for words you use often.</string>
-    <string name="welcome_mode_tour_keyboard_step_3">Speak the completed message, then start your next one.</string>
-    <string name="welcome_mode_tour_boardsets_title">Screens</string>
-    <string name="welcome_mode_tour_boardsets_subtitle">Use visual grids of symbols and linked pages to communicate.</string>
-    <string name="welcome_mode_tour_boardsets_step_1">Choose a screen from your library.</string>
-    <string name="welcome_mode_tour_boardsets_step_2">Tap symbols in a grid to speak or open another page.</string>
-    <string name="welcome_mode_tour_boardsets_step_3">Edit the screen later to tailor its symbols and layout.</string>
-    <string name="welcome_importing_board">Importing page...</string>
     <string name="mode_switch_to_screens">Switch to screens</string>
     <string name="mode_switch_to_keyboard">Switch to keyboard and phrases</string>
     <string name="board_workspace_enter_fullscreen">Open page full screen</string>
@@ -586,9 +555,6 @@
     <string name="category_delete_with_phrases">Delete (with phrases)</string>
     <string name="category_delete_title">Delete category</string>
     <string name="category_delete_message">Delete “%1$s” and all phrases inside?</string>
-    <string name="welcome_tour_phrase_hello">Hello</string>
-    <string name="welcome_tour_phrase_yes">Yes</string>
-    <string name="welcome_tour_phrase_help">Help</string>
     <string name="ui_settings_tts_engine_group">Text-to-Speech engine</string>
     <string name="ui_settings_speech_engine">Speech engine</string>
     <string name="ui_settings_azure">Azure</string>
@@ -698,4 +664,32 @@
     <string name="board_settings_cache_speech_description">Generate audio for all buttons with the selected cloud voice before they are used. Uses provider credits and device storage. Turning this off stops preloading and keeps existing audio.</string>
     <string name="board_settings_enabled">On</string>
     <string name="board_settings_disabled">Off</string>
+    <string name="welcome_set_up">Set up Wingmate</string>
+    <string name="welcome_supporter_note">Setting this up for someone else? Make the choices together where you can. Wingmate does not create an account or profile.</string>
+    <string name="welcome_restore_backup">Restore a backup</string>
+    <string name="welcome_create_blank_screen">Start with a new blank Screen</string>
+    <string name="welcome_privacy_title">Where your words go</string>
+    <string name="welcome_privacy_subtitle">Each item says whether it stays on this device or is sent online. You can change these later in Settings.</string>
+    <string name="welcome_privacy_on_device">Stays on this device</string>
+    <string name="welcome_privacy_device_engine">Handled by this device\'s speech engine</string>
+    <string name="welcome_privacy_online">Sent online</string>
+    <string name="welcome_privacy_speech_title">Speech</string>
+    <string name="welcome_privacy_speech_system">Wingmate gives the text you speak to the speech engine installed on this device and does not send it online itself. Some engines can use the internet; check the engine\'s own settings.</string>
+    <string name="welcome_privacy_speech_cloud">Text you speak is sent to %1$s to create audio. The audio is saved on this device so repeated messages can play without sending them again.</string>
+    <string name="welcome_privacy_history_desc">Messages you speak are listed in History so you can say them again. When History is hidden, new messages are not listed, but their audio is still cached on this device for faster playback.</string>
+    <string name="welcome_review_title">Ready to communicate</string>
+    <string name="welcome_review_subtitle">Check your choices. You can change any of them now or later in Settings.</string>
+    <string name="welcome_review_voice">Voice</string>
+    <string name="welcome_review_phrase">Saved Phrase</string>
+    <string name="welcome_review_workspace">Opens with</string>
+    <string name="welcome_review_privacy">Privacy</string>
+    <string name="welcome_review_none">None</string>
+    <string name="welcome_review_change">Change</string>
+    <string name="welcome_review_change_label">Change %1$s</string>
+    <string name="welcome_review_on">on</string>
+    <string name="welcome_review_off">off</string>
+    <string name="welcome_review_privacy_value">History %1$s · Anonymous reporting %2$s</string>
+    <string name="welcome_review_screens_blank">Screens, with a new blank Screen</string>
+    <string name="welcome_review_finish">Start communicating</string>
+    <string name="test_voice_keep_as_phrase">Keep this sentence as a Phrase</string>
 </resources>

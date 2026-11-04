@@ -11,7 +11,12 @@ import io.github.jdreioe.wingmate.ui.CommunicationSessionStatus
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
 import io.github.jdreioe.wingmate.application.reportEvent
+import io.github.jdreioe.wingmate.ui.WelcomeChoices
 import io.github.jdreioe.wingmate.ui.WelcomeScreen
+import io.github.jdreioe.wingmate.application.PhraseUseCase
+import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.Phrase
+import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.ui.PhraseScreen
 import io.github.jdreioe.wingmate.ui.BoardSetManagerRoot
 import io.github.jdreioe.wingmate.ui.AppTheme
@@ -38,6 +43,7 @@ fun App() {
     val settingsRepository = koinInject<SettingsRepository>()
     val featureUsageReporter = koinInject<FeatureUsageReporter>()
     val voiceUseCase = koinInject<VoiceUseCase>()
+    val phraseUseCase = koinInject<PhraseUseCase>()
     val backupManager = koinInject<CompleteBackupManager>()
     val settingsStateManager = koinInject<SettingsStateManager>()
     val communicationSession = koinInject<CommunicationSession>()
@@ -63,16 +69,18 @@ fun App() {
                 StartupMode.Screens -> Screen.BoardSets
             }
 
-            fun completeWelcomeAndNavigate(mode: StartupMode, createScreen: Boolean, analyticsEnabled: Boolean) {
+            fun completeWelcomeAndNavigate(choices: WelcomeChoices) {
                 scope.launch {
+                    val mode = choices.startupMode
                     val savedSettings = try {
                         withContext(Dispatchers.Default) {
                             settingsRepository.update(
                                 settingsStateManager.getCurrentSettings().copy(
-                            welcomeFlowCompleted = true,
-                            startupMode = mode,
-                            featureUsageReportingEnabled = analyticsEnabled
-                        )
+                                    welcomeFlowCompleted = true,
+                                    startupMode = mode,
+                                    historyVisible = choices.historyVisible,
+                                    featureUsageReportingEnabled = choices.featureUsageReportingEnabled,
+                                )
                             )
                         }
                     } catch (failure: CancellationException) {
@@ -82,10 +90,24 @@ fun App() {
                         return@launch
                     }
                     settingsStateManager.applyLoadedSettings(savedSettings)
-                    createBoardSetOnLaunch = mode == StartupMode.Screens && createScreen
+                    // Saved after settings so a failed save cannot leave a duplicate Phrase
+                    // behind when setup is retried. A failure only loses this convenience
+                    // Phrase; the Communicator can still type it, so setup continues.
+                    choices.phraseToSave?.let { text ->
+                        try {
+                            withContext(Dispatchers.Default) {
+                                phraseUseCase.add(Phrase(id = "", text = text, createdAt = 0))
+                            }
+                        } catch (failure: CancellationException) {
+                            throw failure
+                        } catch (failure: Exception) {
+                            OperationalLogger.warn("welcome.phrase", "save_failed", exceptionClass = failure.loggingClassName())
+                        }
+                    }
+                    createBoardSetOnLaunch = mode == StartupMode.Screens && choices.createBlankScreen
                     startupBoardSetId = null
-                    featureUsageReporter.setEnabled(analyticsEnabled)
-                    if (analyticsEnabled) {
+                    featureUsageReporter.setEnabled(choices.featureUsageReportingEnabled)
+                    if (choices.featureUsageReportingEnabled) {
                         featureUsageReporter.reportEvent(
                             FeatureUsageEvents.ANALYTICS_CONSENT_CHANGED,
                             "enabled" to "true",
@@ -114,7 +136,7 @@ fun App() {
                 startupBoardSetId = settings.startupBoardSetId
                 welcomeCompleted = settings.welcomeFlowCompleted
                 featureUsageReporter.setEnabled(settings.featureUsageReportingEnabled)
-                if (hasSelectedVoice) {
+                if (!needsWelcome(settings, hasSelectedVoice)) {
                     currentScreen = routeFor(settings.startupMode)
                 }
             }
@@ -131,7 +153,7 @@ fun App() {
                     val hasSelectedVoice = loaded.selectedVoice != null
                     welcomeCompleted = settings.welcomeFlowCompleted
                     startupBoardSetId = settings.startupBoardSetId
-                    currentScreen = if (hasSelectedVoice) routeFor(settings.startupMode) else Screen.Welcome
+                    currentScreen = if (needsWelcome(settings, hasSelectedVoice)) Screen.Welcome else routeFor(settings.startupMode)
                     featureUsageReporter.reportEvent(
                         FeatureUsageEvents.APP_STARTED,
                         "welcome_completed" to welcomeCompleted.toString(),
@@ -154,10 +176,10 @@ fun App() {
                     startupBoardSetId = loaded.settings.startupBoardSetId
                     welcomeCompleted = loaded.settings.welcomeFlowCompleted
                     featureUsageReporter.setEnabled(loaded.settings.featureUsageReportingEnabled)
-                    currentScreen = if (loaded.selectedVoice != null) {
-                        routeFor(loaded.settings.startupMode)
-                    } else {
+                    currentScreen = if (needsWelcome(loaded.settings, loaded.selectedVoice != null)) {
                         Screen.Welcome
+                    } else {
+                        routeFor(loaded.settings.startupMode)
                     }
                 }
             }
