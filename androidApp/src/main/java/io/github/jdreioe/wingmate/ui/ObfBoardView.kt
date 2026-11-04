@@ -1662,7 +1662,7 @@ internal fun ObfButtonContent(
     
     val contentColor = when {
         settings.highContrastMode -> highContrastContent
-        resolvedBackgroundColor != null -> contrastingContentColor(bgColor)
+        resolvedBackgroundColor != null -> contrastingContentColor(bgColor, backdrop = MaterialTheme.colorScheme.background)
         else -> MaterialTheme.colorScheme.onSurface
     }
     val buttonShape = button.shape.toShape()

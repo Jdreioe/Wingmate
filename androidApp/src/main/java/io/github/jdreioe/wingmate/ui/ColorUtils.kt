@@ -1,11 +1,16 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 
-/** Pick whichever of black or white has the stronger WCAG contrast ratio. */
-fun contrastingContentColor(background: Color): Color {
-    val luminance = background.luminance()
+/**
+ * Pick whichever of black or white has the stronger WCAG contrast ratio against [background]
+ * as it is seen: a translucent colour (OBF allows rgba) is judged over [backdrop], the surface
+ * behind it, so `rgba(0,0,0,0.1)` on a light page reads as light grey, not black.
+ */
+fun contrastingContentColor(background: Color, backdrop: Color = Color.White): Color {
+    val luminance = background.compositeOver(backdrop).luminance()
     val contrastWithBlack = (luminance + 0.05f) / 0.05f
     val contrastWithWhite = 1.05f / (luminance + 0.05f)
     return if (contrastWithWhite >= contrastWithBlack) Color.White else Color.Black
