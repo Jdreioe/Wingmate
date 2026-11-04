@@ -39,15 +39,32 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
         Text(stringResource(R.string.elevenlabs_setup), style = MaterialTheme.typography.headlineSmall)
         Text(stringResource(R.string.elevenlabs_description))
         Text(stringResource(R.string.elevenlabs_help))
-        OutlinedButton(onClick = { uri.openUri("https://elevenlabs.io/app/settings/api-keys") }) {
-            Text(stringResource(R.string.elevenlabs_key))
-        }
+        SetupActionButton(
+            label = stringResource(R.string.elevenlabs_get_key),
+            onClick = { uri.openUri("https://elevenlabs.io/app/settings/api-keys") },
+            opensBrowser = true,
+        )
         if (configured) Text(stringResource(R.string.elevenlabs_configured))
         OutlinedTextField(value = key, onValueChange = { key = it; failed = false }, enabled = !busy,
             label = { Text(stringResource(R.string.elevenlabs_key)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
         if (failed) Text(stringResource(R.string.elevenlabs_error), color = MaterialTheme.colorScheme.error)
-        if (busy) CircularProgressIndicator()
-        Button(enabled = !busy && key.isNotBlank(), onClick = {
+        if (configured) SetupActionButton(label = stringResource(R.string.elevenlabs_clear), enabled = !busy, onClick = {
+            scope.launch {
+                busy = true; failed = false
+                try { facade.clearElevenLabsSpeechConfig(); configured = false; key = "" }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { failed = true }
+                finally { busy = false }
+            }
+        })
+    }
+    SetupBottomBar(
+        onBack = onBack,
+        backEnabled = !busy,
+        primaryLabel = stringResource(R.string.common_save),
+        primaryEnabled = key.isNotBlank(),
+        primaryBusy = busy,
+        onPrimary = {
             scope.launch {
                 busy = true; failed = false
                 try {
@@ -57,17 +74,7 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
                 catch (_: Exception) { failed = true }
                 finally { busy = false }
             }
-        }) { Text(stringResource(R.string.elevenlabs_save)) }
-        if (configured) TextButton(enabled = !busy, onClick = {
-            scope.launch {
-                busy = true; failed = false
-                try { facade.clearElevenLabsSpeechConfig(); configured = false; key = "" }
-                catch (e: CancellationException) { throw e }
-                catch (_: Exception) { failed = true }
-                finally { busy = false }
-            }
-        }) { Text(stringResource(R.string.elevenlabs_clear)) }
-    }
-    SetupBackButton(onClick = onBack, enabled = !busy, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp))
+        },
+    )
     }
 }

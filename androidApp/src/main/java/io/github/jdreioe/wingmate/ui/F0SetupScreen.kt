@@ -134,7 +134,6 @@ fun F0SetupScreen(
                 F0Step.CREDENTIALS -> CredentialsStep(
                     endpoint = endpoint,
                     subscriptionKey = subscriptionKey,
-                    saving = saving,
                     error = saveError?.let { error ->
                         when (error) {
                             "endpoint" -> stringResource(R.string.azure_setup_error_endpoint)
@@ -144,14 +143,20 @@ fun F0SetupScreen(
                     },
                     onEndpointChange = { endpoint = it },
                     onKeyChange = { subscriptionKey = it },
-                    onSave = ::saveCredentials
                 )
-                F0Step.SUCCESS -> SuccessStep(onDone)
+                F0Step.SUCCESS -> SuccessStep()
             }
         }
-        if (step != F0Step.SUCCESS) {
-            SetupBackButton(onClick = ::goBack, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp))
-        }
+        SetupBottomBar(
+            onBack = ::goBack.takeIf { step != F0Step.SUCCESS },
+            primaryLabel = when (step) {
+                F0Step.GUIDE -> null
+                F0Step.CREDENTIALS -> stringResource(R.string.common_save)
+                F0Step.SUCCESS -> stringResource(R.string.common_continue)
+            },
+            onPrimary = { if (step == F0Step.SUCCESS) onDone() else saveCredentials() },
+            primaryBusy = saving,
+        )
         }
     }
 }
@@ -202,11 +207,10 @@ private fun GuideStepCard(
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("$number. ${stringResource(title)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             body?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium) }
-            val modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
             if (primary) {
-                Button(onClick = onAction, modifier = modifier) { Text(stringResource(action)) }
+                SetupPrimaryButton(label = stringResource(action), onClick = onAction)
             } else {
-                OutlinedButton(onClick = onAction, modifier = modifier) { Text(stringResource(action)) }
+                SetupActionButton(label = stringResource(action), onClick = onAction, opensBrowser = true)
             }
         }
     }
@@ -216,13 +220,10 @@ private fun GuideStepCard(
 private fun CredentialsStep(
     endpoint: String,
     subscriptionKey: String,
-    saving: Boolean,
     error: String?,
     onEndpointChange: (String) -> Unit,
     onKeyChange: (String) -> Unit,
-    onSave: () -> Unit
 ) {
-    val saveCredentialsDescription = stringResource(R.string.azure_setup_save_credentials)
     Column {
         Text(stringResource(R.string.azure_setup_credentials_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
@@ -250,22 +251,15 @@ private fun CredentialsStep(
             Spacer(Modifier.height(8.dp))
             Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onSave, enabled = !saving, modifier = Modifier.fillMaxWidth().semantics { contentDescription = saveCredentialsDescription }) {
-            if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            else Text(stringResource(R.string.azure_setup_save_continue))
-        }
     }
 }
 
 @Composable
-private fun SuccessStep(onDone: () -> Unit) {
+private fun SuccessStep() {
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(60.dp))
         Text(stringResource(R.string.azure_setup_complete_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.azure_setup_complete_description), style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(32.dp))
-        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_continue)) }
     }
 }

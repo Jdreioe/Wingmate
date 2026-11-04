@@ -172,7 +172,8 @@ fun App() {
                     val settings = loaded.settings
                     settingsStateManager.applyLoadedSettings(settings)
                     val hasSelectedVoice = loaded.selectedVoice != null
-                    if (currentScreen == null) {
+                    // A restore not yet routed is routed by the restore effect instead.
+                    if (currentScreen == null && restoreRevision == handledRestoreRevision) {
                         startupBoardSetId = settings.startupBoardSetId
                         currentScreen = if (needsWelcome(settings, hasSelectedVoice)) {
                             Screen.Welcome(WelcomeEntry.Required)
@@ -188,11 +189,10 @@ fun App() {
                 }
             }
 
-            LaunchedEffect(restoreRevision) {
+            LaunchedEffect(restoreRevision, startupRetryKey) {
                 if (restoreRevision == 0L || restoreRevision == handledRestoreRevision) return@LaunchedEffect
-                // Handled up front: if loading fails, Retry runs startup, which routes when no
-                // screen is set, so the restored data is still routed.
-                handledRestoreRevision = restoreRevision
+                // Marked handled only once routed: recreation or Retry before then runs this
+                // again (reloading is idempotent), so "Finish setup" is never lost.
                 currentScreen = null
                 startupLoadState = StartupLoadState.Loading
                 communicationSession.reloadAfterRestore()
@@ -204,6 +204,7 @@ fun App() {
                     settingsStateManager.applyLoadedSettings(loaded.settings)
                     startupBoardSetId = loaded.settings.startupBoardSetId
                     featureUsageReporter.setEnabled(loaded.settings.featureUsageReportingEnabled)
+                    handledRestoreRevision = restoreRevision
                     currentScreen = if (needsWelcome(loaded.settings, loaded.selectedVoice != null)) {
                         Screen.Welcome(WelcomeEntry.AfterRestore)
                     } else {

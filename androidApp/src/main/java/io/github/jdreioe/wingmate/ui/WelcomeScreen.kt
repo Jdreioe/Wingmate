@@ -95,8 +95,8 @@ private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
  * A backup restored from the Start page is routed by App's restore handling.
  *
  * Voice and language are saved as they are chosen, as in Settings. The chosen engine is
- * held here and saved together with the voice, so no way out of setup can leave an engine
- * paired with another engine's voice or without credentials.
+ * held here and saved together with the voice, so as long as both saves succeed, no way out
+ * of setup leaves an engine paired with another engine's voice or without credentials.
  */
 @Composable
 fun WelcomeScreen(
@@ -130,6 +130,8 @@ fun WelcomeScreen(
     var chosenEngine by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
     var startFailed by remember { mutableStateOf(false) }
     var engineCheckFailed by remember { mutableStateOf(false) }
+    /** True while checking for a saved key, so a repeated activation cannot start a second check. */
+    var checkingEngine by remember { mutableStateOf(false) }
     val step = nav.step
 
     fun startSetup() {
@@ -164,10 +166,11 @@ fun WelcomeScreen(
 
     /** A cloud engine goes through its provider page unless its credentials are already saved. */
     fun chooseEngine(engine: TtsEngine) {
-        if (nav.step != WelcomeStep.VoiceEngine) return
+        if (nav.step != WelcomeStep.VoiceEngine || checkingEngine) return
         engineCheckFailed = false
         featureUsageReporter?.reportEvent(FeatureUsageEvents.VOICE_ENGINE_SELECTED, "engine" to engine.name.lowercase())
         val providerStep = engine.providerStep() ?: return useEngine(engine, WelcomeStep.VoiceEngine)
+        checkingEngine = true
         scope.launch {
             val configured: Boolean = try {
                 withContext(Dispatchers.Default) {
@@ -184,8 +187,10 @@ fun WelcomeScreen(
                 OperationalLogger.warn("welcome.engine", "status_failed", exceptionClass = failure.loggingClassName())
                 // Unknown: neither skip a working key nor ask for one without saying why.
                 engineCheckFailed = true
+                checkingEngine = false
                 return@launch
             }
+            checkingEngine = false
             if (configured) {
                 useEngine(engine, WelcomeStep.VoiceEngine)
             } else {
@@ -208,7 +213,10 @@ fun WelcomeScreen(
                 val phrases = checkNotNull(phraseUseCase)
                 val previous = previousId?.let { id -> phrases.list().firstOrNull { it.id == id } }
                 when {
-                    wanted == null -> previous?.let { phrases.delete(it.id) }.let { null }
+                    wanted == null -> {
+                        if (previous != null) phrases.delete(previous.id)
+                        null
+                    }
                     previous != null -> phrases.update(previous.copy(text = wanted)).id
                     else -> phrases.add(Phrase(id = "", text = wanted, createdAt = 0)).id
                 }
@@ -254,7 +262,7 @@ fun WelcomeScreen(
         // Start's Back leaves setup. Review has a save in progress to protect, so leaving is one Back away, on Privacy.
         if (onExit != null && step != WelcomeStep.Start && step != WelcomeStep.Review) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = ::leave, modifier = Modifier.heightIn(min = 48.dp)) {
+                FilledTonalButton(onClick = ::leave, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(stringResource(R.string.welcome_leave_setup))
                 }
             }
@@ -266,6 +274,7 @@ fun WelcomeScreen(
                 onChoicesChange = { choices = it },
                 startFailed = startFailed,
                 engineCheckFailed = engineCheckFailed,
+                checkingEngine = checkingEngine,
                 restoredFromBackup = restoredFromBackup,
                 chosenEngine = chosenEngine,
                 onExit = onExit?.let { ::leave },
@@ -300,6 +309,7 @@ private fun WelcomeStepContent(
     onChoicesChange: (WelcomeChoices) -> Unit,
     startFailed: Boolean,
     engineCheckFailed: Boolean,
+    checkingEngine: Boolean,
     restoredFromBackup: Boolean,
     chosenEngine: TtsEngine?,
     onExit: (() -> Unit)?,
@@ -325,6 +335,8 @@ private fun WelcomeStepContent(
             onEngineChosen = onEngineChosen,
             onBack = onBack,
             checkFailed = engineCheckFailed,
+            checking = checkingEngine,
+            chosenEngine = chosenEngine,
         )
         // Provider pages save credentials only; the engine is saved together with the voice.
         WelcomeStep.AzureSetup -> F0SetupScreen(
@@ -340,6 +352,7 @@ private fun WelcomeStepContent(
             onBack = onBack,
         )
         WelcomeStep.Voice -> PageWithBack(
+            title = stringResource(R.string.welcome_voice_title),
             onBack = onBack,
             // A saved key can stop working (e.g. restored from a backup); setup is the only
             // place to replace it before Settings is reachable.
@@ -354,12 +367,14 @@ private fun WelcomeStepContent(
                 modifier = pageModifier,
             )
         }
-        WelcomeStep.Language -> PageWithBack(onBack = onBack) {
-            LanguageSelectionPage(
-                onBack = onBack,
-                onContinue = { onAdvance(WelcomeStep.Language, WelcomeStep.TestVoice) },
-                modifier = pageModifier,
-            )
+        // Language choices save as they are tapped; Continue only moves on, so setup pins it.
+        WelcomeStep.Language -> PageWithBack(
+            title = stringResource(R.string.welcome_language_title),
+            onBack = onBack,
+            primaryLabel = stringResource(R.string.common_continue),
+            onPrimary = { onAdvance(WelcomeStep.Language, WelcomeStep.TestVoice) },
+        ) {
+            LanguageSelectionPage(onBack = onBack, modifier = pageModifier)
         }
         WelcomeStep.TestVoice -> TestVoiceScreen(
             initialPhraseToSave = choices.phraseToSave,
@@ -395,35 +410,31 @@ private fun WelcomeStepContent(
 
 // ─── Shared layout ───────────────────────────────────────────────────────────
 
-/** Setup's large Back button. Every setup page uses it, so Back looks the same and sits in the same place. */
-@Composable
-internal fun SetupBackButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-        Text(stringResource(R.string.common_back))
-    }
-}
-
-/** Adds setup's on-screen Back (and an optional second action) below a shared Settings page. */
+/**
+ * Wraps a page shared with Settings in setup's frame: a heading, and Back, an optional
+ * second action, and an optional primary action pinned where every setup page has them.
+ */
 @Composable
 private fun PageWithBack(
+    title: String,
     onBack: () -> Unit,
     secondaryLabel: String? = null,
     onSecondary: () -> Unit = {},
+    primaryLabel: String? = null,
+    onPrimary: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp).semantics { heading() },
+        )
         Box(Modifier.weight(1f)) { content() }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            SetupBackButton(onClick = onBack, modifier = Modifier.weight(1f))
-            secondaryLabel?.let {
-                OutlinedButton(onClick = onSecondary, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                    Text(it)
-                }
-            }
+        secondaryLabel?.let {
+            SetupActionButton(label = it, onClick = onSecondary, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp))
         }
+        SetupBottomBar(onBack = onBack, primaryLabel = primaryLabel, onPrimary = onPrimary)
     }
 }
 
@@ -444,9 +455,9 @@ private fun WelcomePage(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp)) {
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
@@ -459,23 +470,13 @@ private fun WelcomePage(
                 }
                 content()
             }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (onBack != null) {
-                    SetupBackButton(onClick = onBack, modifier = Modifier.weight(1f))
-                }
-                Button(
-                    onClick = onPrimary,
-                    enabled = primaryEnabled,
-                    modifier = Modifier.weight(if (onBack != null) 2f else 1f).heightIn(min = 56.dp),
-                ) {
-                    if (primaryBusy) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(12.dp))
-                    }
-                    Text(primaryLabel)
-                }
-            }
+            SetupBottomBar(
+                onBack = onBack,
+                primaryLabel = primaryLabel,
+                onPrimary = onPrimary,
+                primaryEnabled = primaryEnabled,
+                primaryBusy = primaryBusy,
+            )
         }
     }
 }
@@ -575,7 +576,7 @@ private fun StartPage(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        OutlinedButton(
+        FilledTonalButton(
             enabled = !isRestoring && backupManager != null && backupFilePicker != null,
             modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             onClick = {
@@ -642,15 +643,24 @@ private fun StartPage(
     }
 }
 
+private data class EngineOption(val engine: TtsEngine, val title: Int, val description: Int)
+
 /**
  * Choosing what speaks: the device's own engine or a cloud provider. Saves nothing; setup
  * saves the engine together with the voice. Starts on the engine already in use.
  */
 @Composable
-private fun EnginePage(onEngineChosen: (TtsEngine) -> Unit, onBack: () -> Unit, checkFailed: Boolean) {
+private fun EnginePage(
+    onEngineChosen: (TtsEngine) -> Unit,
+    onBack: () -> Unit,
+    checkFailed: Boolean,
+    checking: Boolean,
+    /** The engine picked earlier in this setup, kept when coming back to this page. */
+    chosenEngine: TtsEngine?,
+) {
     val koin = getKoin()
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
-    var selected by rememberSaveable { mutableStateOf<TtsEngine?>(null) }
+    var selected by rememberSaveable { mutableStateOf(chosenEngine) }
     LaunchedEffect(settingsUseCase) {
         if (selected != null) return@LaunchedEffect
         selected = try {
@@ -664,15 +674,17 @@ private fun EnginePage(onEngineChosen: (TtsEngine) -> Unit, onBack: () -> Unit, 
     }
     val current = selected ?: TtsEngine.SYSTEM
     val options = listOf(
-        Triple(TtsEngine.SYSTEM, R.string.welcome_engine_device, R.string.welcome_engine_device_desc),
-        Triple(TtsEngine.AZURE_USER_RESOURCE, R.string.welcome_engine_azure, R.string.welcome_engine_azure_desc),
-        Triple(TtsEngine.GOOGLE_CLOUD, R.string.welcome_engine_google, R.string.welcome_engine_google_desc),
-        Triple(TtsEngine.ELEVENLABS, R.string.welcome_engine_elevenlabs, R.string.welcome_engine_elevenlabs_desc),
+        EngineOption(TtsEngine.SYSTEM, R.string.welcome_engine_device, R.string.welcome_engine_device_desc),
+        EngineOption(TtsEngine.AZURE_USER_RESOURCE, R.string.welcome_engine_azure, R.string.welcome_engine_azure_desc),
+        EngineOption(TtsEngine.GOOGLE_CLOUD, R.string.welcome_engine_google, R.string.welcome_engine_google_desc),
+        EngineOption(TtsEngine.ELEVENLABS, R.string.welcome_engine_elevenlabs, R.string.welcome_engine_elevenlabs_desc),
     )
     WelcomePage(
         title = stringResource(R.string.welcome_engine_title),
         subtitle = null,
         primaryLabel = stringResource(R.string.common_continue),
+        primaryEnabled = !checking,
+        primaryBusy = checking,
         onPrimary = { onEngineChosen(current) },
         onBack = onBack,
     ) {
@@ -804,9 +816,7 @@ private fun PrivacyPage(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error,
                 )
-                OutlinedButton(onClick = { retryKey++ }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.common_retry))
-                }
+                SetupActionButton(label = stringResource(R.string.common_retry), onClick = { retryKey++ })
             }
             is EngineLoad.Ready -> when (val provider = current.engine.cloudProviderName()) {
                 null -> PrivacyCard(
@@ -880,10 +890,10 @@ private fun ReviewRow(label: String, value: String, enabled: Boolean, onChange: 
             Text(value, style = MaterialTheme.typography.titleMedium)
         }
         val changeLabel = stringResource(R.string.welcome_review_change_label, label)
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onChange,
             enabled = enabled,
-            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = changeLabel },
+            modifier = Modifier.heightIn(min = 56.dp).semantics { contentDescription = changeLabel },
         ) {
             Text(stringResource(R.string.welcome_review_change))
         }

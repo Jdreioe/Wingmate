@@ -221,7 +221,8 @@ internal class VoiceSelectionViewModel(
 
     /**
      * Saves [voice] with its language and, in setup, the engine it belongs to. Every way of
-     * saving a voice goes through here, so setup never pairs an engine with another's voice.
+     * saving a voice goes through here, so as long as both writes succeed, setup never pairs
+     * an engine with another engine's voice. (A failed second write is shown as saveFailed.)
      */
     private suspend fun saveVoice(voice: Voice, engine: TtsEngine) {
         operations.selectVoice(voice)

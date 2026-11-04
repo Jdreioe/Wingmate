@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import io.github.jdreioe.wingmate.application.SettingsUseCase
@@ -98,19 +99,19 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 stringResource(R.string.test_voice_title),
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 16.dp).semantics { heading() }
             )
         
         if (loading) {
@@ -123,13 +124,7 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { loadAttempt++ }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.common_retry))
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedButton(onClick = ::stopThenBack, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text(stringResource(R.string.common_back))
-            }
+            SetupActionButton(label = stringResource(R.string.common_retry), onClick = { loadAttempt++ })
         } else {
             // Voice info card
             Card(
@@ -267,43 +262,27 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 Switch(checked = keepAsPhrase, onCheckedChange = null)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Navigation buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedButton(
-                    onClick = ::stopThenBack,
-                    modifier = Modifier.weight(1f).heightIn(min = 56.dp)
-                ) {
-                    Text(stringResource(R.string.common_back))
-                }
-                
-                Button(
-                    onClick = {
-                        // Stop any ongoing speech before proceeding
-                        scope.launch {
-                            try {
-                                speechService.stop()
-                            } catch (e: CancellationException) {
-                                // The page has left; a cancelled tap must not move setup on again.
-                                throw e
-                            } catch (e: Exception) {
-                                OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
-                            }
-                            onNext(testText.trim().takeIf { keepAsPhrase && it.isNotEmpty() })
-                        }
-                    },
-                    modifier = Modifier.weight(2f).heightIn(min = 56.dp)
-                ) {
-                    Text(stringResource(R.string.common_continue))
-                }
-            }
         }
+        }
+        SetupBottomBar(
+            onBack = ::stopThenBack,
+            primaryLabel = stringResource(R.string.common_continue),
+            primaryEnabled = !loading && !loadFailed,
+            onPrimary = {
+                // Stop any ongoing speech before proceeding
+                scope.launch {
+                    try {
+                        speechService.stop()
+                    } catch (e: CancellationException) {
+                        // The page has left; a cancelled tap must not move setup on again.
+                        throw e
+                    } catch (e: Exception) {
+                        OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
+                    }
+                    onNext(testText.trim().takeIf { keepAsPhrase && it.isNotEmpty() })
+                }
+            },
+        )
         }
     }
 }

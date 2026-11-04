@@ -171,9 +171,6 @@ fun GoogleTtsSetupScreen(
                     if (credentialConfigured) {
                         Spacer(Modifier.height(16.dp))
                         Text(stringResource(R.string.google_tts_configured), color = MaterialTheme.colorScheme.primary)
-                        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.common_continue))
-                        }
                     }
                 }
 
@@ -186,25 +183,23 @@ fun GoogleTtsSetupScreen(
                     Spacer(Modifier.height(12.dp))
                     Text(stringResource(R.string.google_setup_cloud_steps))
                     Spacer(Modifier.height(20.dp))
-                    OutlinedButton(
+                    SetupActionButton(
+                        label = stringResource(R.string.google_setup_open_billing),
                         onClick = { uriHandler.openUri(GOOGLE_CLOUD_BILLING_URL) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_open_billing)) }
-                    Spacer(Modifier.height(8.dp))
-                    Button(
+                        opensBrowser = true,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    SetupActionButton(
+                        label = stringResource(R.string.google_setup_enable_api),
                         onClick = { uriHandler.openUri(GOOGLE_TTS_API_URL) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_enable_api)) }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
+                        opensBrowser = true,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    SetupActionButton(
+                        label = stringResource(R.string.google_setup_create_key),
                         onClick = { uriHandler.openUri(GOOGLE_API_CREDENTIALS_URL) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_create_key)) }
-                    Spacer(Modifier.height(20.dp))
-                    Button(
-                        onClick = { step = GoogleTtsSetupStep.API_KEY },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_have_key)) }
+                        opensBrowser = true,
+                    )
                 }
 
                 GoogleTtsSetupStep.API_KEY -> {
@@ -238,15 +233,7 @@ fun GoogleTtsSetupScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
-                    Spacer(Modifier.height(20.dp))
-                    Button(
-                        onClick = ::saveAndValidate,
-                        enabled = apiKey.isNotBlank() && !saving,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Text(stringResource(R.string.google_setup_save_validate))
-                    }
+
                 }
 
                 GoogleTtsSetupStep.SUCCESS -> {
@@ -262,17 +249,29 @@ fun GoogleTtsSetupScreen(
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.google_setup_complete_description))
-                        Spacer(Modifier.height(32.dp))
-                        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.common_continue))
-                        }
+
                     }
                 }
             }
         }
-        if (showNavigation && step != GoogleTtsSetupStep.SUCCESS) {
-            SetupBackButton(onClick = ::goBack, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp))
-        }
+        SetupBottomBar(
+            onBack = ::goBack.takeIf { showNavigation && step != GoogleTtsSetupStep.SUCCESS },
+            primaryLabel = when (step) {
+                GoogleTtsSetupStep.WELCOME -> if (credentialConfigured) stringResource(R.string.common_continue) else null
+                GoogleTtsSetupStep.CLOUD_PROJECT -> stringResource(R.string.google_setup_have_key)
+                GoogleTtsSetupStep.API_KEY -> stringResource(R.string.common_save)
+                GoogleTtsSetupStep.SUCCESS -> stringResource(R.string.common_continue)
+            },
+            onPrimary = {
+                when (step) {
+                    GoogleTtsSetupStep.CLOUD_PROJECT -> step = GoogleTtsSetupStep.API_KEY
+                    GoogleTtsSetupStep.API_KEY -> saveAndValidate()
+                    GoogleTtsSetupStep.WELCOME, GoogleTtsSetupStep.SUCCESS -> onDone()
+                }
+            },
+            primaryEnabled = step != GoogleTtsSetupStep.API_KEY || apiKey.isNotBlank(),
+            primaryBusy = saving,
+        )
         }
     }
 }

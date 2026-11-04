@@ -271,8 +271,6 @@
     <string name="azure_setup_endpoint_label">Region eller slutpunkt</string>
     <string name="azure_setup_endpoint_placeholder">northeurope</string>
     <string name="azure_setup_key_label">Abonnementsnøgle</string>
-    <string name="azure_setup_save_credentials">Gem Azure-oplysninger</string>
-    <string name="azure_setup_save_continue">Gem og fortsæt</string>
     <string name="azure_setup_complete_title">Sådan!</string>
     <string name="azure_setup_complete_description">Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.</string>
     <string name="azure_credentials_configured">Azure Speech-oplysningerne er konfigureret sikkert på denne enhed.</string>
@@ -568,7 +566,6 @@
     <string name="google_setup_key_description">Begræns nøglen til Cloud Text-to-Speech API i Google Cloud. Gemini-modeller kræver desuden en autorisationsnøgle, der er knyttet til en tjenestekonto med Vertex AI User. Vælg også Android-apps, og tilføj disse værdier for stærkere beskyttelse:</string>
     <string name="google_setup_android_restriction">Pakkenavn: %1$s\nSHA-1-certifikatfingeraftryk: %2$s</string>
     <string name="google_setup_secure_storage_android">Wingmate krypterer nøglen med Android Keystore, udelader den fra sikkerhedskopier og viser den aldrig igen.</string>
-    <string name="google_setup_save_validate">Gem sikkert og bekræft</string>
     <string name="google_setup_error_validation">Wingmate kunne ikke bekræfte nøglen. Kontrollér nøgle, forbindelse, fakturering, API-adgang og begrænsninger. Din tidligere opsætning er bevaret.</string>
     <string name="google_setup_complete_title">Google TTS er klar</string>
     <string name="google_setup_complete_description">Nøglen er bekræftet og gemt sikkert på denne enhed. Google Cloud-stemmer er nu tilgængelige.</string>
@@ -627,7 +624,6 @@
     <string name="elevenlabs_description">Brug stemmer fra din ElevenLabs-konto, herunder personlige stemmekloner. Kræver internet. Tekst sendes til ElevenLabs, og forbrug tæller med i din kontos kvote.</string>
     <string name="elevenlabs_key">ElevenLabs API-nøgle</string>
     <string name="elevenlabs_help">Opret en API-nøgle hos ElevenLabs med læseadgang til Voices og adgang til Text to Speech, og indsæt den her. Tilføj biblioteksstemmer eller opret en personlig stemme på din ElevenLabs-konto først.</string>
-    <string name="elevenlabs_save">Gem sikkert og bekræft</string>
     <string name="elevenlabs_clear">Fjern nøgle</string>
     <string name="elevenlabs_configured">ElevenLabs-nøglen er gemt sikkert på denne enhed.</string>
     <string name="elevenlabs_error">Kunne ikke fuldføre anmodningen. Kontrollér forbindelsen, nøglens rettigheder og tilgængelige stemmer, og prøv igen.</string>
@@ -661,7 +657,7 @@
     <string name="welcome_review_finish">Begynd at kommunikere</string>
     <string name="test_voice_keep_as_phrase">Gem sætningen som en frase</string>
     <string name="welcome_review_save_failed">Dine valg kunne ikke gemmes. De er her stadig, så du kan prøve igen.</string>
-    <string name="test_voice_failed">Stemmen kunne ikke afspilles. Tjek din internetforbindelse, eller vælg en anden stemme.</string>
+    <string name="test_voice_failed">Stemmen kunne ikke afspilles. Vælg en anden stemme, eller tjek at dens stemmedata er hentet.</string>
     <string name="welcome_privacy_speech_unknown">Wingmate kunne ikke læse, hvilken taletjeneste du valgte, så den kan ikke sige, hvor dine ord bliver af.</string>
     <string name="welcome_privacy_online_when_on">Sendes kun online, hvis det er slået til</string>
     <string name="welcome_leave_setup">Forlad opsætning</string>
@@ -699,4 +695,7 @@
     <string name="azure_guide_paste_action">Indtast nøgle</string>
     <string name="azure_guide_errors_title">Hvis Azure viser en fejl</string>
     <string name="azure_guide_errors_body">• Har du allerede en gratis Speech-ressource? Brug dens nøgle (kun én pr. abonnement).\n• Region ikke tilladt? Vælg en anden region.\n• Ikke registreret? Abonnementer → Ressourceudbydere → Microsoft.CognitiveServices → Registrer.</string>
+    <string name="elevenlabs_get_key">Hent en ElevenLabs API-nøgle</string>
+    <string name="welcome_voice_title">Vælg en stemme</string>
+    <string name="welcome_language_title">Vælg sprog</string>
 </resources>

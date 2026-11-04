@@ -279,8 +279,6 @@
     <string name="azure_setup_endpoint_label">Region or endpoint</string>
     <string name="azure_setup_endpoint_placeholder">northeurope</string>
     <string name="azure_setup_key_label">Subscription key</string>
-    <string name="azure_setup_save_credentials">Save Azure credentials</string>
-    <string name="azure_setup_save_continue">Save and continue</string>
     <string name="azure_setup_complete_title">All set!</string>
     <string name="azure_setup_complete_description">Your Azure Speech credentials are saved securely on this device.</string>
     <string name="azure_credentials_configured">Azure Speech credentials are securely configured on this device.</string>
@@ -570,7 +568,6 @@
     <string name="google_setup_key_description">In Google Cloud, restrict the key to the Cloud Text-to-Speech API. Gemini models additionally need an authorization key bound to a service account with Vertex AI User. For stronger protection, also choose Android apps and add these values:</string>
     <string name="google_setup_android_restriction">Package name: %1$s\nSHA-1 certificate fingerprint: %2$s</string>
     <string name="google_setup_secure_storage_android">Wingmate encrypts the key with Android Keystore, excludes it from backups, and never displays it again.</string>
-    <string name="google_setup_save_validate">Save securely and verify</string>
     <string name="google_setup_error_validation">Wingmate could not verify this key. Check the key, connection, billing, API access, and restrictions. Your previous setup was kept.</string>
     <string name="google_setup_complete_title">Google TTS is ready</string>
     <string name="google_setup_complete_description">The key was verified and stored securely on this device. Google Cloud voices are now available.</string>
@@ -627,7 +624,6 @@
     <string name="elevenlabs_description">Use voices from your ElevenLabs account, including personal voice clones. Requires internet. Text is sent to ElevenLabs and usage counts toward your account allowance.</string>
     <string name="elevenlabs_key">ElevenLabs API key</string>
     <string name="elevenlabs_help">Create an API key in ElevenLabs with Voices read and Text to Speech access, then paste it here. Add library voices or create a personal voice in your ElevenLabs account first.</string>
-    <string name="elevenlabs_save">Save securely and verify</string>
     <string name="elevenlabs_clear">Remove key</string>
     <string name="elevenlabs_configured">ElevenLabs key is stored securely on this device.</string>
     <string name="elevenlabs_error">Could not complete the request. Check your connection, API key permissions, and available voices, then retry.</string>
@@ -661,7 +657,7 @@
     <string name="welcome_review_finish">Start communicating</string>
     <string name="test_voice_keep_as_phrase">Keep this sentence as a Phrase</string>
     <string name="welcome_review_save_failed">Your choices could not be saved. They are still here, so you can try again.</string>
-    <string name="test_voice_failed">This voice could not play. Check your internet connection or choose another voice.</string>
+    <string name="test_voice_failed">This voice could not play. Choose another voice, or check that its voice data is downloaded.</string>
     <string name="welcome_privacy_speech_unknown">Wingmate could not read which speech service you chose, so it cannot say where your words go.</string>
     <string name="welcome_privacy_online_when_on">Sent online only if turned on</string>
     <string name="welcome_leave_setup">Leave setup</string>
@@ -699,4 +695,7 @@
     <string name="azure_guide_paste_action">Enter key</string>
     <string name="azure_guide_errors_title">If Azure shows an error</string>
     <string name="azure_guide_errors_body">• Already have a free Speech resource? Use its key (only one per subscription).\n• Region not allowed? Pick another region.\n• Not registered? Subscriptions → Resource providers → Microsoft.CognitiveServices → Register.</string>
+    <string name="elevenlabs_get_key">Get an ElevenLabs API key</string>
+    <string name="welcome_voice_title">Choose a voice</string>
+    <string name="welcome_language_title">Choose languages</string>
 </resources>
