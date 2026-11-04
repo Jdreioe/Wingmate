@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -156,8 +158,17 @@ private fun WideTypingPanel(
     settings: Settings,
 ) {
     val controlScale = settings.playbackIconScale.coerceIn(0.75f, 1.5f)
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
+    val actionRow = 56.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)
+    BoxWithConstraints(Modifier.fillMaxSize().padding(12.dp)) {
+    // A short panel (a foldable or laptop window with the on-screen keyboard up, or large
+    // scaling) drops Speak, Stop and Keyboard to a still-large 56dp and leaves out the app
+    // actions (Screens, fullscreen, Settings; back once the keyboard is hidden), so at least one
+    // row of the area below and its Earlier/More buttons stay on screen.
+    val roomy = maxHeight >= 48.dp + 88.dp * controlScale + 72.dp * controlScale + actionRow + 56.dp + 8.dp * 6
+    val speakHeight = if (roomy) 88.dp * controlScale else 56.dp
+    val controlHeight = if (roomy) 72.dp * controlScale else 56.dp
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (roomy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = appActions)
         // Speak turns into Pause while speech plays and Resume while paused, in the same place.
         val speakAction = when (speech) {
             WideSpeechState.Idle -> onSpeak
@@ -168,7 +179,7 @@ private fun WideTypingPanel(
             onClick = speakAction,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp * controlScale)
+                .height(speakHeight)
                 // Switch, dwell and selection keys reach it like any Typing Screen Button.
                 .typingAccessTarget("typing:speak", enabled = true, shape = ButtonDefaults.shape, action = speakAction)
                 .selectOnTouchDown(settings.selectOnTouchDown, speakAction),
@@ -197,7 +208,7 @@ private fun WideTypingPanel(
                 enabled = stopEnabled,
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 72.dp * controlScale)
+                    .heightIn(min = controlHeight)
                     .typingAccessTarget("typing:stop", enabled = stopEnabled, shape = ButtonDefaults.outlinedShape, action = onStop)
                     .selectOnTouchDown(stopEnabled && settings.selectOnTouchDown, onStop),
                 contentPadding = PaddingValues(horizontal = 8.dp),
@@ -209,7 +220,7 @@ private fun WideTypingPanel(
                 onClick = toggleKeyboard,
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 72.dp * controlScale)
+                    .heightIn(min = controlHeight)
                     .typingAccessTarget("typing:keyboard", enabled = true, shape = ButtonDefaults.filledTonalShape, action = toggleKeyboard)
                     .selectOnTouchDown(settings.selectOnTouchDown, toggleKeyboard),
                 contentPadding = PaddingValues(horizontal = 8.dp),
@@ -238,15 +249,18 @@ private fun WideTypingPanel(
         }
         if (scroll.maxValue > 0) PanelPager(scroll, settings)
     }
+    }
 }
 
 /** Earlier and More: page the panel's scroll area by most of its height. Shown while it overflows. */
 @Composable
 private fun PanelPager(scroll: ScrollState, settings: Settings) {
     val scope = rememberCoroutineScope()
+    // Never less than one action row, so a tiny viewport still moves on.
+    val minimumStep = with(LocalDensity.current) { 64.dp.toPx() }
     val page = { forward: Boolean ->
         scope.launch {
-            val step = scroll.viewportSize * 0.8f
+            val step = maxOf(scroll.viewportSize * 0.8f, minimumStep)
             scroll.animateScrollBy(if (forward) step else -step)
         }
         Unit
