@@ -266,13 +266,11 @@
     <string name="language_no_available">Ingen sprog tilgængelige</string>
     <string name="language_no_match">Ingen sprog matcher filtrene</string>
 
-    <string name="azure_setup_credentials_title">Indtast Azure-oplysninger</string>
-    <string name="azure_setup_credentials_description">Indsæt KEY 1 og Placering/Region.</string>
-    <string name="azure_setup_endpoint_label">Region eller slutpunkt</string>
+    <string name="azure_setup_credentials_title">Indsæt din nøgle</string>
+    <string name="azure_setup_credentials_description">Indsæt KEY 1 og derefter Placering/Region.</string>
+    <string name="azure_setup_endpoint_label">Placering/Region</string>
     <string name="azure_setup_endpoint_placeholder">northeurope</string>
-    <string name="azure_setup_key_label">Abonnementsnøgle</string>
-    <string name="azure_setup_complete_title">Sådan!</string>
-    <string name="azure_setup_complete_description">Dine Azure Speech-oplysninger er gemt sikkert på denne enhed.</string>
+    <string name="azure_setup_key_label">KEY 1</string>
     <string name="azure_credentials_configured">Azure Speech-oplysningerne er konfigureret sikkert på denne enhed.</string>
     <string name="azure_credentials_replace">Erstat Azure-oplysninger</string>
     <string name="azure_setup_error_endpoint">Indtast en gyldig Azure Speech-region eller et officielt HTTPS-endpoint.</string>
@@ -653,7 +651,7 @@
     <string name="welcome_review_change_label">Ændr %1$s</string>
     <string name="welcome_review_on">til</string>
     <string name="welcome_review_off">fra</string>
-    <string name="welcome_review_privacy_value">Vis Historik %1$s · Anonym analysedata %2$s</string>
+    <string name="welcome_review_privacy_value">Talehistorik %1$s · Anonym analysedata %2$s</string>
     <string name="welcome_review_finish">Begynd at kommunikere</string>
     <string name="test_voice_keep_as_phrase">Gem sætningen som en frase</string>
     <string name="welcome_review_save_failed">Dine valg kunne ikke gemmes. De er her stadig, så du kan prøve igen.</string>
@@ -663,7 +661,6 @@
     <string name="welcome_leave_setup">Forlad opsætning</string>
     <string name="welcome_start_failed">Wingmate kunne ikke gemme, at opsætningen er startet. Prøv igen.</string>
     <string name="welcome_restored_needs_setup">Din sikkerhedskopi blev gendannet. Gør opsætningen færdig for at begynde at kommunikere.</string>
-    <string name="welcome_review_speech">Tale</string>
     <string name="welcome_review_speech_online">Sendes online til %1$s</string>
     <string name="welcome_review_loading">Indlæser</string>
     <string name="welcome_reenter_key">Indtast nøglen igen</string>
@@ -697,5 +694,13 @@
     <string name="azure_guide_errors_body">• Har du allerede en gratis Speech-ressource? Brug dens nøgle (kun én pr. abonnement).\n• Region ikke tilladt? Vælg en anden region.\n• Ikke registreret? Abonnementer → Ressourceudbydere → Microsoft.CognitiveServices → Registrer.</string>
     <string name="elevenlabs_get_key">Hent en ElevenLabs API-nøgle</string>
     <string name="welcome_voice_title">Vælg en stemme</string>
-    <string name="welcome_language_title">Vælg sprog</string>
+    <string name="welcome_language_title">Vælg et sprog</string>
+    <string name="welcome_review_language">Sprog</string>
+    <string name="welcome_keep_voice">Behold nuværende stemme</string>
+    <string name="welcome_restoring">Gendanner…</string>
+    <string name="welcome_test_title">Hør din stemme</string>
+    <string name="welcome_test_sentence">Sætning at prøve</string>
+    <string name="welcome_change_language">Skift sprog</string>
+    <string name="welcome_privacy_policy">Privatlivspolitik</string>
+    <string name="welcome_test_play">Afspil</string>
 </resources>

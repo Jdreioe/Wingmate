@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -118,6 +119,7 @@ fun WelcomeScreen(
     val configRepository = remember(koin) { koin.getOrNull<ConfigRepository>() }
     val speechService = remember(koin) { koin.getOrNull<SpeechService>() }
     val phraseUseCase = remember(koin) { koin.getOrNull<PhraseUseCase>() }
+    val voiceUseCase = remember(koin) { koin.getOrNull<VoiceUseCase>() }
     val scope = rememberCoroutineScope()
 
     var nav by rememberSaveable(stateSaver = WelcomeNavigation.Saver) { mutableStateOf(WelcomeNavigation()) }
@@ -133,6 +135,18 @@ fun WelcomeScreen(
     /** True while checking for a saved key, so a repeated activation cannot start a second check. */
     var checkingEngine by remember { mutableStateOf(false) }
     val step = nav.step
+    // The saved voice belongs to the engine being set up, so it can be kept as it is.
+    val canKeepVoice by produceState(false, step, chosenEngine) {
+        value = step == WelcomeStep.Voice && try {
+            withContext(Dispatchers.Default) {
+                settingsUseCase?.get()?.ttsEngine == chosenEngine && voiceUseCase?.selected() != null
+            }
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            false
+        }
+    }
 
     fun startSetup() {
         scope.launch {
@@ -194,6 +208,8 @@ fun WelcomeScreen(
             if (configured) {
                 useEngine(engine, WelcomeStep.VoiceEngine)
             } else {
+                // Remembered so the engine page still shows this choice if they come back.
+                chosenEngine = engine
                 nav = nav.advance(WelcomeStep.VoiceEngine, providerStep)
             }
         }
@@ -262,9 +278,7 @@ fun WelcomeScreen(
         // Start's Back leaves setup. Review has a save in progress to protect, so leaving is one Back away, on Privacy.
         if (onExit != null && step != WelcomeStep.Start && step != WelcomeStep.Review) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                FilledTonalButton(onClick = ::leave, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.welcome_leave_setup))
-                }
+                SetupQuietButton(label = stringResource(R.string.welcome_leave_setup), onClick = ::leave)
             }
         }
         Box(Modifier.weight(1f)) {
@@ -275,6 +289,7 @@ fun WelcomeScreen(
                 startFailed = startFailed,
                 engineCheckFailed = engineCheckFailed,
                 checkingEngine = checkingEngine,
+                canKeepVoice = canKeepVoice,
                 restoredFromBackup = restoredFromBackup,
                 chosenEngine = chosenEngine,
                 onExit = onExit?.let { ::leave },
@@ -310,6 +325,7 @@ private fun WelcomeStepContent(
     startFailed: Boolean,
     engineCheckFailed: Boolean,
     checkingEngine: Boolean,
+    canKeepVoice: Boolean,
     restoredFromBackup: Boolean,
     chosenEngine: TtsEngine?,
     onExit: (() -> Unit)?,
@@ -359,25 +375,29 @@ private fun WelcomeStepContent(
             secondaryLabel = chosenEngine?.takeIf { it != TtsEngine.SYSTEM }
                 ?.let { stringResource(R.string.welcome_reenter_key) },
             onSecondary = { chosenEngine?.providerStep()?.let { onAdvance(WelcomeStep.Voice, it) } },
+            // Keeping the voice already in use must not mean finding it again in a long list.
+            primaryLabel = if (canKeepVoice) stringResource(R.string.welcome_keep_voice) else null,
+            onPrimary = { onAdvance(WelcomeStep.Voice, WelcomeStep.TestVoice) },
         ) {
             VoiceSelectionPage(
                 onBack = onBack,
-                onVoiceSelected = { onAdvance(WelcomeStep.Voice, WelcomeStep.Language) },
+                onVoiceSelected = { onAdvance(WelcomeStep.Voice, WelcomeStep.TestVoice) },
                 engineToSave = chosenEngine,
                 modifier = pageModifier,
             )
         }
-        // Language choices save as they are tapped; Continue only moves on, so setup pins it.
+        // Language choices save as they are tapped; Continue returns to the page that opened it.
         WelcomeStep.Language -> PageWithBack(
             title = stringResource(R.string.welcome_language_title),
             onBack = onBack,
             primaryLabel = stringResource(R.string.common_continue),
-            onPrimary = { onAdvance(WelcomeStep.Language, WelcomeStep.TestVoice) },
+            onPrimary = onBack,
         ) {
             LanguageSelectionPage(onBack = onBack, modifier = pageModifier)
         }
         WelcomeStep.TestVoice -> TestVoiceScreen(
             initialPhraseToSave = choices.phraseToSave,
+            onChangeLanguage = { onAdvance(WelcomeStep.TestVoice, WelcomeStep.Language) },
             onNext = { phraseToSave ->
                 onChoicesChange(choices.copy(phraseToSave = phraseToSave))
                 onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace)
@@ -399,6 +419,7 @@ private fun WelcomeStepContent(
         WelcomeStep.Review -> ReviewPage(
             choices = choices,
             onChangeVoice = { onChange(WelcomeStep.VoiceEngine) },
+            onChangeLanguage = { onChange(WelcomeStep.Language) },
             onChangePhrase = { onChange(WelcomeStep.TestVoice) },
             onChangeWorkspace = { onChange(WelcomeStep.Workspace) },
             onChangePrivacy = { onChange(WelcomeStep.Privacy) },
@@ -452,6 +473,10 @@ private fun WelcomePage(
     primaryEnabled: Boolean = true,
     /** Shows progress in the primary button, announced as [primaryLabel] still. */
     primaryBusy: Boolean = false,
+    /** An optional quiet action under the bottom bar (e.g. Restore a backup). */
+    quietLabel: String? = null,
+    quietEnabled: Boolean = true,
+    onQuiet: () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -477,6 +502,14 @@ private fun WelcomePage(
                 primaryEnabled = primaryEnabled,
                 primaryBusy = primaryBusy,
             )
+            quietLabel?.let {
+                SetupQuietButton(
+                    label = it,
+                    onClick = onQuiet,
+                    enabled = quietEnabled,
+                    modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
+                )
+            }
         }
     }
 }
@@ -568,6 +601,24 @@ private fun StartPage(
         primaryEnabled = !isRestoring,
         onPrimary = onSetUp,
         onBack = onExit?.takeIf { !isRestoring },
+        // Below Set up, so it is read and scanned after the main action, not before it.
+        quietLabel = stringResource(if (isRestoring) R.string.welcome_restoring else R.string.welcome_restore_backup),
+        quietEnabled = !isRestoring && backupManager != null && backupFilePicker != null,
+        onQuiet = {
+            scope.launch {
+                restoreStatus = null
+                try {
+                    pendingRestorePath = backupFilePicker?.pickFile(
+                        title = backupRestoreTitle,
+                        extensions = listOf("wingmate-backup", "zip")
+                    )
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    restoreStatus = backupPickerFailed
+                }
+            }
+        },
     ) {
         if (restoredFromBackup) {
             Text(
@@ -575,31 +626,6 @@ private fun StartPage(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
-        }
-        FilledTonalButton(
-            enabled = !isRestoring && backupManager != null && backupFilePicker != null,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-            onClick = {
-                scope.launch {
-                    restoreStatus = null
-                    try {
-                        pendingRestorePath = backupFilePicker?.pickFile(
-                            title = backupRestoreTitle,
-                            extensions = listOf("wingmate-backup", "zip")
-                        )
-                    } catch (failure: CancellationException) {
-                        throw failure
-                    } catch (_: Exception) {
-                        restoreStatus = backupPickerFailed
-                    }
-                }
-            }
-        ) {
-            if (isRestoring) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-            }
-            Text(stringResource(R.string.welcome_restore_backup))
         }
         val error = restoreStatus ?: if (startFailed) stringResource(R.string.welcome_start_failed) else null
         error?.let {
@@ -853,6 +879,12 @@ private fun PrivacyPage(
                 onCheckedChange = { onChoicesChange(choices.copy(featureUsageReportingEnabled = it)) },
             )
         }
+        val uriHandler = LocalUriHandler.current
+        SetupActionButton(
+            label = stringResource(R.string.welcome_privacy_policy),
+            onClick = { uriHandler.openUri(PRIVACY_POLICY_URL) },
+            opensBrowser = true,
+        )
     }
 }
 
@@ -863,6 +895,13 @@ private fun TtsEngine.providerStep(): WelcomeStep? = when (this) {
     TtsEngine.GOOGLE_CLOUD -> WelcomeStep.GoogleSetup
     TtsEngine.ELEVENLABS -> WelcomeStep.ElevenLabsSetup
 }
+
+/** Wingmate's privacy policy, kept in the repository next to the code it describes. */
+internal const val PRIVACY_POLICY_URL = "https://github.com/Jdreioe/Wingmate/blob/main/PRIVACY_POLICY.md"
+
+/** A language tag such as "da-DK" as people read it ("Danish (Denmark)") in the app's language. */
+internal fun languageName(tag: String): String =
+    java.util.Locale.forLanguageTag(tag).getDisplayName(java.util.Locale.getDefault()).ifBlank { tag }
 
 /** Where the speech engine setting stands on the Privacy page. */
 private sealed interface EngineLoad {
@@ -904,6 +943,7 @@ private fun ReviewRow(label: String, value: String, enabled: Boolean, onChange: 
 private fun ReviewPage(
     choices: WelcomeChoices,
     onChangeVoice: () -> Unit,
+    onChangeLanguage: () -> Unit,
     onChangePhrase: () -> Unit,
     onChangeWorkspace: () -> Unit,
     onChangePrivacy: () -> Unit,
@@ -917,15 +957,20 @@ private fun ReviewPage(
     val deviceEngine = stringResource(R.string.welcome_privacy_device_engine)
     val sentOnlineTemplate = stringResource(R.string.welcome_review_speech_online)
     // Null while loading, so nothing misleading is shown or announced before the values arrive.
-    val voiceAndSpeech by produceState<Pair<String, String>?>(null, voiceUseCase, settingsUseCase) {
+    val voiceAndLanguage by produceState<Pair<String, String>?>(null, voiceUseCase, settingsUseCase) {
         value = try {
             withContext(Dispatchers.IO) {
-                val voice = voiceUseCase?.selected()?.let { it.displayName ?: it.name } ?: unknown
-                val speech = when (val engine = settingsUseCase?.get()?.ttsEngine) {
+                val name = voiceUseCase?.selected()?.let { it.displayName ?: it.name } ?: unknown
+                val settings = settingsUseCase?.get()
+                val speech = when (val engine = settings?.ttsEngine) {
                     null -> unknown
                     else -> engine.cloudProviderName()?.let { sentOnlineTemplate.format(it) } ?: deviceEngine
                 }
-                voice to speech
+                val languages = settings?.let { listOf(it.primaryLanguage, it.secondaryLanguage) }
+                    ?.filter { it.isNotBlank() }
+                    ?.joinToString(" · ") { languageName(it) }
+                    ?.ifBlank { null } ?: unknown
+                "$name\n$speech" to languages
             }
         } catch (failure: CancellationException) {
             throw failure
@@ -987,9 +1032,9 @@ private fun ReviewPage(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        ReviewRow(stringResource(R.string.welcome_review_voice), voiceAndSpeech?.first ?: loading, !finishing, onChangeVoice)
+        ReviewRow(stringResource(R.string.welcome_review_voice), voiceAndLanguage?.first ?: loading, !finishing, onChangeVoice)
         HorizontalDivider()
-        ReviewRow(stringResource(R.string.welcome_review_speech), voiceAndSpeech?.second ?: loading, !finishing, onChangeVoice)
+        ReviewRow(stringResource(R.string.welcome_review_language), voiceAndLanguage?.second ?: loading, !finishing, onChangeLanguage)
         HorizontalDivider()
         ReviewRow(
             stringResource(R.string.welcome_review_phrase),

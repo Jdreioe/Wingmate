@@ -7,6 +7,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -36,7 +38,11 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(stringResource(R.string.elevenlabs_setup), style = MaterialTheme.typography.headlineSmall)
+        Text(
+            stringResource(R.string.elevenlabs_setup),
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.semantics { heading() },
+        )
         Text(stringResource(R.string.elevenlabs_description))
         Text(stringResource(R.string.elevenlabs_help))
         SetupActionButton(

@@ -5,16 +5,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class WelcomeNavigationTest {
-    private val atReview = WelcomeNavigation(listOf(Start, VoiceEngine, Voice, Language, TestVoice, Workspace, Privacy, Review))
+    private val atReview = WelcomeNavigation(listOf(Start, VoiceEngine, Voice, TestVoice, Workspace, Privacy, Review))
 
     @Test
     fun `a repeated activation moves only once`() {
-        val once = WelcomeNavigation(listOf(Start, VoiceEngine, Voice)).advance(Voice, Language)
-        assertEquals(once, once.advance(Voice, Language))
+        val once = WelcomeNavigation(listOf(Start, VoiceEngine, Voice)).advance(Voice, TestVoice)
+        assertEquals(once, once.advance(Voice, TestVoice))
 
-        val backOnce = once.back(Language)
+        val backOnce = once.back(TestVoice)
         assertEquals(Voice, backOnce.step)
-        assertEquals(backOnce, backOnce.back(Language))
+        assertEquals(backOnce, backOnce.back(TestVoice))
     }
 
     @Test
@@ -33,8 +33,7 @@ class WelcomeNavigationTest {
     fun `a changed voice section returns to Review after its last page`() {
         val voiceDone = atReview.change(VoiceEngine)
             .advance(VoiceEngine, Voice)
-            .advance(Voice, Language)
-            .advance(Language, TestVoice)
+            .advance(Voice, TestVoice)
             .finishSection(TestVoice, Workspace)
 
         assertEquals(atReview, voiceDone)
@@ -47,5 +46,13 @@ class WelcomeNavigationTest {
 
         val again = first.advance(Voice, AzureSetup).toVoiceFrom(AzureSetup)
         assertEquals(first, again)
+    }
+
+    @Test
+    fun `language is a side page that returns where it was opened`() {
+        val fromTest = WelcomeNavigation(listOf(Start, VoiceEngine, Voice, TestVoice)).advance(TestVoice, Language)
+        assertEquals(TestVoice, fromTest.back(Language).step)
+
+        assertEquals(atReview, atReview.change(Language).back(Language))
     }
 }

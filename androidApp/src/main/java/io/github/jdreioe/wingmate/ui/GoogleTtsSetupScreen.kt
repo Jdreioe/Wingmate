@@ -1,6 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -140,8 +142,8 @@ fun GoogleTtsSetupScreen(
                 GoogleTtsSetupStep.WELCOME -> {
                     Text(
                         stringResource(R.string.google_setup_welcome_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.google_setup_welcome_description))
@@ -177,8 +179,8 @@ fun GoogleTtsSetupScreen(
                 GoogleTtsSetupStep.CLOUD_PROJECT -> {
                     Text(
                         stringResource(R.string.google_setup_cloud_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(stringResource(R.string.google_setup_cloud_steps))
@@ -205,8 +207,8 @@ fun GoogleTtsSetupScreen(
                 GoogleTtsSetupStep.API_KEY -> {
                     Text(
                         stringResource(R.string.google_setup_key_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.google_setup_key_description))
@@ -245,7 +247,7 @@ fun GoogleTtsSetupScreen(
                         Text(
                             stringResource(R.string.google_setup_complete_title),
                             style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.semantics { heading() },
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.google_setup_complete_description))

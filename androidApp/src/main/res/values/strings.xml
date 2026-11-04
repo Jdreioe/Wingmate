@@ -274,13 +274,11 @@
     <string name="language_no_available">No languages available</string>
     <string name="language_no_match">No languages match filters</string>
 
-    <string name="azure_setup_credentials_title">Enter Azure credentials</string>
-    <string name="azure_setup_credentials_description">Paste KEY 1 and the Location/Region.</string>
-    <string name="azure_setup_endpoint_label">Region or endpoint</string>
+    <string name="azure_setup_credentials_title">Paste your key</string>
+    <string name="azure_setup_credentials_description">Paste KEY 1, then the Location/Region.</string>
+    <string name="azure_setup_endpoint_label">Location/Region</string>
     <string name="azure_setup_endpoint_placeholder">northeurope</string>
-    <string name="azure_setup_key_label">Subscription key</string>
-    <string name="azure_setup_complete_title">All set!</string>
-    <string name="azure_setup_complete_description">Your Azure Speech credentials are saved securely on this device.</string>
+    <string name="azure_setup_key_label">KEY 1</string>
     <string name="azure_credentials_configured">Azure Speech credentials are securely configured on this device.</string>
     <string name="azure_credentials_replace">Replace Azure credentials</string>
     <string name="azure_setup_error_endpoint">Enter a valid Azure Speech region or official HTTPS endpoint.</string>
@@ -653,7 +651,7 @@
     <string name="welcome_review_change_label">Change %1$s</string>
     <string name="welcome_review_on">on</string>
     <string name="welcome_review_off">off</string>
-    <string name="welcome_review_privacy_value">Show History %1$s · Anonymous analytics %2$s</string>
+    <string name="welcome_review_privacy_value">Speech history %1$s · Anonymous analytics %2$s</string>
     <string name="welcome_review_finish">Start communicating</string>
     <string name="test_voice_keep_as_phrase">Keep this sentence as a Phrase</string>
     <string name="welcome_review_save_failed">Your choices could not be saved. They are still here, so you can try again.</string>
@@ -663,7 +661,6 @@
     <string name="welcome_leave_setup">Leave setup</string>
     <string name="welcome_start_failed">Wingmate could not save that setup has started. Try again.</string>
     <string name="welcome_restored_needs_setup">Your backup was restored. Finish setup to start communicating.</string>
-    <string name="welcome_review_speech">Speech</string>
     <string name="welcome_review_speech_online">Sent online to %1$s</string>
     <string name="welcome_review_loading">Loading</string>
     <string name="welcome_reenter_key">Enter the key again</string>
@@ -697,5 +694,13 @@
     <string name="azure_guide_errors_body">• Already have a free Speech resource? Use its key (only one per subscription).\n• Region not allowed? Pick another region.\n• Not registered? Subscriptions → Resource providers → Microsoft.CognitiveServices → Register.</string>
     <string name="elevenlabs_get_key">Get an ElevenLabs API key</string>
     <string name="welcome_voice_title">Choose a voice</string>
-    <string name="welcome_language_title">Choose languages</string>
+    <string name="welcome_language_title">Choose a language</string>
+    <string name="welcome_review_language">Language</string>
+    <string name="welcome_keep_voice">Keep current voice</string>
+    <string name="welcome_restoring">Restoring…</string>
+    <string name="welcome_test_title">Hear your voice</string>
+    <string name="welcome_test_sentence">Sentence to try</string>
+    <string name="welcome_change_language">Change language</string>
+    <string name="welcome_privacy_policy">Privacy policy</string>
+    <string name="welcome_test_play">Play</string>
 </resources>

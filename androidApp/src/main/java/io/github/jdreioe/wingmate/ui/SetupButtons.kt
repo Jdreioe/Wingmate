@@ -16,8 +16,10 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.hojmoseit.wingmate.R
@@ -59,14 +61,28 @@ internal fun SetupActionButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     opensBrowser: Boolean = false,
+    /** Decorative leading icon; the label carries the meaning. */
+    icon: ImageVector? = null,
 ) {
     FilledTonalButton(onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+        icon?.let {
+            Icon(it, contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(8.dp))
+        }
         Text(label)
         if (opensBrowser) {
             Spacer(Modifier.width(8.dp))
             // Decorative: screen readers hear the label; the browser opening is announced by the system.
             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp))
         }
+    }
+}
+
+/** A way out that should not compete with the page's actions: Leave setup, Restore a backup. */
+@Composable
+internal fun SetupQuietButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 56.dp)) {
+        Text(label)
     }
 }
 

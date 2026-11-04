@@ -10,8 +10,9 @@ internal enum class WelcomeStep(val analyticsName: String) {
     GoogleSetup("google_setup"),
     ElevenLabsSetup("elevenlabs_setup"),
     Voice("voice"),
-    Language("language"),
     TestVoice("test_voice"),
+    /** A side page, opened from TestVoice or Review; finishing it goes back where it came from. */
+    Language("language"),
     Workspace("workspace"),
     Privacy("privacy"),
     Review("review"),

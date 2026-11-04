@@ -41,7 +41,13 @@ import com.hojmoseit.wingmate.R
  * text, or null when it should not be saved. Previews are not recorded in History or cached.
  */
 @Composable
-fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?) -> Unit, onBack: () -> Unit) {
+fun TestVoiceScreen(
+    initialPhraseToSave: String?,
+    /** Opens language choice; offered only when the voice speaks more than one language. */
+    onChangeLanguage: () -> Unit,
+    onNext: (phraseToSave: String?) -> Unit,
+    onBack: () -> Unit,
+) {
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
     val settingsUseCase = koinInject<SettingsUseCase>()
@@ -105,11 +111,10 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                stringResource(R.string.test_voice_title),
-                style = MaterialTheme.typography.headlineSmall,
+                stringResource(R.string.welcome_test_title),
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(bottom = 16.dp).semantics { heading() }
             )
@@ -131,25 +136,25 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.test_voice_selected_voice),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         selectedVoice?.displayName ?: selectedVoice?.name ?: stringResource(R.string.test_voice_unknown_voice),
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        selectedVoice?.primaryLanguage ?: stringResource(R.string.test_voice_unknown_language),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        (selectedVoice?.selectedLanguage?.ifBlank { null } ?: selectedVoice?.primaryLanguage)
+                            ?.let(::languageName)
+                            ?: stringResource(R.string.test_voice_unknown_language),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
+            }
+            if ((selectedVoice?.supportedLanguages?.size ?: 0) > 1) {
+                Spacer(modifier = Modifier.height(16.dp))
+                SetupActionButton(label = stringResource(R.string.welcome_change_language), onClick = onChangeLanguage)
             }
             
             Spacer(modifier = Modifier.height(24.dp))
@@ -159,7 +164,7 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
             OutlinedTextField(
                 value = testText,
                 onValueChange = { testText = it },
-                label = { Text(stringResource(R.string.test_voice_message_label)) },
+                label = { Text(stringResource(R.string.welcome_test_sentence)) },
                 modifier = Modifier.fillMaxWidth().then(showKeyboard),
                 minLines = 2,
                 maxLines = 4
@@ -167,14 +172,19 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Play button
-            Button(
+            // Play button: an action, not the page's primary (Continue is).
+            SetupActionButton(
+                label = stringResource(if (isPlaying) R.string.test_voice_stop else R.string.welcome_test_play),
+                icon = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                enabled = testText.isNotBlank(),
                 onClick = {
                     if (isPlaying) {
                         // Stop current playback
                         scope.launch {
                             try {
-                                    speechService.stop()
+                                speechService.stop()
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 OperationalLogger.warn("speech.stop", "failed", exceptionClass = e.loggingClassName())
                             } finally {
@@ -211,29 +221,8 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                    enabled = testText.isNotBlank()
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) {
-                        stringResource(R.string.test_voice_stop)
-                    } else {
-                        stringResource(R.string.test_voice_play)
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    if (isPlaying) {
-                        stringResource(R.string.test_voice_stop)
-                    } else {
-                        stringResource(R.string.test_voice_test_button)
-                    }
-                )
-            }
-            
+            )
+
             if (playbackFailed) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
