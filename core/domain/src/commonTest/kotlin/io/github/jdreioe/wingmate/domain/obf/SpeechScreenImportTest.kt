@@ -56,6 +56,24 @@ class SpeechScreenImportTest {
     }
 
     @Test
+    fun twoColumnsPutEightParagraphsSideBySideAboveThePageLinks() {
+        val text = (1..9).joinToString("\n\n") { "Paragraph $it." }
+        val graph = SpeechScreenImport.createGraph("speech", "Toast", text, 8, "Previous", "Next", 1L, columns = 2)
+        graph.requireValid()
+
+        val first = graph.boards[0].grid!!
+        assertEquals(5, first.rows)
+        assertEquals(listOf("speech-p0-paragraph-0", "speech-p0-paragraph-1"), first.order[0])
+        assertEquals(listOf("speech-p0-paragraph-6", "speech-p0-paragraph-7"), first.order[3])
+        assertEquals(listOf(null, "speech-p0-next"), first.order[4])
+        // Every Page keeps the same shape, so the links stay in place; a short last Page has empty cells.
+        val last = graph.boards[1].grid!!
+        assertEquals(5, last.rows)
+        assertEquals(listOf("speech-p1-paragraph-0", null), last.order[0])
+        assertEquals(listOf("speech-p1-previous", null), last.order[4])
+    }
+
+    @Test
     fun emptyOrHeadingOnlyInputDoesNotCreateScreensAndInvalidPageSizesAreRejected() {
         assertTrue(SpeechScreenImport.preview("Speech", " \n# Heading\n", 4).isEmpty())
         for (size in listOf(0, 9)) {

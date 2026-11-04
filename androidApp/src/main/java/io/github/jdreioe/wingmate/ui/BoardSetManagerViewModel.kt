@@ -127,7 +127,8 @@ internal sealed interface BoardSetManagerAction {
     data class SpeechNameChanged(val name: String) : BoardSetManagerAction
     data class SpeechTextChanged(val text: String) : BoardSetManagerAction
     data class SpeechCountChanged(val count: Int) : BoardSetManagerAction
-    data class SpeechImportSubmitted(val previousLabel: String, val nextLabel: String) : BoardSetManagerAction
+    /** [columns]: paragraphs side by side per Page row, chosen from the window (2 on tablets). */
+    data class SpeechImportSubmitted(val previousLabel: String, val nextLabel: String, val columns: Int = 1) : BoardSetManagerAction
     data object ImportClicked : BoardSetManagerAction
     data class OpenClicked(val boardSetId: String) : BoardSetManagerAction
     data class EditClicked(val boardSetId: String) : BoardSetManagerAction
@@ -167,7 +168,7 @@ internal interface BoardSetManagerOperations {
     suspend fun cacheAll()
     suspend fun cacheBoardSet(id: String)
     suspend fun requiresDeleteUnlock(): Boolean
-    suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String): ObfBoardSet
+    suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String, columns: Int = 1): ObfBoardSet
     suspend fun importBoardSet(): BoardImportResult
     suspend fun createBoardSet(name: String, rows: Int, columns: Int, rootBoardName: String): ObfBoardSet
     suspend fun createCalculatorBoardSet(name: String): ObfBoardSet
@@ -208,8 +209,8 @@ internal class DefaultBoardSetManagerOperations(
         rootBoardName: String,
     ) = useCase.createBoardSet(name, rows, columns, rootBoardName)
 
-    override suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String) =
-        useCase.importSpeech(draft.name, draft.text, draft.paragraphsPerPage, previousLabel, nextLabel)
+    override suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String, columns: Int) =
+        useCase.importSpeech(draft.name, draft.text, draft.paragraphsPerPage, previousLabel, nextLabel, columns)
 
     override suspend fun createCalculatorBoardSet(name: String) = useCase.createCalculatorBoardSet(name)
     override suspend fun createKeyboardBoardSet(name: String, preset: KeyboardPreset) =
@@ -372,7 +373,7 @@ internal class BoardSetManagerViewModel(
         _state.update { it.copy(isCreating = true, speechImportFailed = false) }
         viewModelScope.launch {
             try {
-                val created = operations.importSpeech(draft, action.previousLabel, action.nextLabel)
+                val created = operations.importSpeech(draft, action.previousLabel, action.nextLabel, action.columns)
                 showCreatedBoardSet(created)
                 savedStateHandle[SHOW_SPEECH_IMPORT] = false
                 savedStateHandle[SPEECH_NAME] = ""

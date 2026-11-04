@@ -245,7 +245,7 @@ class BoardSetManagerViewModelTest {
 
         override suspend fun cacheBoardSet(id: String) = Unit
         override suspend fun requiresDeleteUnlock() = deleteRequiresUnlock
-        override suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String): ObfBoardSet {
+        override suspend fun importSpeech(draft: SpeechImportDraft, previousLabel: String, nextLabel: String, columns: Int): ObfBoardSet {
             if (speechImportFails) error("Storage unavailable")
             return boardSet("speech-1", draft.name).also(boardSets::add)
         }

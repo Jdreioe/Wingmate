@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -24,6 +25,14 @@ import io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport
 @Composable
 internal fun SpeechImportDialog(state: BoardSetManagerState, onAction: (BoardSetManagerAction) -> Unit) {
     val draft = state.speechDraft
+    // A tablet's width fits two paragraphs side by side, so a Page holds 8 (2 x 4) by default.
+    // Chosen once here and saved with the Screen; the Page never reflows with the window.
+    val columns = if (currentWindowWidth().isLarge) 2 else 1
+    LaunchedEffect(columns) {
+        if (columns == 2 && draft.text.isEmpty() && draft.paragraphsPerPage == SpeechScreenImport.DEFAULT_PARAGRAPHS_PER_PAGE) {
+            onAction(BoardSetManagerAction.SpeechCountChanged(SpeechScreenImport.MAX_PARAGRAPHS_PER_PAGE))
+        }
+    }
     val previous = stringResource(R.string.speech_import_previous)
     val next = stringResource(R.string.speech_import_next)
     AlertDialog(
@@ -88,7 +97,7 @@ internal fun SpeechImportDialog(state: BoardSetManagerState, onAction: (BoardSet
         },
         confirmButton = {
             TextButton(
-                onClick = { onAction(BoardSetManagerAction.SpeechImportSubmitted(previous, next)) },
+                onClick = { onAction(BoardSetManagerAction.SpeechImportSubmitted(previous, next, columns)) },
                 enabled = draft.canImport && !state.isCreating,
             ) {
                 if (state.isCreating) CircularProgressIndicator()
