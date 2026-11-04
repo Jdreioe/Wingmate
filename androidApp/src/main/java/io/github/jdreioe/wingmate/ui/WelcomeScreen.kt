@@ -335,7 +335,9 @@ fun WelcomeScreen(
                 onBack = { nav = nav.back(step) },
                 onFinishSection = { from, next -> nav = nav.finishSection(from, next) },
                 onChange = { target -> nav = nav.change(target) },
-                onUnsavedSpeedChange = { choices = choices.copy(unsavedSpeed = it) },
+                onSpeedUnsaved = { choices = choices.copy(unsavedSpeed = it) },
+                // Only that exact speed: a saver from before recreation may finish late.
+                onSpeedSaved = { if (choices.unsavedSpeed == it) choices = choices.copy(unsavedSpeed = null) },
                 onFinish = { syncSetupPhrase(choices.phraseToSave) && onComplete(choices) },
                 onWorkspaceChosen = {
                     if (nav.step == WelcomeStep.Workspace) {
@@ -373,7 +375,8 @@ private fun WelcomeStepContent(
     onFinishSection: (from: WelcomeStep, next: WelcomeStep) -> Unit,
     onChange: (WelcomeStep) -> Unit,
     /** Applied to the current draft (it may arrive after a save, not on a fresh composition). */
-    onUnsavedSpeedChange: (UnsavedSpeed?) -> Unit,
+    onSpeedUnsaved: (UnsavedSpeed) -> Unit,
+    onSpeedSaved: (UnsavedSpeed) -> Unit,
     onFinish: suspend () -> Boolean,
     onWorkspaceChosen: () -> Unit,
 ) {
@@ -441,7 +444,8 @@ private fun WelcomeStepContent(
             onSentenceChange = { onChoicesChange(choices.copy(sentence = it)) },
             onKeepAsPhraseChange = { keep, text -> onChoicesChange(choices.copy(keepSentence = keep, sentence = text)) },
             unsavedSpeed = choices.unsavedSpeed,
-            onUnsavedSpeedChange = onUnsavedSpeedChange,
+            onSpeedUnsaved = onSpeedUnsaved,
+            onSpeedSaved = onSpeedSaved,
             onChangeLanguage = { onAdvance(WelcomeStep.TestVoice, WelcomeStep.Language) },
             onNext = { onFinishSection(WelcomeStep.TestVoice, WelcomeStep.Workspace) },
             onBack = onBack,

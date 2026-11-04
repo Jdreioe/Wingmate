@@ -65,7 +65,9 @@ fun TestVoiceScreen(
     onKeepAsPhraseChange: ((keep: Boolean, sentence: String) -> Unit)? = null,
     /** A speed not yet confirmed saved, held by setup so it survives this page going away. */
     unsavedSpeed: UnsavedSpeed? = null,
-    onUnsavedSpeedChange: (UnsavedSpeed?) -> Unit = {},
+    onSpeedUnsaved: (UnsavedSpeed) -> Unit = {},
+    /** That speed is now saved; may arrive after this page has gone (see [SpeedSaver]). */
+    onSpeedSaved: (UnsavedSpeed) -> Unit = {},
     /** Opens language choice for a voice that speaks more than one language; null hides it. */
     onChangeLanguage: (() -> Unit)? = null,
     /** False inside Settings, whose top bar already shows the title and handles insets. */
@@ -92,7 +94,8 @@ fun TestVoiceScreen(
     // Speed is saved once it settles; SpeedSaver owns the saves (one at a time, on the app's
     // scope on the main thread) and tells setup which speed is not yet confirmed saved.
     val appScope = koinInject<CoroutineScope>()
-    val setUnsaved by rememberUpdatedState(onUnsavedSpeedChange)
+    val reportUnsaved by rememberUpdatedState(onSpeedUnsaved)
+    val reportSaved by rememberUpdatedState(onSpeedSaved)
     val speedSaver = remember {
         SpeedSaver(
             scope = CoroutineScope(appScope.coroutineContext + Dispatchers.Main.immediate),
@@ -103,7 +106,8 @@ fun TestVoiceScreen(
                         .isSuccess
                 }
             },
-            onUnsavedChange = { setUnsaved(it) },
+            onUnsaved = { reportUnsaved(it) },
+            onSaved = { reportSaved(it) },
         )
     }
     DisposableEffect(Unit) {

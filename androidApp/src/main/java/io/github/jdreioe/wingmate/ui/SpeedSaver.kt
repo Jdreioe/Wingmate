@@ -17,14 +17,17 @@ import kotlinx.coroutines.launch
  *
  * One save runs at a time, owned by [scope] (the app's scope on the main thread, so leaving
  * the page cannot cut it off). Callers join a running save and then save the newest speed if
- * that one was older, so a change followed by Continue saves exactly once. [onUnsavedChange]
- * tells setup which speed is not yet confirmed saved, so it survives the page going away.
+ * that one was older, so a change followed by Continue saves exactly once. [onUnsaved] tells
+ * setup which speed is not yet confirmed saved, so it survives the page going away, and
+ * [onSaved] which speed now is. A saver can outlive its page (recreation), so setup clears
+ * its draft only when [onSaved] names exactly that speed.
  */
 internal class SpeedSaver(
     private val scope: CoroutineScope,
     /** Saves the voice with its speed; false if it could not be saved. */
     private val save: suspend (Voice) -> Boolean,
-    private val onUnsavedChange: (UnsavedSpeed?) -> Unit,
+    private val onUnsaved: (UnsavedSpeed) -> Unit,
+    private val onSaved: (UnsavedSpeed) -> Unit,
     private val settleMillis: Long = 800,
 ) {
     /** The newest voice-with-speed, and the last one confirmed saved. */
@@ -49,7 +52,7 @@ internal class SpeedSaver(
     /** The speed changed; saves it once it settles. */
     fun changed(voice: Voice) {
         latest = voice
-        onUnsavedChange(UnsavedSpeed(voice.name.orEmpty(), voice.rate ?: 1.0))
+        onUnsaved(voice.speed())
         settling?.cancel()
         settling = scope.launch {
             delay(settleMillis)
@@ -73,28 +76,35 @@ internal class SpeedSaver(
     /** The page is going away another way (Leave setup, recreation): finish any unsaved speed. */
     fun leaving() {
         settling?.cancel()
-        if (latest != confirmed) scope.launch { saveLatest() }
+        scope.launch { saveLatest() }
     }
 
     private suspend fun saveLatest(): Boolean {
         while (true) {
+            // A save still running decides what is stored, even when the page is back at the
+            // confirmed speed (1.0 → 1.1 → 1.0): wait for it before comparing.
+            running?.takeIf { it.second.isActive }?.let { (voice, job) ->
+                if (job.await()) confirmed = voice
+                if (running?.second === job) running = null
+            }
             val target = latest ?: return true
-            if (target == confirmed) return true
-            val (voice, job) = running?.takeIf { it.second.isActive }
-                ?: (target to scope.async { save(target) }).also { running = it }
+            if (target == confirmed) {
+                failed = false
+                onSaved(target.speed())
+                return true
+            }
+            val job = scope.async { save(target) }
+            running = target to job
             val saved = job.await()
             if (running?.second === job) running = null
             if (!saved) {
                 failed = true
                 return false
             }
-            confirmed = voice
-            if (voice == latest) {
-                failed = false
-                onUnsavedChange(null)
-                return true
-            }
-            // A newer speed arrived while that one saved: save it too.
+            confirmed = target
+            // Loops: a newer speed may have arrived while that one saved.
         }
     }
+
+    private fun Voice.speed() = UnsavedSpeed(name.orEmpty(), rate ?: 1.0)
 }
