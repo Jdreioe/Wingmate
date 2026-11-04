@@ -30,7 +30,6 @@ import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
@@ -115,15 +114,16 @@ fun TestVoiceScreen(
         }
         return if (rateSaveFailed) saveRateNow() else true
     }
-    // Leaving another way (e.g. Leave setup) cancels this page's scope; a speed still waiting
-    // is saved on its own so it is not lost.
+    // Leaving another way (e.g. Leave setup) cancels this page's scope; a speed still waiting,
+    // or one whose save failed, is saved on the app's scope so it is not lost.
+    val appScope = koinInject<CoroutineScope>()
     DisposableEffect(Unit) {
         onDispose {
-            if (rateSaveJob?.isActive == true) {
+            if (rateSaveJob?.isActive == true || rateSaveFailed) {
                 val voice = selectedVoice
                 rateSaveJob?.cancel()
                 if (voice != null) {
-                    CoroutineScope(Dispatchers.IO + NonCancellable).launch {
+                    appScope.launch(Dispatchers.IO) {
                         runCatching { voiceUseCase.select(voice) }
                             .onFailure { OperationalLogger.warn("voice_rate.save", "failed_on_leave", exceptionClass = it.loggingClassName()) }
                     }
@@ -226,7 +226,6 @@ fun TestVoiceScreen(
                 )
             }
 
-            // Speaking rate, set while hearing the voice; saved on the voice, as Settings does.
             Spacer(modifier = Modifier.height(24.dp))
             
             // Test text input
@@ -295,7 +294,8 @@ fun TestVoiceScreen(
                 )
             }
 
-            // Right under Play, so trying a speed and listening again is one short loop.
+            // Speaking rate, right under Play so trying a speed and listening again is one short
+            // loop; saved on the voice, as Settings does.
             selectedVoice?.let { voice ->
                 val range = if (engine == TtsEngine.ELEVENLABS) 0.7f..1.2f else 0.5f..2.0f
                 var rate by remember(voice.name) { mutableFloatStateOf((voice.rate ?: 1.0).toFloat().coerceIn(range)) }

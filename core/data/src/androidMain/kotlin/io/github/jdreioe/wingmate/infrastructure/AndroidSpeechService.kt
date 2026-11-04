@@ -241,10 +241,12 @@ class AndroidSpeechService(
         abandonAudioFocus()
     }
 
-    private fun onTtsUtteranceFinished(utteranceId: String?) {
+    private fun onTtsUtteranceFinished(utteranceId: String?, failed: Boolean = false) {
         val requestId = utteranceId?.substringAfter("wingmate-", "")
             ?.substringBefore('-')?.toLongOrNull() ?: return
         if (requestGeneration.get() != requestId) return
+        // Only after the request check: a late error from a replaced request must not fail this one.
+        if (failed) ttsUtteranceFailed.set(true)
         val remaining = pendingTtsUtterances.updateAndGet { count -> if (count > 0) count - 1 else 0 }
         if (remaining == 0) {
             // An engine error (e.g. voice data not installed) ends the request as FAILED, not done.
@@ -301,14 +303,12 @@ class AndroidSpeechService(
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                ttsUtteranceFailed.set(true)
-                onTtsUtteranceFinished(utteranceId)
+                onTtsUtteranceFinished(utteranceId, failed = true)
             }
 
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
-                ttsUtteranceFailed.set(true)
-                onTtsUtteranceFinished(utteranceId)
+                onTtsUtteranceFinished(utteranceId, failed = true)
             }
         })
 
@@ -1287,7 +1287,7 @@ class AndroidSpeechService(
             }
 
             if (pendingTtsUtterances.get() == 0) {
-                finishPlayback(requestId)
+                finishPlayback(requestId, failed = ttsUtteranceFailed.get())
             } else {
                 markPlaybackStarted(combinedText, voice, requestId)
             }
