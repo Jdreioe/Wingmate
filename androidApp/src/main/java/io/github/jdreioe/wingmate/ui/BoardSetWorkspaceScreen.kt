@@ -188,7 +188,6 @@ private data class WorkspaceCellTarget(
 fun BoardSetManagerRoot(
     onBack: () -> Unit,
     onBackToWelcome: () -> Unit,
-    createOnLaunch: Boolean = false,
     initialBoardSetId: String? = null,
     initialMode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
 ) {
@@ -224,10 +223,9 @@ fun BoardSetManagerRoot(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val defaultBoardName = stringResource(R.string.board_dialog_default_board_name)
 
-    LaunchedEffect(viewModel, createOnLaunch, initialBoardSetId, initialMode) {
+    LaunchedEffect(viewModel, initialBoardSetId, initialMode) {
         viewModel.onAction(
             BoardSetManagerAction.Initialize(
-                createOnLaunch = createOnLaunch,
                 initialBoardSetId = initialBoardSetId,
                 initialMode = initialMode,
             )

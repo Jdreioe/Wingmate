@@ -42,7 +42,7 @@ class BoardSetManagerViewModelTest {
         }
         val viewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
 
-        viewModel.onAction(BoardSetManagerAction.Initialize(false, null))
+        viewModel.onAction(BoardSetManagerAction.Initialize(initialBoardSetId = null))
 
         assertFalse(viewModel.state.value.isLoading)
         assertEquals(listOf("set-1"), viewModel.state.value.boardSets.map { it.id })
@@ -67,7 +67,6 @@ class BoardSetManagerViewModelTest {
 
         runViewModel.onAction(
             BoardSetManagerAction.Initialize(
-                createOnLaunch = false,
                 initialBoardSetId = "typing",
                 initialMode = BoardWorkspaceMode.Run,
             )
@@ -78,7 +77,6 @@ class BoardSetManagerViewModelTest {
         val editViewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
         editViewModel.onAction(
             BoardSetManagerAction.Initialize(
-                createOnLaunch = false,
                 initialBoardSetId = "typing",
                 initialMode = BoardWorkspaceMode.Edit,
             )
@@ -117,7 +115,7 @@ class BoardSetManagerViewModelTest {
             deleteRequiresUnlock = true
         }
         val viewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
-        viewModel.onAction(BoardSetManagerAction.Initialize(false, null))
+        viewModel.onAction(BoardSetManagerAction.Initialize(initialBoardSetId = null))
 
         viewModel.onAction(BoardSetManagerAction.DeleteClicked("set-1"))
         viewModel.onAction(BoardSetManagerAction.DeleteConfirmed)
@@ -137,7 +135,7 @@ class BoardSetManagerViewModelTest {
     fun `creating a blank board set opens it in edit mode`() = runTest {
         val operations = FakeBoardSetManagerOperations()
         val viewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
-        viewModel.onAction(BoardSetManagerAction.Initialize(false, null))
+        viewModel.onAction(BoardSetManagerAction.Initialize(initialBoardSetId = null))
 
         viewModel.onAction(
             BoardSetManagerAction.CreateSubmitted(

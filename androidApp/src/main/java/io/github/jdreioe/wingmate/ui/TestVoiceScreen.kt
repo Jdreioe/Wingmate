@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -48,13 +49,18 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
     var engine by remember { mutableStateOf(TtsEngine.SYSTEM) }
     var playbackFailed by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
-    var testText by remember(defaultTestText) { mutableStateOf(initialPhraseToSave ?: defaultTestText) }
-    var keepAsPhrase by remember { mutableStateOf(initialPhraseToSave != null) }
+    var testText by rememberSaveable(defaultTestText) { mutableStateOf(initialPhraseToSave ?: defaultTestText) }
+    var keepAsPhrase by rememberSaveable { mutableStateOf(initialPhraseToSave != null) }
     var loading by remember { mutableStateOf(true) }
+    // Without the saved engine, a preview could play through the wrong one; block it instead.
+    var loadFailed by remember { mutableStateOf(false) }
+    var loadAttempt by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     // Load selected voice
-    LaunchedEffect(voiceUseCase) {
+    LaunchedEffect(voiceUseCase, loadAttempt) {
+        loading = true
+        loadFailed = false
         try {
             val (voice, savedEngine) = withContext(Dispatchers.IO) {
                 voiceUseCase.selected() to settingsUseCase.get().ttsEngine
@@ -65,6 +71,7 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
             throw e
         } catch (e: Exception) {
             OperationalLogger.warn("voice_selection.load", "failed", exceptionClass = e.loggingClassName())
+            loadFailed = true
         } finally {
             loading = false
         }
@@ -91,6 +98,21 @@ fun TestVoiceScreen(initialPhraseToSave: String?, onNext: (phraseToSave: String?
         
         if (loading) {
             CircularProgressIndicator()
+        } else if (loadFailed) {
+            Text(
+                stringResource(R.string.voice_load_failed),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { loadAttempt++ }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text(stringResource(R.string.common_retry))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text(stringResource(R.string.common_back))
+            }
         } else {
             // Voice info card
             Card(

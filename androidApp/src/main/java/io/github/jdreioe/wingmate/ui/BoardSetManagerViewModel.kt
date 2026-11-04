@@ -77,7 +77,6 @@ internal data class BoardSetManagerState(
 
 internal sealed interface BoardSetManagerAction {
     data class Initialize(
-        val createOnLaunch: Boolean,
         val initialBoardSetId: String?,
         val initialMode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
     ) : BoardSetManagerAction
@@ -304,9 +303,6 @@ internal class BoardSetManagerViewModel(
     private fun initialize(action: BoardSetManagerAction.Initialize) {
         if (initialized) return
         initialized = true
-        if (action.createOnLaunch && restoredRoute == BoardSetManagerRoute.Library) {
-            setShowCreateDialog(true)
-        }
         refreshBoardSets()
         viewModelScope.launch { runCatching { operations.cacheAll() } }
         if (restoredRoute == BoardSetManagerRoute.Library && action.initialBoardSetId != null) {

@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -39,6 +41,7 @@ import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
+import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import io.github.jdreioe.wingmate.platform.FilePicker
 import kotlinx.coroutines.CancellationException
@@ -68,7 +71,7 @@ data class WelcomeChoices(
     }
 }
 
-/** One page of setup. [analyticsName] is stable across R8 renaming. */
+/** One page of setup. [analyticsName] is stable across R8 renaming and is also the saved-state key. */
 private sealed class WelcomeStep(val analyticsName: String) {
     data object Start : WelcomeStep("start")
     data object VoiceEngine : WelcomeStep("voice_engine")
@@ -83,43 +86,83 @@ private sealed class WelcomeStep(val analyticsName: String) {
     data object Review : WelcomeStep("review")
 }
 
+private val allWelcomeSteps = listOf(
+    WelcomeStep.Start, WelcomeStep.VoiceEngine, WelcomeStep.AzureSetup, WelcomeStep.GoogleSetup,
+    WelcomeStep.ElevenLabsSetup, WelcomeStep.Voice, WelcomeStep.Language, WelcomeStep.TestVoice,
+    WelcomeStep.Workspace, WelcomeStep.Privacy, WelcomeStep.Review,
+)
+
+/** Keeps the back stack across activity recreation. */
+private val welcomePathSaver = listSaver<List<WelcomeStep>, String>(
+    save = { path -> path.map { it.analyticsName } },
+    restore = { names ->
+        names.mapNotNull { name -> allWelcomeSteps.firstOrNull { it.analyticsName == name } }
+            .ifEmpty { listOf(WelcomeStep.Start) }
+    },
+)
+
+/** Keeps the draft answers across activity recreation. */
+private val welcomeChoicesSaver = listSaver<WelcomeChoices, Any?>(
+    save = { listOf(it.startupMode.name, it.phraseToSave, it.historyVisible, it.featureUsageReportingEnabled) },
+    restore = { values ->
+        WelcomeChoices(
+            startupMode = StartupMode.valueOf(values[0] as String),
+            phraseToSave = values[1] as String?,
+            historyVisible = values[2] as Boolean,
+            featureUsageReportingEnabled = values[3] as Boolean,
+        )
+    },
+)
+
+/** Voice settings when setup was reopened, put back if the Communicator leaves without finishing. */
+private data class VoiceSnapshot(
+    val engine: TtsEngine,
+    val primaryLanguage: String,
+    val secondaryLanguage: String,
+    val voice: Voice?,
+)
+
 /**
  * First-run setup: voice first (so the Communicator hears themselves early), then how
  * they communicate, then what stays on the device, then a review with one finish button.
  * Navigation is a back stack, so system Back and on-screen Back always return to the
- * page that was actually shown before.
+ * page that was actually shown before. A backup restored from the Start page is routed
+ * by App's restore handling, which rebuilds this screen.
  */
 @Composable
 fun WelcomeScreen(
     initialChoices: WelcomeChoices,
     /** Saves [WelcomeChoices] and opens the workspace; returns false if saving failed. */
     onComplete: suspend (WelcomeChoices) -> Boolean,
-    onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit,
-    /** Leaves setup without saving; only offered when setup was finished before. */
+    /**
+     * Non-null when setup was reopened by someone who already communicates with Wingmate.
+     * Leaving puts back the voice, engine, and languages that the voice pages changed.
+     */
     onExit: (() -> Unit)?,
 ) {
     val koin = getKoin()
     val featureUsageReporter = remember(koin) { koin.getOrNull<FeatureUsageReporter>() }
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
+    val voiceUseCase = remember(koin) { koin.getOrNull<VoiceUseCase>() }
     val scope = rememberCoroutineScope()
 
-    var path by remember { mutableStateOf(listOf<WelcomeStep>(WelcomeStep.Start)) }
-    var choices by remember { mutableStateOf(initialChoices) }
+    var path by rememberSaveable(stateSaver = welcomePathSaver) { mutableStateOf(listOf<WelcomeStep>(WelcomeStep.Start)) }
+    var choices by rememberSaveable(stateSaver = welcomeChoicesSaver) { mutableStateOf(initialChoices) }
+    var exitFailed by remember { mutableStateOf(false) }
     val step = path.last()
 
-    /** Remember that setup began, so an interrupted setup resumes on next launch (see needsWelcome). */
-    fun markStarted() {
-        scope.launch {
-            try {
-                withContext(Dispatchers.Default) {
-                    settingsUseCase?.let { it.update(it.get().copy(welcomeFlowStarted = true)) }
-                }
-            } catch (failure: CancellationException) {
-                throw failure
-            } catch (failure: Exception) {
-                // Only resumption after an interruption is lost; setup itself can continue.
-                OperationalLogger.warn("welcome.start", "mark_started_failed", exceptionClass = failure.loggingClassName())
+    val snapshot by produceState<VoiceSnapshot?>(null, onExit != null) {
+        if (onExit == null) return@produceState
+        value = try {
+            withContext(Dispatchers.Default) {
+                val settings = settingsUseCase?.get() ?: return@withContext null
+                VoiceSnapshot(settings.ttsEngine, settings.primaryLanguage, settings.secondaryLanguage, voiceUseCase?.selected())
             }
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: Exception) {
+            OperationalLogger.warn("welcome.exit", "snapshot_failed", exceptionClass = failure.loggingClassName())
+            null
         }
     }
 
@@ -128,6 +171,55 @@ fun WelcomeScreen(
     /** Return to an earlier page from Review; following pages are rebuilt on the way forward. */
     fun revisit(target: WelcomeStep) { path = path.takeWhile { it != target } + target }
 
+    fun startSetup() {
+        scope.launch {
+            // Saved before moving on, so the voice pages' own settings writes cannot race it.
+            // Reopened setup is not marked: leaving it must never make setup mandatory.
+            if (onExit == null) {
+                try {
+                    withContext(Dispatchers.Default) {
+                        settingsUseCase?.let { it.update(it.get().copy(welcomeFlowStarted = true)) }
+                    }
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (failure: Exception) {
+                    // Only resuming after an interruption is lost; setup itself can continue.
+                    OperationalLogger.warn("welcome.start", "mark_started_failed", exceptionClass = failure.loggingClassName())
+                }
+            }
+            if (path == listOf(WelcomeStep.Start)) push(WelcomeStep.VoiceEngine)
+        }
+    }
+
+    fun exit() {
+        val leave = onExit ?: return
+        scope.launch {
+            exitFailed = false
+            try {
+                snapshot?.let { previous ->
+                    withContext(Dispatchers.Default) {
+                        settingsUseCase?.let {
+                            it.update(
+                                it.get().copy(
+                                    ttsEngine = previous.engine,
+                                    primaryLanguage = previous.primaryLanguage,
+                                    secondaryLanguage = previous.secondaryLanguage,
+                                )
+                            )
+                        }
+                        previous.voice?.let { voiceUseCase?.select(it) }
+                    }
+                }
+                leave()
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                OperationalLogger.warn("welcome.exit", "restore_voice_failed", exceptionClass = failure.loggingClassName())
+                exitFailed = true
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STARTED)
     }
@@ -135,19 +227,16 @@ fun WelcomeScreen(
         featureUsageReporter?.reportEvent(FeatureUsageEvents.WELCOME_STEP_VIEWED, "step" to step.analyticsName)
     }
     BackHandler(enabled = path.size > 1 || onExit != null) {
-        if (path.size > 1) pop() else onExit?.invoke()
+        if (path.size > 1) pop() else exit()
     }
 
     val pageModifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)
 
     when (step) {
         WelcomeStep.Start -> StartPage(
-            onSetUp = {
-                markStarted()
-                push(WelcomeStep.VoiceEngine)
-            },
-            onBackupRestored = onBackupRestored,
-            onExit = onExit,
+            onSetUp = ::startSetup,
+            onExit = onExit?.let { ::exit },
+            exitFailed = exitFailed,
         )
         WelcomeStep.VoiceEngine -> VoiceEngineSelectorScreen(
             onNext = {
@@ -331,8 +420,8 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 @Composable
 private fun StartPage(
     onSetUp: () -> Unit,
-    onBackupRestored: (settings: Settings, hasSelectedVoice: Boolean) -> Unit,
     onExit: (() -> Unit)?,
+    exitFailed: Boolean,
 ) {
     val koin = getKoin()
     val backupManager = remember(koin) { koin.getOrNull<CompleteBackupManager>() }
@@ -344,6 +433,9 @@ private fun StartPage(
     val backupRestoreUnavailable = stringResource(R.string.backup_restore_unavailable)
     val backupRestoreTitle = stringResource(R.string.backup_restore)
     val scope = rememberCoroutineScope()
+    // Leaving the page would cancel a restore in progress; registered after the
+    // screen-level handler, so it takes precedence while active.
+    BackHandler(enabled = isRestoring) {}
 
     WelcomePage(
         title = stringResource(R.string.welcome_title),
@@ -380,8 +472,14 @@ private fun StartPage(
             }
             Text(stringResource(R.string.welcome_restore_backup))
         }
-        restoreStatus?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        val error = restoreStatus ?: if (exitFailed) stringResource(R.string.welcome_exit_failed) else null
+        error?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
         }
     }
 
@@ -398,10 +496,8 @@ private fun StartPage(
                     restoreStatus = null
                     scope.launch {
                         when (val result = backupManager?.restoreBackup(restorePath)) {
-                            is BackupRestoreResult.Success -> onBackupRestored(
-                                result.payload.settings,
-                                result.payload.selectedVoice != null
-                            )
+                            // App reloads and routes after a restore (restoreRevision).
+                            is BackupRestoreResult.Success -> Unit
                             is BackupRestoreResult.Failure -> restoreStatus = result.message
                             null -> restoreStatus = backupRestoreUnavailable
                         }
@@ -457,6 +553,7 @@ private enum class DataLocation(val label: Int, val icon: ImageVector) {
     /** The installed system speech engine; Wingmate cannot promise it never uses the network. */
     DeviceEngine(R.string.welcome_privacy_device_engine, Icons.Default.PhoneAndroid),
     Online(R.string.welcome_privacy_online, Icons.Default.Cloud),
+    OnlineWhenOn(R.string.welcome_privacy_online_when_on, Icons.Default.Cloud),
 }
 
 @Composable
@@ -490,15 +587,18 @@ private fun PrivacyPage(
     val koin = getKoin()
     val settingsUseCase = remember(koin) { koin.getOrNull<SettingsUseCase>() }
     // The voice engine was saved by the voice pages; read it so the speech card names
-    // the provider that actually receives text.
-    val engine by produceState<TtsEngine?>(null, settingsUseCase) {
+    // the provider that actually receives text. An unknown engine is never shown as System.
+    var retryKey by remember { mutableIntStateOf(0) }
+    val engine by produceState<EngineLoad>(EngineLoad.Loading, settingsUseCase, retryKey) {
+        value = EngineLoad.Loading
         value = try {
-            withContext(Dispatchers.Default) { settingsUseCase?.get()?.ttsEngine } ?: TtsEngine.SYSTEM
+            val loaded = withContext(Dispatchers.Default) { settingsUseCase?.get()?.ttsEngine }
+            if (loaded != null) EngineLoad.Ready(loaded) else EngineLoad.Failed
         } catch (failure: CancellationException) {
             throw failure
         } catch (failure: Exception) {
             OperationalLogger.warn("welcome.privacy", "settings_load_failed", exceptionClass = failure.loggingClassName())
-            TtsEngine.SYSTEM
+            EngineLoad.Failed
         }
     }
 
@@ -510,17 +610,30 @@ private fun PrivacyPage(
         onBack = onBack,
     ) {
         when (val current = engine) {
-            null -> CircularProgressIndicator()
-            TtsEngine.SYSTEM -> PrivacyCard(
-                title = stringResource(R.string.welcome_privacy_speech_title),
-                location = DataLocation.DeviceEngine,
-                description = stringResource(R.string.welcome_privacy_speech_system),
-            )
-            else -> PrivacyCard(
-                title = stringResource(R.string.welcome_privacy_speech_title),
-                location = DataLocation.Online,
-                description = stringResource(R.string.welcome_privacy_speech_cloud, current.providerName()),
-            )
+            EngineLoad.Loading -> CircularProgressIndicator()
+            EngineLoad.Failed -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.welcome_privacy_speech_unknown),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                OutlinedButton(onClick = { retryKey++ }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.common_retry))
+                }
+            }
+            is EngineLoad.Ready -> if (current.engine == TtsEngine.SYSTEM) {
+                PrivacyCard(
+                    title = stringResource(R.string.welcome_privacy_speech_title),
+                    location = DataLocation.DeviceEngine,
+                    description = stringResource(R.string.welcome_privacy_speech_system),
+                )
+            } else {
+                PrivacyCard(
+                    title = stringResource(R.string.welcome_privacy_speech_title),
+                    location = DataLocation.Online,
+                    description = stringResource(R.string.welcome_privacy_speech_cloud, current.engine.providerName()),
+                )
+            }
         }
         PrivacyCard(
             title = stringResource(R.string.category_history),
@@ -535,7 +648,7 @@ private fun PrivacyPage(
         }
         PrivacyCard(
             title = stringResource(R.string.welcome_analytics_title),
-            location = DataLocation.Online,
+            location = DataLocation.OnlineWhenOn,
             description = stringResource(R.string.welcome_analytics_description),
         ) {
             SwitchRow(
@@ -548,6 +661,12 @@ private fun PrivacyPage(
 }
 
 /** Provider names are brands and stay untranslated. Only called for cloud engines. */
+private sealed interface EngineLoad {
+    data object Loading : EngineLoad
+    data object Failed : EngineLoad
+    data class Ready(val engine: TtsEngine) : EngineLoad
+}
+
 private fun TtsEngine.providerName(): String = when (this) {
     TtsEngine.SYSTEM -> ""
     TtsEngine.AZURE_USER_RESOURCE, TtsEngine.AZURE_MANAGED -> "Microsoft Azure"
@@ -556,7 +675,7 @@ private fun TtsEngine.providerName(): String = when (this) {
 }
 
 @Composable
-private fun ReviewRow(label: String, value: String, onChange: () -> Unit) {
+private fun ReviewRow(label: String, value: String, enabled: Boolean, onChange: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -568,6 +687,7 @@ private fun ReviewRow(label: String, value: String, onChange: () -> Unit) {
         val changeLabel = stringResource(R.string.welcome_review_change_label, label)
         OutlinedButton(
             onClick = onChange,
+            enabled = enabled,
             modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = changeLabel },
         ) {
             Text(stringResource(R.string.welcome_review_change))
@@ -603,6 +723,8 @@ private fun ReviewPage(
     var finishing by remember { mutableStateOf(false) }
     var saveFailed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    // Leaving Review would cancel the save part-way; takes precedence over the screen's handler.
+    BackHandler(enabled = finishing) {}
 
     val workspace = when (choices.startupMode) {
         StartupMode.Keyboard -> stringResource(R.string.welcome_start_mode_keyboard_title)
@@ -642,16 +764,17 @@ private fun ReviewPage(
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        ReviewRow(stringResource(R.string.welcome_review_voice), voiceName, onChangeVoice)
+        ReviewRow(stringResource(R.string.welcome_review_voice), voiceName, !finishing, onChangeVoice)
         HorizontalDivider()
         ReviewRow(
             stringResource(R.string.welcome_review_phrase),
             choices.phraseToSave ?: stringResource(R.string.welcome_review_none),
+            !finishing,
             onChangePhrase,
         )
         HorizontalDivider()
-        ReviewRow(stringResource(R.string.welcome_review_workspace), workspace, onChangeWorkspace)
+        ReviewRow(stringResource(R.string.welcome_review_workspace), workspace, !finishing, onChangeWorkspace)
         HorizontalDivider()
-        ReviewRow(stringResource(R.string.welcome_review_privacy), privacy, onChangePrivacy)
+        ReviewRow(stringResource(R.string.welcome_review_privacy), privacy, !finishing, onChangePrivacy)
     }
 }
