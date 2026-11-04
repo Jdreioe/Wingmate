@@ -708,4 +708,9 @@
     <string name="welcome_review_speed">Hastighed %1$.1f×</string>
     <string name="ui_settings_azure_setup">Opsæt Azure</string>
     <string name="ui_settings_google_setup">Opsæt Google Cloud TTS</string>
+    <string name="setup_section_voice">Din stemme</string>
+    <string name="setup_section_communicate">Sådan kommunikerer du</string>
+    <string name="setup_section_privacy">Privatliv</string>
+    <string name="setup_section_review">Gennemse</string>
+    <string name="setup_progress_description">Trin %1$d af %2$d: %3$s</string>
 </resources>

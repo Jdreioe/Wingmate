@@ -9,6 +9,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.GridView
@@ -20,7 +21,11 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -306,49 +311,62 @@ fun WelcomeScreen(
 
     val pageModifier = Modifier.fillMaxSize().padding(horizontal = 24.dp)
 
-    Column(Modifier.fillMaxSize()) {
-        // Start's Back leaves setup. Review has a save in progress to protect, so leaving is one Back away, on Privacy.
-        if (onExit != null && step != WelcomeStep.Start && step != WelcomeStep.Review) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                SetupQuietButton(label = stringResource(R.string.welcome_leave_setup), onClick = ::leave)
-            }
+    // Wide windows show setup as a guided two-pane page: where the Communicator is on the
+    // left, the current page on the right at a readable width. The page itself is the same.
+    val windowWidth = currentWindowWidth()
+    Row(Modifier.fillMaxSize()) {
+        if (windowWidth == WindowWidth.Expanded) {
+            SetupProgressPane(step = step, modifier = Modifier.weight(0.38f).fillMaxHeight())
         }
-        Box(Modifier.weight(1f)) {
-            WelcomeStepContent(
-                step = step,
-                choices = choices,
-                onChoicesChange = { choices = it },
-                startFailed = startFailed,
-                engineCheckFailed = engineCheckFailed,
-                checkingEngine = checkingEngine,
-                keepableVoice = keepableVoice,
-                voiceEngine = voiceEngine,
-                restoredFromBackup = restoredFromBackup,
-                chosenEngine = chosenEngine,
-                onExit = onExit?.let { ::leave },
-                pageModifier = pageModifier,
-                onStartSetup = ::startSetup,
-                onEngineChosen = ::chooseEngine,
-                onUseEngine = ::useEngine,
-                onAdvance = { from, to -> nav = nav.advance(from, to) },
-                // Bound to the page shown now, so a late second tap is ignored once it has left.
-                onBack = { nav = nav.back(step) },
-                onFinishSection = { from, next -> nav = nav.finishSection(from, next) },
-                onChange = { target -> nav = nav.change(target) },
-                onSpeedUnsaved = { choices = choices.copy(unsavedSpeed = it) },
-                // Only that exact speed: a saver from before recreation may finish late.
-                onSpeedSaved = { if (choices.unsavedSpeed == it) choices = choices.copy(unsavedSpeed = null) },
-                onFinish = { syncSetupPhrase(choices.phraseToSave) && onComplete(choices) },
-                onWorkspaceChosen = {
-                    if (nav.step == WelcomeStep.Workspace) {
-                        featureUsageReporter?.reportEvent(
-                            FeatureUsageEvents.STARTUP_MODE_SELECTED,
-                            "mode" to choices.startupMode.name.lowercase()
-                        )
-                        nav = nav.finishSection(WelcomeStep.Workspace, WelcomeStep.Privacy)
+        Box(
+            Modifier.weight(if (windowWidth == WindowWidth.Expanded) 0.62f else 1f).fillMaxHeight(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Column(Modifier.then(if (windowWidth.isLarge) Modifier.widthIn(max = SetupPageMaxWidth) else Modifier).fillMaxSize()) {
+                // Start's Back leaves setup. Review has a save in progress to protect, so leaving is one Back away, on Privacy.
+                if (onExit != null && step != WelcomeStep.Start && step != WelcomeStep.Review) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                        SetupQuietButton(label = stringResource(R.string.welcome_leave_setup), onClick = ::leave)
                     }
-                },
-            )
+                }
+                Box(Modifier.weight(1f)) {
+                    WelcomeStepContent(
+                        step = step,
+                        choices = choices,
+                        onChoicesChange = { choices = it },
+                        startFailed = startFailed,
+                        engineCheckFailed = engineCheckFailed,
+                        checkingEngine = checkingEngine,
+                        keepableVoice = keepableVoice,
+                        voiceEngine = voiceEngine,
+                        restoredFromBackup = restoredFromBackup,
+                        chosenEngine = chosenEngine,
+                        onExit = onExit?.let { ::leave },
+                        pageModifier = pageModifier,
+                        onStartSetup = ::startSetup,
+                        onEngineChosen = ::chooseEngine,
+                        onUseEngine = ::useEngine,
+                        onAdvance = { from, to -> nav = nav.advance(from, to) },
+                        // Bound to the page shown now, so a late second tap is ignored once it has left.
+                        onBack = { nav = nav.back(step) },
+                        onFinishSection = { from, next -> nav = nav.finishSection(from, next) },
+                        onChange = { target -> nav = nav.change(target) },
+                        onSpeedUnsaved = { choices = choices.copy(unsavedSpeed = it) },
+                        // Only that exact speed: a saver from before recreation may finish late.
+                        onSpeedSaved = { if (choices.unsavedSpeed == it) choices = choices.copy(unsavedSpeed = null) },
+                        onFinish = { syncSetupPhrase(choices.phraseToSave) && onComplete(choices) },
+                        onWorkspaceChosen = {
+                            if (nav.step == WelcomeStep.Workspace) {
+                                featureUsageReporter?.reportEvent(
+                                    FeatureUsageEvents.STARTUP_MODE_SELECTED,
+                                    "mode" to choices.startupMode.name.lowercase()
+                                )
+                                nav = nav.finishSection(WelcomeStep.Workspace, WelcomeStep.Privacy)
+                            }
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -476,6 +494,111 @@ private fun WelcomeStepContent(
 }
 
 // ─── Shared layout ───────────────────────────────────────────────────────────
+
+/** How wide a setup page grows on a large window: past this, lines and buttons get hard to scan. */
+private val SetupPageMaxWidth = 680.dp
+
+/** The parts of setup, in order, as the progress pane names them. */
+private enum class SetupSection(val label: Int) {
+    Voice(R.string.setup_section_voice),
+    Communicate(R.string.setup_section_communicate),
+    Privacy(R.string.setup_section_privacy),
+    Review(R.string.setup_section_review),
+}
+
+private val WelcomeStep.section: SetupSection?
+    get() = when (this) {
+        WelcomeStep.Start -> null
+        WelcomeStep.VoiceEngine, WelcomeStep.AzureSetup, WelcomeStep.GoogleSetup, WelcomeStep.ElevenLabsSetup,
+        WelcomeStep.Voice, WelcomeStep.TestVoice, WelcomeStep.Language -> SetupSection.Voice
+        WelcomeStep.Workspace -> SetupSection.Communicate
+        WelcomeStep.Privacy -> SetupSection.Privacy
+        WelcomeStep.Review -> SetupSection.Review
+    }
+
+/**
+ * Shows where the Communicator is in setup, beside the page on wide windows. Information
+ * only: it has no actions, so switch and keyboard scanning go straight to the page.
+ */
+@Composable
+private fun SetupProgressPane(step: WelcomeStep, modifier: Modifier = Modifier) {
+    val current = step.section
+    val progressDescription = current?.let {
+        stringResource(R.string.setup_progress_description, it.ordinal + 1, SetupSection.entries.size, stringResource(it.label))
+    }
+    Surface(
+        modifier = modifier.padding(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(40.dp)
+                .semantics(mergeDescendants = true) { progressDescription?.let { contentDescription = it } },
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_launcher_monochrome),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(96.dp).offset(x = (-16).dp),
+            )
+            Text(
+                stringResource(R.string.app_name),
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(24.dp))
+            SetupSection.entries.forEach { section ->
+                SetupProgressRow(
+                    number = section.ordinal + 1,
+                    label = stringResource(section.label),
+                    isCurrent = section == current,
+                    isDone = current != null && section.ordinal < current.ordinal,
+                )
+            }
+        }
+    }
+}
+
+/** One part of setup. The current part is shown by a filled circle and bold text, not colour alone. */
+@Composable
+private fun SetupProgressRow(number: Int, label: String, isCurrent: Boolean, isDone: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 56.dp)) {
+        Surface(
+            shape = CircleShape,
+            color = when {
+                isCurrent -> colors.primary
+                isDone -> colors.secondaryContainer
+                else -> Color.Transparent
+            },
+            contentColor = when {
+                isCurrent -> colors.onPrimary
+                isDone -> colors.onSecondaryContainer
+                else -> colors.onSurfaceVariant
+            },
+            border = if (isCurrent || isDone) null else BorderStroke(2.dp, colors.outline),
+            modifier = Modifier.size(40.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (isDone) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("$number", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
+            color = if (isCurrent) colors.onSurface else colors.onSurfaceVariant,
+        )
+    }
+}
 
 /**
  * Wraps a page shared with Settings in setup's frame: a heading, and Back, an optional
