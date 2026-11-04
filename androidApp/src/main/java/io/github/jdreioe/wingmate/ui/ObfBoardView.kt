@@ -1787,6 +1787,12 @@ internal fun ObfButtonContent(
         fontSize = MaterialTheme.typography.bodyLarge.fontSize * boundedFontScale,
         lineHeight = MaterialTheme.typography.bodyLarge.fontSize * boundedFontScale * 1.25f,
     )
+    val largeWindow = currentWindowWidth().isLarge
+    val readingTextStyle = MaterialTheme.typography.titleLarge.copy(
+        fontSize = MaterialTheme.typography.titleLarge.fontSize * boundedFontScale,
+        lineHeight = MaterialTheme.typography.titleLarge.lineHeight * boundedFontScale,
+        fontWeight = FontWeight.Normal,
+    )
     val shortWordStyle = MaterialTheme.typography.titleLarge.copy(
         fontSize = MaterialTheme.typography.titleLarge.fontSize * boundedFontScale,
         lineHeight = MaterialTheme.typography.titleLarge.lineHeight * boundedFontScale,
@@ -1988,7 +1994,11 @@ internal fun ObfButtonContent(
                     !(displayLabel.isNullOrBlank() && displayVocalization.isNullOrBlank())
 
                 if (showLbl && !showImg) {
-                    val labelText = displayLabel ?: displayVocalization ?: ""
+                    // A label that is a "…" cut of what the Button says (a Speech Screen's
+                    // paragraph cue) shows the whole text, so the speaker can read along; it
+                    // wraps to fill the cell. The saved label is unchanged.
+                    val fullText = expandedButtonText(displayLabel, displayVocalization)
+                    val labelText = fullText ?: displayLabel ?: displayVocalization ?: ""
                     // One rule for every text-only Button: a word or short phrase ("all done",
                     // "Hvordan går det?") is centred in the large style; a sentence reads from
                     // the top start, like text.
@@ -1999,10 +2009,19 @@ internal fun ObfButtonContent(
                     ) {
                         Text(
                             text = labelText,
-                            style = if (shortLabel) shortWordStyle else phraseTextStyle,
+                            style = when {
+                                shortLabel -> shortWordStyle
+                                // Larger reading text where a tablet's cells have room for it.
+                                fullText != null && largeWindow -> readingTextStyle
+                                else -> phraseTextStyle
+                            },
                             textAlign = if (shortLabel) TextAlign.Center else TextAlign.Start,
                             color = contentColor,
-                            maxLines = if (shortLabel) 2 else 3,
+                            maxLines = when {
+                                shortLabel -> 2
+                                fullText != null -> Int.MAX_VALUE
+                                else -> 3
+                            },
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -2296,4 +2315,15 @@ private fun BoardCellMenuPopup(menu: BoardCellMenu, item: BoardGridItem, button:
             onClick = { onDismiss(); menu.onRemove(item.row, item.column) },
         )
     }
+}
+
+/**
+ * The whole spoken text when [label] is a shortened cue for it ("Good evening, everyone…"), as
+ * Speech Screens store long paragraphs; otherwise null and the label shows as it is.
+ */
+internal fun expandedButtonText(label: String?, vocalization: String?): String? {
+    if (label == null || vocalization == null || !label.endsWith("…")) return null
+    val cue = label.removeSuffix("…").trimEnd()
+    val spoken = vocalization.replace(Regex("\\s+"), " ").trim()
+    return spoken.takeIf { cue.isNotEmpty() && it.length > cue.length && it.startsWith(cue) }
 }
