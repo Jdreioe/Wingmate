@@ -1,5 +1,13 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -14,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -336,6 +345,7 @@ private fun settingsRouteTitle(route: SettingsRoute): String = when (route) {
     SettingsRoute.PronunciationDictionary -> stringResource(R.string.dictionary_title)
     is SettingsRoute.Category -> settingsCategoryTitle(route.tab)
     SettingsRoute.VoiceSelection -> stringResource(R.string.voice_select_title)
+    SettingsRoute.VoiceTest -> stringResource(R.string.welcome_test_title)
     SettingsRoute.LanguageSelection -> stringResource(R.string.language_dialog_title)
     SettingsRoute.ElevenLabsSetup -> "ElevenLabs"
     SettingsRoute.GoogleSetup -> stringResource(R.string.google_setup_title)
@@ -375,8 +385,20 @@ private fun SettingsRouteContent(
             modifier = modifier
         )
         SettingsRoute.VoiceSelection -> VoiceSelectionPage(
-            onBack = { onAction(SettingsAction.BackClicked) }
+            onBack = { onAction(SettingsAction.BackClicked) },
+            onVoiceSelected = { onAction(SettingsAction.VoiceChosen) },
         )
+        SettingsRoute.VoiceTest -> {
+            var sentence by rememberSaveable { mutableStateOf<String?>(null) }
+            TestVoiceScreen(
+                sentence = sentence,
+                onSentenceChange = { sentence = it },
+                onNext = { onAction(SettingsAction.VoiceTestDone) },
+                onBack = { onAction(SettingsAction.BackClicked) },
+                primaryLabel = stringResource(R.string.common_done),
+                standalone = false,
+            )
+        }
         SettingsRoute.LanguageSelection -> LanguageSelectionPage(
             onBack = { onAction(SettingsAction.BackClicked) }
         )
@@ -427,16 +449,6 @@ private fun CategoryContent(
             SettingsTab.Speech -> SpeechSection(
                 ttsEngine = settings.ttsEngine,
                 onTtsEngineChange = { engine -> onAction(SettingsAction.TtsEngineSelected(engine)) },
-                endpoint = state.azureEndpoint,
-                onEndpointChange = { onAction(SettingsAction.AzureEndpointChanged(it)) },
-                subscriptionKey = state.azureSubscriptionKey,
-                onSubscriptionKeyChange = { onAction(SettingsAction.AzureSubscriptionKeyChanged(it)) },
-                endpointError = if (state.azureEndpointInvalid) {
-                    stringResource(R.string.azure_setup_error_endpoint)
-                } else null,
-                credentialConfigured = state.azureCredentialConfigured,
-                replacingCredentials = state.replacingAzureCredentials,
-                onReplaceCredentials = { onAction(SettingsAction.ReplaceAzureCredentialsClicked) },
                 googleCredentialConfigured = state.googleCredentialConfigured,
                 onOpenElevenLabsSetup = { onAction(SettingsAction.ElevenLabsSetupOpened) },
                 onOpenGoogleSetup = { onAction(SettingsAction.GoogleSetupOpened) },
@@ -1127,14 +1139,6 @@ private fun SettingsCategoryRow(
 private fun SpeechSection(
     ttsEngine: TtsEngine,
     onTtsEngineChange: (TtsEngine) -> Unit,
-    endpoint: String,
-    onEndpointChange: (String) -> Unit,
-    subscriptionKey: String,
-    onSubscriptionKeyChange: (String) -> Unit,
-    endpointError: String?,
-    credentialConfigured: Boolean,
-    replacingCredentials: Boolean,
-    onReplaceCredentials: () -> Unit,
     googleCredentialConfigured: Boolean,
     onOpenElevenLabsSetup: () -> Unit,
     onOpenGoogleSetup: () -> Unit,
@@ -1180,17 +1184,9 @@ private fun SpeechSection(
         }
         if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
             SettingsGroupDivider()
-            AzureCredentialEditor(
-                credentialConfigured = credentialConfigured,
-                replacingCredentials = replacingCredentials,
-                endpoint = endpoint,
-                onEndpointChange = onEndpointChange,
-                subscriptionKey = subscriptionKey,
-                onSubscriptionKeyChange = onSubscriptionKeyChange,
-                endpointError = endpointError,
-                onReplaceCredentials = onReplaceCredentials,
-                modifier = Modifier.padding(vertical = 12.dp)
-            )
+            Button(onClick = onOpenF0Setup, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.ui_settings_azure_setup))
+            }
         }
 
         if (ttsEngine == TtsEngine.ELEVENLABS) {
@@ -1214,23 +1210,14 @@ private fun SpeechSection(
                         Text(stringResource(R.string.google_tts_clear_key))
                     }
                 } else {
-                    Text(stringResource(R.string.google_tts_api_key_help))
                     Button(onClick = onOpenGoogleSetup, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.google_setup_guided_title))
+                        Text(stringResource(R.string.ui_settings_google_setup))
                     }
                 }
             }
         }
 
         Spacer(Modifier.height(12.dp))
-        if (ttsEngine == TtsEngine.AZURE_USER_RESOURCE || ttsEngine == TtsEngine.AZURE_MANAGED) {
-            OutlinedButton(
-                onClick = onOpenF0Setup,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.ui_settings_azure_free_tier))
-            }
-        }
     }
 
     SettingsGroup(title = stringResource(R.string.phrase_screen_voice_settings)) {
@@ -1939,23 +1926,34 @@ private fun rememberVoiceSelectionOperations(): VoiceSelectionOperations {
             settingsUseCase = koin.get(),
             systemVoiceProvider = koin.getOrNull(),
             featureUsageReporter = koin.get(),
+            speechService = koin.get(),
         )
     }
 }
 
-/** Voice picker shared by Settings and Welcome; [onVoiceSelected] defaults to [onBack]. */
+/**
+ * Voice picker shared by Settings and Welcome; [onVoiceSelected] defaults to [onBack].
+ * Setup passes [engineToSave] so the engine is saved together with the chosen voice.
+ */
 @Composable
 internal fun VoiceSelectionPage(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onVoiceSelected: (() -> Unit)? = null
+    onVoiceSelected: (() -> Unit)? = null,
+    engineToSave: TtsEngine? = null,
 ) {
     val operations = rememberVoiceSelectionOperations()
     val viewModel: VoiceSelectionViewModel = viewModel(
-        factory = remember(operations) { viewModelFactory { initializer { VoiceSelectionViewModel(operations) } } }
+        // Keyed by engine: a cached view model must not keep another engine.
+        key = "voice-selection-${engineToSave?.name ?: "saved"}",
+        factory = remember(operations, engineToSave) {
+            viewModelFactory { initializer { VoiceSelectionViewModel(operations, engineToSave) } }
+        }
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.onAction(VoiceSelectionAction.Load) }
+    // The view model outlives this page; a preview must stop when the page leaves.
+    DisposableEffect(viewModel) { onDispose { viewModel.onAction(VoiceSelectionAction.PreviewStopped) } }
     val currentOnChosen by rememberUpdatedState(onVoiceSelected ?: onBack)
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -2060,16 +2058,19 @@ private fun VoiceSelectionContent(
             )
         }
 
-        Text(
-            pluralStringResource(
-                R.plurals.voice_showing_count,
-                voices.size,
-                filteredVoices.size,
-                voices.size,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Hidden while loading: "Showing 0 of 0 voices" over a spinner reads as an empty list.
+        if (ready != null) {
+            Text(
+                pluralStringResource(
+                    R.plurals.voice_showing_count,
+                    voices.size,
+                    filteredVoices.size,
+                    voices.size,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
         if (ready?.saveFailed == true) {
             Text(stringResource(R.string.voice_save_failed), color = MaterialTheme.colorScheme.error)
@@ -2107,12 +2108,15 @@ private fun VoiceSelectionContent(
                             modifier = Modifier.padding(16.dp)
                         )
                     } else {
+                        val sampleText = stringResource(R.string.test_voice_default_text)
                         filteredVoices.forEachIndexed { index, v ->
                             VoiceRow(
                                 voice = v,
                                 isSelected = state.selected?.name == v.name,
                                 showSettings = ttsEngine != TtsEngine.SYSTEM,
+                                preview = state.preview,
                                 onSelect = { onAction(VoiceSelectionAction.VoiceSelected(v, selectedLanguage)) },
+                                onPreview = { onAction(VoiceSelectionAction.PreviewToggled(v, sampleText)) },
                                 onSettings = { editingVoice = v }
                             )
                             if (index < filteredVoices.lastIndex) {
@@ -2143,9 +2147,14 @@ private fun VoiceRow(
     voice: Voice,
     isSelected: Boolean,
     showSettings: Boolean,
+    preview: VoicePreview,
     onSelect: () -> Unit,
+    onPreview: () -> Unit,
     onSettings: () -> Unit
 ) {
+    val playing = preview is VoicePreview.Playing && preview.voiceName == voice.name
+    val failed = preview is VoicePreview.Failed && preview.voiceName == voice.name
+    val name = voice.displayName ?: voice.name ?: stringResource(R.string.common_unknown)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2154,7 +2163,7 @@ private fun VoiceRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = voice.displayName ?: voice.name ?: stringResource(R.string.common_unknown), style = MaterialTheme.typography.bodyLarge)
+            Text(text = name, style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = voice.primaryLanguage?.let(::localizedLocaleDisplayName).orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
@@ -2167,6 +2176,23 @@ private fun VoiceRow(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+            if (failed) {
+                Text(
+                    stringResource(R.string.voice_preview_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        // Hear a voice without choosing it; a large target, labelled with the voice for TalkBack.
+        val previewLabel = stringResource(if (playing) R.string.voice_preview_stop else R.string.voice_preview_play, name)
+        FilledTonalIconButton(
+            onClick = onPreview,
+            modifier = Modifier.size(56.dp).semantics { contentDescription = previewLabel },
+        ) {
+            Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
         }
         if (showSettings) {
             Spacer(Modifier.width(8.dp))
@@ -2202,7 +2228,8 @@ private fun VoiceFilterChips(
             )
         }
     }
-    if (genders.isNotEmpty()) {
+    // A row whose only choice is "Unknown" (device voices) filters nothing.
+    if (genders.any { !it.equals("Unknown", ignoreCase = true) }) {
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

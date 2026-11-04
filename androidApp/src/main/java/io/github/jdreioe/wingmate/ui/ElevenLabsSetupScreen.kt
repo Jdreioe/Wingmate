@@ -7,6 +7,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,30 +36,25 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { failed = true }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(stringResource(R.string.elevenlabs_setup), style = MaterialTheme.typography.headlineSmall)
+    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            stringResource(R.string.elevenlabs_setup),
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.semantics { heading() },
+        )
         Text(stringResource(R.string.elevenlabs_description))
         Text(stringResource(R.string.elevenlabs_help))
-        OutlinedButton(onClick = { uri.openUri("https://elevenlabs.io/app/settings/api-keys") }) {
-            Text(stringResource(R.string.elevenlabs_key))
-        }
+        SetupActionButton(
+            label = stringResource(R.string.elevenlabs_get_key),
+            onClick = { uri.openUri("https://elevenlabs.io/app/settings/api-keys") },
+            opensBrowser = true,
+        )
         if (configured) Text(stringResource(R.string.elevenlabs_configured))
         OutlinedTextField(value = key, onValueChange = { key = it; failed = false }, enabled = !busy,
             label = { Text(stringResource(R.string.elevenlabs_key)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
         if (failed) Text(stringResource(R.string.elevenlabs_error), color = MaterialTheme.colorScheme.error)
-        if (busy) CircularProgressIndicator()
-        Button(enabled = !busy && key.isNotBlank(), onClick = {
-            scope.launch {
-                busy = true; failed = false
-                try {
-                    withContext(Dispatchers.Default) { facade.saveValidatedElevenLabsSpeechConfig(key) }
-                    key = ""; configured = true; onDone()
-                } catch (e: CancellationException) { throw e }
-                catch (_: Exception) { failed = true }
-                finally { busy = false }
-            }
-        }) { Text(stringResource(R.string.elevenlabs_save)) }
-        if (configured) TextButton(enabled = !busy, onClick = {
+        if (configured) SetupActionButton(label = stringResource(R.string.elevenlabs_clear), enabled = !busy, onClick = {
             scope.launch {
                 busy = true; failed = false
                 try { facade.clearElevenLabsSpeechConfig(); configured = false; key = "" }
@@ -65,7 +62,25 @@ fun ElevenLabsSetupScreen(onDone: () -> Unit, onBack: () -> Unit) {
                 catch (_: Exception) { failed = true }
                 finally { busy = false }
             }
-        }) { Text(stringResource(R.string.elevenlabs_clear)) }
-        TextButton(onClick = onBack, enabled = !busy) { Text(stringResource(R.string.common_back)) }
+        })
+    }
+    SetupBottomBar(
+        onBack = onBack,
+        backEnabled = !busy,
+        primaryLabel = stringResource(R.string.common_save),
+        primaryEnabled = key.isNotBlank(),
+        primaryBusy = busy,
+        onPrimary = {
+            scope.launch {
+                busy = true; failed = false
+                try {
+                    withContext(Dispatchers.Default) { facade.saveValidatedElevenLabsCredential(key) }
+                    key = ""; configured = true; onDone()
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { failed = true }
+                finally { busy = false }
+            }
+        },
+    )
     }
 }

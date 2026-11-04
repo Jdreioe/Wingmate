@@ -107,6 +107,8 @@ fun PhraseScreen(
         viewModelFactory { initializer { PhraseScreenViewModel(createSavedStateHandle(), operations) } }
     }
     val viewModel: PhraseScreenViewModel = viewModel(factory = factory)
+    // The view model outlives this screen (Activity-scoped), so reload on each visit.
+    LaunchedEffect(viewModel) { viewModel.onAction(PhraseScreenAction.Shown) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val showFullscreen by io.github.jdreioe.wingmate.presentation.DisplayWindowBus.show.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }

@@ -41,4 +41,15 @@ class StartupLoadStateTest {
         )
         assertEquals(null, (recovered as StartupLoadState.Ready).selectedVoice)
     }
+
+    @Test
+    fun `setup is shown until finished, except to installs from before it was tracked`() {
+        assertEquals(true, needsWelcome(Settings(), hasSelectedVoice = false))
+        // Finished setup but the voice is gone (cleared, or restored without one): stay out of setup.
+        assertEquals(false, needsWelcome(Settings(welcomeFlowCompleted = true), hasSelectedVoice = false))
+        // Installs from before setup was tracked.
+        assertEquals(false, needsWelcome(Settings(), hasSelectedVoice = true))
+        // Setup interrupted after the voice page saved a voice: resume it.
+        assertEquals(true, needsWelcome(Settings(welcomeFlowStarted = true), hasSelectedVoice = true))
+    }
 }

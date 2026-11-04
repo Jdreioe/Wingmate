@@ -23,3 +23,11 @@ internal suspend fun loadStartupState(
 } catch (_: Exception) {
     StartupLoadState.Failed
 }
+
+/**
+ * Setup is shown until it is finished. Voice pages save the voice immediately, so a
+ * selected voice alone only marks an install from before setup was tracked
+ * ([Settings.welcomeFlowStarted] unset); those Communicators are never sent back through setup.
+ */
+internal fun needsWelcome(settings: Settings, hasSelectedVoice: Boolean): Boolean =
+    !settings.welcomeFlowCompleted && (settings.welcomeFlowStarted || !hasSelectedVoice)

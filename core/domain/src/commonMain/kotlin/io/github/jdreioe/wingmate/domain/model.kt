@@ -136,6 +136,9 @@ data class Settings(
     val useCustomColors: Boolean = false, // enable custom color theming
     // Welcome flow completion
     val welcomeFlowCompleted: Boolean = false,
+    // Set when this install begins first-run setup, so an unfinished setup is resumed
+    // instead of being mistaken for an install from before welcomeFlowCompleted existed.
+    val welcomeFlowStarted: Boolean = false,
     // Screen shown after launch once onboarding has been completed.
     val startupMode: StartupMode = StartupMode.Keyboard,
     // Optional screen set opened directly when startupMode is Screens.

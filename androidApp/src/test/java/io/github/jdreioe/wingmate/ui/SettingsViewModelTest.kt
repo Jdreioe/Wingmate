@@ -6,7 +6,6 @@ import io.github.jdreioe.wingmate.application.EditingAccessState
 import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
 import io.github.jdreioe.wingmate.domain.Settings
-import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.StartupMode
 import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -50,7 +48,6 @@ class SettingsViewModelTest {
     fun `initialize loads settings and status into the ready state`() = runTest {
         val operations = FakeSettingsOperations().apply {
             settings = Settings(ttsEngine = TtsEngine.GOOGLE_CLOUD, gridColumns = 5)
-            azureConfigured = true
             googleConfigured = true
             boardSets += boardSet("set-1")
         }
@@ -63,7 +60,6 @@ class SettingsViewModelTest {
         assertFalse(state.loadFailed)
         assertEquals(TtsEngine.GOOGLE_CLOUD, state.settings.ttsEngine)
         assertEquals(5, state.settings.gridColumns)
-        assertTrue(state.azureCredentialConfigured)
         assertTrue(state.googleCredentialConfigured)
         assertEquals(listOf("set-1"), state.boardSets.map { it.id })
     }
@@ -125,6 +121,23 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `a chosen voice opens Hear your voice, whose Back returns to the list and Done to Speech`() = runTest {
+        val viewModel = SettingsViewModel(SavedStateHandle(), FakeSettingsOperations())
+        viewModel.onAction(SettingsAction.Initialize)
+        viewModel.onAction(SettingsAction.CategorySelected(SettingsTab.Speech))
+        viewModel.onAction(SettingsAction.VoiceSelectionOpened)
+
+        viewModel.onAction(SettingsAction.VoiceChosen)
+        assertEquals(SettingsRoute.VoiceTest, viewModel.state.value.route)
+        viewModel.onAction(SettingsAction.BackClicked)
+        assertEquals(SettingsRoute.VoiceSelection, viewModel.state.value.route)
+
+        viewModel.onAction(SettingsAction.VoiceChosen)
+        viewModel.onAction(SettingsAction.VoiceTestDone)
+        assertEquals(SettingsRoute.Category(SettingsTab.Speech), viewModel.state.value.route)
+    }
+
+    @Test
     fun `back pops speech sub-pages, categories, then closes settings`() = runTest {
         val viewModel = SettingsViewModel(SavedStateHandle(), FakeSettingsOperations())
         viewModel.onAction(SettingsAction.Initialize)
@@ -161,41 +174,6 @@ class SettingsViewModelTest {
             SettingsRoute.Category(SettingsTab.Accessibility),
             restored.state.value.route,
         )
-    }
-
-    @Test
-    fun `azure credentials save after the debounce clears the draft`() = runTest {
-        val operations = FakeSettingsOperations()
-        val viewModel = SettingsViewModel(SavedStateHandle(), operations)
-        viewModel.onAction(SettingsAction.Initialize)
-
-        val endpoint = "https://eastus.api.cognitive.microsoft.com"
-        viewModel.onAction(SettingsAction.AzureEndpointChanged(endpoint))
-        viewModel.onAction(SettingsAction.AzureSubscriptionKeyChanged("key-123"))
-        advanceTimeBy(400)
-        runCurrent()
-
-        assertEquals(listOf(endpoint), operations.savedAzure.map { it.endpoint })
-        assertTrue(viewModel.state.value.azureCredentialConfigured)
-        assertEquals("", viewModel.state.value.azureSubscriptionKey)
-        assertFalse(viewModel.state.value.azureEndpointInvalid)
-    }
-
-    @Test
-    fun `invalid azure endpoint shows an error without saving`() = runTest {
-        val operations = FakeSettingsOperations()
-        val viewModel = SettingsViewModel(SavedStateHandle(), operations)
-        viewModel.onAction(SettingsAction.Initialize)
-
-        viewModel.onAction(SettingsAction.ReplaceAzureCredentialsClicked)
-        viewModel.onAction(SettingsAction.AzureEndpointChanged("http://insecure.example.com"))
-        viewModel.onAction(SettingsAction.AzureSubscriptionKeyChanged("key-123"))
-        advanceTimeBy(400)
-        runCurrent()
-
-        assertTrue(viewModel.state.value.azureEndpointInvalid)
-        assertTrue(operations.savedAzure.isEmpty())
-        assertFalse(viewModel.state.value.azureCredentialConfigured)
     }
 
     @Test
@@ -294,11 +272,9 @@ class SettingsViewModelTest {
         var settings: Settings = Settings()
         var loadError: Exception? = null
         var failNextUpdate = false
-        var azureConfigured = false
         var googleConfigured = false
         val boardSets = mutableListOf<ObfBoardSet>()
         var sentenceCachingResult: ObfBoardSet? = null
-        val savedAzure = mutableListOf<SpeechServiceConfig>()
         var downloadResult = ArasaacDownloadProgress(completed = 0, total = 0)
         var downloadError: Exception? = null
         val dictionary = mutableListOf<PronunciationEntry>()
@@ -315,17 +291,7 @@ class SettingsViewModelTest {
             settings = update(settings)
         }
 
-        override suspend fun azureStatus(): Pair<String, Boolean> = "" to azureConfigured
-
         override suspend fun googleCredentialConfigured(): Boolean = googleConfigured
-
-        override suspend fun saveAzureCredentials(
-            endpoint: String,
-            subscriptionKey: String,
-        ): Boolean {
-            savedAzure += SpeechServiceConfig(endpoint, subscriptionKey)
-            return true
-        }
 
         override suspend fun clearGoogleCredentials() {
             googleConfigured = false

@@ -84,14 +84,13 @@ internal data class PhraseScreenState(
     val secondaryRanges: List<TextRange> get() = communication.activeMessage.languageSpans
         .filter { it.languageTag == settings.secondaryLanguage }
         .map { TextRange(it.range.start, it.range.endExclusive) }
-    val hasSecondaryLanguage: Boolean get() = settings.secondaryLanguage.isNotBlank() &&
-        settings.secondaryLanguage != settings.primaryLanguage &&
-        voice?.supportedLanguages.orEmpty().distinct().size > 1 &&
-        settings.secondaryLanguage in voice?.supportedLanguages.orEmpty()
+    val hasSecondaryLanguage: Boolean get() = settings.secondaryLanguageFor(voice) != null
 }
 
 internal sealed interface PhraseScreenAction {
     data object RetryLoad : PhraseScreenAction
+    /** The screen is shown again; Phrases may have been added elsewhere (e.g. by setup). */
+    data object Shown : PhraseScreenAction
     data object RetryHistory : PhraseScreenAction
     data object RetryMutation : PhraseScreenAction
     data class EditInput(val value: TextFieldValue) : PhraseScreenAction
@@ -276,6 +275,7 @@ internal class PhraseScreenViewModel(
     fun onAction(action: PhraseScreenAction) {
         when (action) {
             PhraseScreenAction.RetryLoad -> { loadPhrases(); loadTemplate(); loadCategories(); loadVoice() }
+            PhraseScreenAction.Shown -> refreshShown()
             PhraseScreenAction.RetryHistory -> loadHistory()
             PhraseScreenAction.RetryMutation -> state.value.failedMutation?.let(::onAction)
             is PhraseScreenAction.EditInput -> editInput(action.value)
@@ -563,6 +563,29 @@ internal class PhraseScreenViewModel(
                 _state.update { it.copy(template = graph, templateStatus = TypingLoadStatus.Ready) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { _state.update { it.copy(templateStatus = TypingLoadStatus.Failed) } }
+        }
+    }
+
+    /**
+     * Picks up Phrases and Categories added elsewhere (e.g. by setup) when the screen is shown
+     * again, keeping the current list and editing available while it refreshes. A failed
+     * refresh keeps the list already shown, which is still correct for this screen's own edits.
+     */
+    private fun refreshShown() {
+        val current = state.value
+        if (current.phraseStatus != TypingLoadStatus.Ready || current.categoryStatus != TypingLoadStatus.Ready) return
+        // Shares the Phrase job, so a newer load always replaces an older read.
+        phraseJob?.cancel()
+        phraseJob = viewModelScope.launch {
+            try {
+                val phrases = operations.phrases()
+                _state.update { it.copy(phrases = phrases) }
+                refreshCategories()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                OperationalLogger.warn("typing.refresh", "failed", exceptionClass = failure.loggingClassName())
+            }
         }
     }
 

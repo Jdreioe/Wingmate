@@ -83,6 +83,71 @@ class VoiceSelectionViewModelTest {
     }
 
     @Test
+    fun `setup lists the chosen engine and saves it only together with the voice`() = runTest {
+        val voice = Voice(name = "en-US-Jenny", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(
+            settings = Settings(ttsEngine = TtsEngine.SYSTEM),
+            refreshed = listOf(voice),
+        )
+        val viewModel = VoiceSelectionViewModel(operations, engineToSave = TtsEngine.AZURE_USER_RESOURCE)
+
+        viewModel.onAction(VoiceSelectionAction.Load)
+        assertEquals(listOf(voice), (viewModel.state.value as VoiceSelectionUiState.Ready).voices)
+        assertEquals(TtsEngine.SYSTEM, operations.settings.ttsEngine)
+
+        viewModel.onAction(VoiceSelectionAction.VoiceSelected(voice, filterLanguage = null))
+
+        assertEquals(voice.name, operations.selected?.name)
+        assertEquals(TtsEngine.AZURE_USER_RESOURCE, operations.settings.ttsEngine)
+    }
+
+    @Test
+    fun `saving a voice's settings in setup also saves its engine`() = runTest {
+        val voice = Voice(name = "en-US-Neural2-A", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(settings = Settings(ttsEngine = TtsEngine.SYSTEM), refreshed = listOf(voice))
+        val viewModel = VoiceSelectionViewModel(operations, engineToSave = TtsEngine.GOOGLE_CLOUD)
+        viewModel.onAction(VoiceSelectionAction.Load)
+
+        viewModel.onAction(VoiceSelectionAction.VoiceSettingsSaved(voice))
+
+        assertEquals(TtsEngine.GOOGLE_CLOUD, operations.settings.ttsEngine)
+    }
+
+    @Test
+    fun `a failed preview is shown on that voice and does not choose it`() = runTest {
+        val voice = Voice(name = "en-US-Jenny", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(
+            settings = Settings(ttsEngine = TtsEngine.AZURE_USER_RESOURCE),
+            refreshed = listOf(voice),
+        ).apply { previewFails = true }
+        val viewModel = VoiceSelectionViewModel(operations)
+        viewModel.onAction(VoiceSelectionAction.Load)
+
+        viewModel.onAction(VoiceSelectionAction.PreviewToggled(voice, "Hello"))
+
+        val ready = viewModel.state.value as VoiceSelectionUiState.Ready
+        assertEquals(VoicePreview.Failed("en-US-Jenny"), ready.preview)
+        assertEquals(null, operations.selected)
+    }
+
+    @Test
+    fun `choosing the saved voice again keeps its speed and pitch`() = runTest {
+        val listed = Voice(name = "system-default", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(
+            settings = Settings(),
+            system = listOf(listed),
+            selected = listed.copy(rate = 1.2, pitch = 0.9),
+        )
+        val viewModel = VoiceSelectionViewModel(operations)
+        viewModel.onAction(VoiceSelectionAction.Load)
+
+        viewModel.onAction(VoiceSelectionAction.VoiceSelected(listed, filterLanguage = null))
+
+        assertEquals(1.2, operations.selected?.rate)
+        assertEquals(0.9, operations.selected?.pitch)
+    }
+
+    @Test
     fun `failed selection keeps the list and reports the failure`() = runTest {
         val voice = Voice(name = "system-default", primaryLanguage = "en-US")
         val operations = FakeVoiceSelectionOperations(settings = Settings(), system = listOf(voice))
@@ -125,5 +190,10 @@ internal class FakeVoiceSelectionOperations(
         check(!selectFails) { "write failed" }
         selected = voice
     }
+    var previewFails = false
+    override suspend fun previewVoice(voice: Voice, engine: TtsEngine, text: String) {
+        check(!previewFails) { "offline" }
+    }
+    override suspend fun stopPreview() = Unit
     override fun reportEvent(event: String, vararg metadata: Pair<String, String>) = Unit
 }

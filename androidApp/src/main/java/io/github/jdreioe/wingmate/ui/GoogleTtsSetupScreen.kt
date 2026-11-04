@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -100,7 +103,7 @@ fun GoogleTtsSetupScreen(
             saveError = null
             try {
                 withContext(Dispatchers.Default) {
-                    speechFacade.saveValidatedGoogleSpeechConfig(apiKey)
+                    speechFacade.saveValidatedGoogleCredential(apiKey)
                 }
                 apiKey = ""
                 credentialConfigured = true
@@ -115,41 +118,32 @@ fun GoogleTtsSetupScreen(
         }
     }
 
+    /** Back steps through this page's own steps before leaving it. */
+    fun goBack() {
+        when (step) {
+            GoogleTtsSetupStep.WELCOME -> onBack()
+            GoogleTtsSetupStep.CLOUD_PROJECT, GoogleTtsSetupStep.API_KEY -> step = GoogleTtsSetupStep.WELCOME
+            GoogleTtsSetupStep.SUCCESS -> onDone()
+        }
+    }
+    BackHandler(enabled = step == GoogleTtsSetupStep.CLOUD_PROJECT || step == GoogleTtsSetupStep.API_KEY) {
+        step = GoogleTtsSetupStep.WELCOME
+    }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize().then(if (showNavigation) Modifier.statusBarsPadding() else Modifier)) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .then(if (showNavigation) Modifier.statusBarsPadding() else Modifier)
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
-            if (showNavigation) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = {
-                        when (step) {
-                            GoogleTtsSetupStep.WELCOME -> onBack()
-                            GoogleTtsSetupStep.CLOUD_PROJECT, GoogleTtsSetupStep.API_KEY ->
-                                step = GoogleTtsSetupStep.WELCOME
-                            GoogleTtsSetupStep.SUCCESS -> onDone()
-                        }
-                    }) {
-                        Text(stringResource(if (step == GoogleTtsSetupStep.WELCOME) R.string.common_cancel else R.string.common_back))
-                    }
-                    Text(stringResource(R.string.google_setup_title), style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(64.dp))
-                }
-                Spacer(Modifier.height(24.dp))
-            }
             when (step) {
                 GoogleTtsSetupStep.WELCOME -> {
                     Text(
                         stringResource(R.string.google_setup_welcome_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.google_setup_welcome_description))
@@ -179,47 +173,42 @@ fun GoogleTtsSetupScreen(
                     if (credentialConfigured) {
                         Spacer(Modifier.height(16.dp))
                         Text(stringResource(R.string.google_tts_configured), color = MaterialTheme.colorScheme.primary)
-                        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.common_continue))
-                        }
                     }
                 }
 
                 GoogleTtsSetupStep.CLOUD_PROJECT -> {
                     Text(
                         stringResource(R.string.google_setup_cloud_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(stringResource(R.string.google_setup_cloud_steps))
                     Spacer(Modifier.height(20.dp))
-                    OutlinedButton(
+                    SetupActionButton(
+                        label = stringResource(R.string.google_setup_open_billing),
                         onClick = { uriHandler.openUri(GOOGLE_CLOUD_BILLING_URL) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_open_billing)) }
-                    Spacer(Modifier.height(8.dp))
-                    Button(
+                        opensBrowser = true,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    SetupActionButton(
+                        label = stringResource(R.string.google_setup_enable_api),
                         onClick = { uriHandler.openUri(GOOGLE_TTS_API_URL) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_enable_api)) }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
+                        opensBrowser = true,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    SetupActionButton(
+                        label = stringResource(R.string.google_setup_create_key),
                         onClick = { uriHandler.openUri(GOOGLE_API_CREDENTIALS_URL) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_create_key)) }
-                    Spacer(Modifier.height(20.dp))
-                    Button(
-                        onClick = { step = GoogleTtsSetupStep.API_KEY },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(stringResource(R.string.google_setup_have_key)) }
+                        opensBrowser = true,
+                    )
                 }
 
                 GoogleTtsSetupStep.API_KEY -> {
                     Text(
                         stringResource(R.string.google_setup_key_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.google_setup_key_description))
@@ -246,15 +235,7 @@ fun GoogleTtsSetupScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(it, color = MaterialTheme.colorScheme.error)
                     }
-                    Spacer(Modifier.height(20.dp))
-                    Button(
-                        onClick = ::saveAndValidate,
-                        enabled = apiKey.isNotBlank() && !saving,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        if (saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        else Text(stringResource(R.string.google_setup_save_validate))
-                    }
+
                 }
 
                 GoogleTtsSetupStep.SUCCESS -> {
@@ -266,17 +247,33 @@ fun GoogleTtsSetupScreen(
                         Text(
                             stringResource(R.string.google_setup_complete_title),
                             style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.semantics { heading() },
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.google_setup_complete_description))
-                        Spacer(Modifier.height(32.dp))
-                        Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.common_continue))
-                        }
+
                     }
                 }
             }
+        }
+        SetupBottomBar(
+            onBack = ::goBack.takeIf { showNavigation && step != GoogleTtsSetupStep.SUCCESS },
+            primaryLabel = when (step) {
+                GoogleTtsSetupStep.WELCOME -> if (credentialConfigured) stringResource(R.string.common_continue) else null
+                GoogleTtsSetupStep.CLOUD_PROJECT -> stringResource(R.string.google_setup_have_key)
+                GoogleTtsSetupStep.API_KEY -> stringResource(R.string.common_save)
+                GoogleTtsSetupStep.SUCCESS -> stringResource(R.string.common_continue)
+            },
+            onPrimary = {
+                when (step) {
+                    GoogleTtsSetupStep.CLOUD_PROJECT -> step = GoogleTtsSetupStep.API_KEY
+                    GoogleTtsSetupStep.API_KEY -> saveAndValidate()
+                    GoogleTtsSetupStep.WELCOME, GoogleTtsSetupStep.SUCCESS -> onDone()
+                }
+            },
+            primaryEnabled = step != GoogleTtsSetupStep.API_KEY || apiKey.isNotBlank(),
+            primaryBusy = saving,
+        )
         }
     }
 }
