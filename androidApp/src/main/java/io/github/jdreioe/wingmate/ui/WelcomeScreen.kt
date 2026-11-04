@@ -139,7 +139,8 @@ fun WelcomeScreen(
     // keep never appears or moves under someone using dwell or a switch.
     var savedVoice by remember { mutableStateOf<SavedVoice?>(null) }
     LaunchedEffect(step == WelcomeStep.Voice) {
-        if (step == WelcomeStep.Voice) return@LaunchedEffect
+        // Loaded once even on the Voice page, for setup restored straight onto it.
+        if (step == WelcomeStep.Voice && savedVoice != null) return@LaunchedEffect
         savedVoice = try {
             withContext(Dispatchers.Default) {
                 val engine = settingsUseCase?.get()?.ttsEngine
@@ -1000,7 +1001,10 @@ private fun ReviewPage(
             withContext(Dispatchers.IO) {
                 val voice = voiceUseCase?.selected()
                 val name = voice?.let { it.displayName ?: it.name } ?: unknown
-                val speed = speedTemplate.format(voice?.rate ?: 1.0)
+                val engine = settingsUseCase?.get()?.ttsEngine
+                // ElevenLabs only speaks 0.7–1.2x; show the speed it will actually use.
+                val rate = (voice?.rate ?: 1.0).let { if (engine == TtsEngine.ELEVENLABS) it.coerceIn(0.7, 1.2) else it }
+                val speed = speedTemplate.format(rate)
                 val settings = settingsUseCase?.get()
                 val speech = when (val engine = settings?.ttsEngine) {
                     null -> unknown

@@ -217,9 +217,9 @@ internal class VoiceSelectionViewModel(
         viewModelScope.launch {
             updateReady { it.copy(saveFailed = false) }
             try {
-                val chosen = if (ready.engine == TtsEngine.SYSTEM) voice else {
+                val chosen = (if (ready.engine == TtsEngine.SYSTEM) voice else {
                     voice.withPreferredSupportedLanguage(filterLanguage ?: ready.preferredLanguage)
-                }
+                }).withTuningOf(ready.selected)
                 saveVoice(chosen, ready.engine)
                 updateReady { it.copy(selected = chosen) }
                 if (choiceVisit == visit) mutableEvents.send(VoiceSelectionEvent.VoiceChosen)
@@ -286,7 +286,7 @@ internal class VoiceSelectionViewModel(
             }
             updateReady { it.copy(preview = VoicePreview.Playing(name)) }
             val outcome = try {
-                operations.previewVoice(voice, ready.engine, text)
+                operations.previewVoice(voice.withTuningOf(ready.selected), ready.engine, text)
                 VoicePreview.Idle
             } catch (failure: CancellationException) {
                 throw failure
@@ -342,3 +342,11 @@ internal suspend fun SpeechService.speakPreview(text: String, voice: Voice?, eng
     }
     check(playbackState().status != SpeechPlaybackStatus.FAILED) { "Preview playback failed" }
 }
+
+/**
+ * The list's copy of a voice carries no speed or pitch. Choosing (or hearing) the voice that
+ * is already saved keeps the speed and pitch set for it; any other voice starts fresh.
+ */
+internal fun Voice.withTuningOf(saved: Voice?): Voice =
+    if (saved == null || saved.name != name) this
+    else copy(rate = saved.rate, pitch = saved.pitch, rateForSSML = saved.rateForSSML, pitchForSSML = saved.pitchForSSML)

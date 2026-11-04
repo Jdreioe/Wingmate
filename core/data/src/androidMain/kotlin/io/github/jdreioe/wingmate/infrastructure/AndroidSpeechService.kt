@@ -163,6 +163,8 @@ class AndroidSpeechService(
     @Volatile private var activeRequestJob: Job? = null
     @Volatile private var state = SpeechPlaybackState()
     private val pendingTtsUtterances = AtomicInteger(0)
+    /** Set when the TTS engine reports an error for the current request's utterances. */
+    private val ttsUtteranceFailed = java.util.concurrent.atomic.AtomicBoolean(false)
     private val mediaSession: MediaSession by lazy {
         MediaSession(context, "WingmateSpeechSession").apply {
             setCallback(object : MediaSession.Callback() {
@@ -225,11 +227,15 @@ class AndroidSpeechService(
         updatePlaybackState(PlaybackState.STATE_PLAYING)
     }
 
-    private fun finishPlayback(requestId: Long = requestGeneration.get()) {
+    private fun finishPlayback(requestId: Long = requestGeneration.get(), failed: Boolean = false) {
         if (requestGeneration.get() != requestId) return
         isPlaying = false
         isPaused = false
-        state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
+        state = if (failed) {
+            SpeechPlaybackState(requestId, SpeechPlaybackStatus.FAILED, "Speech could not be played")
+        } else {
+            SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
+        }
         pausedAtSegment = false
         updatePlaybackState(PlaybackState.STATE_STOPPED)
         abandonAudioFocus()
@@ -241,7 +247,8 @@ class AndroidSpeechService(
         if (requestGeneration.get() != requestId) return
         val remaining = pendingTtsUtterances.updateAndGet { count -> if (count > 0) count - 1 else 0 }
         if (remaining == 0) {
-            finishPlayback(requestId)
+            // An engine error (e.g. voice data not installed) ends the request as FAILED, not done.
+            finishPlayback(requestId, failed = ttsUtteranceFailed.get())
         }
     }
 
@@ -294,11 +301,13 @@ class AndroidSpeechService(
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
+                ttsUtteranceFailed.set(true)
                 onTtsUtteranceFinished(utteranceId)
             }
 
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
+                ttsUtteranceFailed.set(true)
                 onTtsUtteranceFinished(utteranceId)
             }
         })
@@ -1008,6 +1017,7 @@ class AndroidSpeechService(
             try { t.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
             requestAudioFocus()
             val utteranceId = "wingmate-$requestId-${System.nanoTime()}"
+            ttsUtteranceFailed.set(false)
             pendingTtsUtterances.set(1)
             val result = synchronized(playerLock) {
                 check(requestGeneration.get() == requestId) { "Speech request was replaced" }
@@ -1018,7 +1028,8 @@ class AndroidSpeechService(
                 finishPlayback(requestId)
                 error("Device text-to-speech rejected playback")
             }
-            markPlaybackStarted(cleanText, voice, requestId)
+            // The engine can finish (or fail) before speak() returns; never mark that as playing.
+            if (pendingTtsUtterances.get() > 0) markPlaybackStarted(cleanText, voice, requestId)
         }
     }
 
@@ -1209,6 +1220,7 @@ class AndroidSpeechService(
             requestAudioFocus()
 
             val combinedText = segments.joinToString(" ") { it.text }.trim()
+            ttsUtteranceFailed.set(false)
             pendingTtsUtterances.set(0)
             check(requestGeneration.get() == requestId) { "Speech request was replaced" }
             

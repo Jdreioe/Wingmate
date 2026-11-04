@@ -2249,7 +2249,8 @@ private fun VoiceFilterChips(
             )
         }
     }
-    if (genders.isNotEmpty()) {
+    // A row whose only choice is "Unknown" (device voices) filters nothing.
+    if (genders.any { !it.equals("Unknown", ignoreCase = true) }) {
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

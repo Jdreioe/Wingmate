@@ -131,6 +131,23 @@ class VoiceSelectionViewModelTest {
     }
 
     @Test
+    fun `choosing the saved voice again keeps its speed and pitch`() = runTest {
+        val listed = Voice(name = "system-default", primaryLanguage = "en-US")
+        val operations = FakeVoiceSelectionOperations(
+            settings = Settings(),
+            system = listOf(listed),
+            selected = listed.copy(rate = 1.2, pitch = 0.9),
+        )
+        val viewModel = VoiceSelectionViewModel(operations)
+        viewModel.onAction(VoiceSelectionAction.Load)
+
+        viewModel.onAction(VoiceSelectionAction.VoiceSelected(listed, filterLanguage = null))
+
+        assertEquals(1.2, operations.selected?.rate)
+        assertEquals(0.9, operations.selected?.pitch)
+    }
+
+    @Test
     fun `failed selection keeps the list and reports the failure`() = runTest {
         val voice = Voice(name = "system-default", primaryLanguage = "en-US")
         val operations = FakeVoiceSelectionOperations(settings = Settings(), system = listOf(voice))
