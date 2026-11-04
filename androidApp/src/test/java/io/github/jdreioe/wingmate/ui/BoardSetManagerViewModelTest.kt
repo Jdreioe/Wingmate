@@ -1,9 +1,12 @@
 package io.github.jdreioe.wingmate.ui
 
+import com.hojmoseit.wingmate.R
+
 import androidx.lifecycle.SavedStateHandle
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,6 +36,23 @@ class BoardSetManagerViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `a failed import says why, as a failure that is not offered as a retry`() = runTest {
+        val operations = FakeBoardSetManagerOperations().apply {
+            boardSets += boardSet("set-1", "Core words")
+            importResult = BoardImportResult.Failure(BoardImportErrorCode.INVALID_MANIFEST, "Field 'paths' is required")
+        }
+        val viewModel = BoardSetManagerViewModel(SavedStateHandle(), operations)
+        viewModel.onAction(BoardSetManagerAction.Initialize(initialBoardSetId = null))
+
+        viewModel.onAction(BoardSetManagerAction.ImportClicked)
+
+        assertEquals(
+            LibraryStatus.Failed(BoardSetManagerMessage.Resource(R.string.board_import_error_incomplete)),
+            viewModel.state.value.status,
+        )
     }
 
     @Test
@@ -229,7 +249,8 @@ class BoardSetManagerViewModelTest {
             if (speechImportFails) error("Storage unavailable")
             return boardSet("speech-1", draft.name).also(boardSets::add)
         }
-        override suspend fun importBoardSet(): BoardImportResult = BoardImportResult.Cancelled
+        var importResult: BoardImportResult = BoardImportResult.Cancelled
+        override suspend fun importBoardSet(): BoardImportResult = importResult
 
         override suspend fun createBoardSet(
             name: String,

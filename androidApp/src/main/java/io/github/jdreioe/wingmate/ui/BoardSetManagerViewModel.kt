@@ -13,6 +13,7 @@ import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +39,32 @@ internal sealed interface BoardSetManagerRoute {
 internal sealed interface BoardSetManagerMessage {
     data class Resource(@param:StringRes val id: Int) : BoardSetManagerMessage
     data class Dynamic(val value: String) : BoardSetManagerMessage
+}
+
+/** What the library last reports: a confirmation, or a failure that is shown as an error. */
+internal sealed interface LibraryStatus {
+    val message: BoardSetManagerMessage
+
+    data class Done(override val message: BoardSetManagerMessage) : LibraryStatus
+
+    /** [canRetry]: loading the library failed, so Retry loads it again. */
+    data class Failed(override val message: BoardSetManagerMessage, val canRetry: Boolean = false) : LibraryStatus
+}
+
+/** Why an import failed, in words a Supporter can act on; never the raw exception text. */
+@StringRes
+internal fun BoardImportErrorCode.messageRes(): Int = when (this) {
+    BoardImportErrorCode.FILE_UNREADABLE -> R.string.board_import_error_unreadable
+    BoardImportErrorCode.MALFORMED_JSON -> R.string.board_import_error_not_a_board
+    BoardImportErrorCode.MALFORMED_ARCHIVE -> R.string.board_import_error_damaged
+    BoardImportErrorCode.INVALID_MANIFEST, BoardImportErrorCode.INVALID_GRAPH -> R.string.board_import_error_incomplete
+    BoardImportErrorCode.UNSAFE_ENTRY_NAME, BoardImportErrorCode.DUPLICATE_ENTRY -> R.string.board_import_error_unsafe
+    BoardImportErrorCode.ENCRYPTED_ENTRY -> R.string.board_import_error_encrypted
+    BoardImportErrorCode.TOO_MANY_ENTRIES, BoardImportErrorCode.JSON_ENTRY_TOO_LARGE,
+    BoardImportErrorCode.MEDIA_ENTRY_TOO_LARGE, BoardImportErrorCode.ARCHIVE_TOO_LARGE,
+    BoardImportErrorCode.COMPRESSION_RATIO_EXCEEDED -> R.string.board_import_error_too_large
+    BoardImportErrorCode.MEDIA_UNRESOLVED -> R.string.board_import_error_media
+    BoardImportErrorCode.PERSISTENCE_FAILED -> R.string.board_import_error_not_saved
 }
 
 internal data class CreateBoardSetDraft(
@@ -72,7 +99,7 @@ internal data class BoardSetManagerState(
     val deleteTargetId: String? = null,
     val pendingProtectedDeleteId: String? = null,
     val showDeleteAccessDialog: Boolean = false,
-    val statusMessage: BoardSetManagerMessage? = null,
+    val status: LibraryStatus? = null,
 )
 
 internal sealed interface BoardSetManagerAction {
@@ -318,10 +345,15 @@ internal class BoardSetManagerViewModel(
 
     private fun refreshBoardSets() {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, statusMessage = null) }
+            // A confirmation (e.g. "Imported") stays; only an earlier load failure is retried away.
+            _state.update { state ->
+                state.copy(isLoading = true, status = state.status.takeUnless { it is LibraryStatus.Failed && it.canRetry })
+            }
             runCatching { operations.listBoardSets() }
                 .onSuccess { boardSets -> _state.update { it.copy(boardSets = boardSets) } }
-                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_load_error)) }
+                .onFailure {
+                    _state.update { it.copy(status = LibraryStatus.Failed(BoardSetManagerMessage.Resource(R.string.board_sets_load_error), canRetry = true)) }
+                }
             _state.update { it.copy(isLoading = false) }
         }
     }
@@ -368,9 +400,7 @@ internal class BoardSetManagerViewModel(
                     openWorkspace(result.boardSet.id, BoardWorkspaceMode.Run)
                 }
                 BoardImportResult.Cancelled -> Unit
-                is BoardImportResult.Failure -> setStatus(
-                    BoardSetManagerMessage.Resource(R.string.board_sets_import_error)
-                )
+                is BoardImportResult.Failure -> fail(BoardSetManagerMessage.Resource(result.code.messageRes()))
             }
         }
     }
@@ -382,7 +412,7 @@ internal class BoardSetManagerViewModel(
                     setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_duplicated))
                     refreshBoardSets()
                 }
-                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_duplicate_error)) }
+                .onFailure { fail(BoardSetManagerMessage.Resource(R.string.board_sets_duplicate_error)) }
         }
     }
 
@@ -390,7 +420,7 @@ internal class BoardSetManagerViewModel(
         viewModelScope.launch {
             runCatching { operations.toggleLocked(id) }
                 .onSuccess { refreshBoardSets() }
-                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_lock_error)) }
+                .onFailure { fail(BoardSetManagerMessage.Resource(R.string.board_sets_lock_error)) }
         }
     }
 
@@ -426,7 +456,7 @@ internal class BoardSetManagerViewModel(
                     setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_deleted))
                     refreshBoardSets()
                 }
-                .onFailure { setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_delete_error)) }
+                .onFailure { fail(BoardSetManagerMessage.Resource(R.string.board_sets_delete_error)) }
         }
     }
 
@@ -455,7 +485,7 @@ internal class BoardSetManagerViewModel(
                     openWorkspace(created.id, BoardWorkspaceMode.Edit)
                 }
             }.onFailure {
-                setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_create_error))
+                fail(BoardSetManagerMessage.Resource(R.string.board_sets_create_error))
             }
             _state.update { it.copy(isCreating = false) }
         }
@@ -529,8 +559,12 @@ internal class BoardSetManagerViewModel(
         }
     }
 
+    private fun fail(message: BoardSetManagerMessage) {
+        _state.update { it.copy(status = LibraryStatus.Failed(message)) }
+    }
+
     private fun setStatus(message: BoardSetManagerMessage) {
-        _state.update { it.copy(statusMessage = message) }
+        _state.update { it.copy(status = LibraryStatus.Done(message)) }
     }
 
     private fun sendEvent(event: BoardSetManagerEvent) {

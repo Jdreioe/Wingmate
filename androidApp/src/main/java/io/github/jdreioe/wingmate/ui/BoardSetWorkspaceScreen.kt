@@ -28,6 +28,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -248,7 +252,7 @@ fun BoardSetManagerRoot(
     when (val route = state.route) {
         BoardSetManagerRoute.Library -> BoardSetManagerScreen(
             state = state,
-            statusMessage = state.statusMessage?.resolve(),
+            status = state.status,
             importAvailable = boardImportService != null,
             onAction = viewModel::onAction,
         )
@@ -341,7 +345,7 @@ private fun BoardSetManagerMessage.resolve(): String = when (this) {
 @Composable
 internal fun BoardSetManagerScreen(
     state: BoardSetManagerState,
-    statusMessage: String?,
+    status: LibraryStatus?,
     importAvailable: Boolean,
     onAction: (BoardSetManagerAction) -> Unit,
 ) {
@@ -349,7 +353,7 @@ internal fun BoardSetManagerScreen(
         boardSets = state.boardSets,
         isLoading = state.isLoading,
         isCreating = state.isCreating,
-        statusMessage = statusMessage,
+        status = status,
         onBack = { onAction(BoardSetManagerAction.BackClicked) },
         onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
         onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
@@ -395,7 +399,7 @@ private fun BoardSetManagerScreenPreview() {
                 ),
                 isLoading = false,
             ),
-            statusMessage = null,
+            status = null,
             importAvailable = true,
             onAction = {},
         )
@@ -408,7 +412,7 @@ private fun BoardSetLibraryScreen(
     boardSets: List<ObfBoardSet>,
     isLoading: Boolean,
     isCreating: Boolean,
-    statusMessage: String?,
+    status: LibraryStatus?,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onCreate: () -> Unit,
@@ -511,9 +515,9 @@ private fun BoardSetLibraryScreen(
                             stringResource(R.string.board_sets_empty_body),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        statusMessage?.let {
+                        status?.let {
                             Spacer(Modifier.height(12.dp))
-                            Text(it, color = MaterialTheme.colorScheme.error)
+                            LibraryStatusBanner(it)
                         }
                         Spacer(Modifier.height(16.dp))
                         if (large) {
@@ -521,14 +525,14 @@ private fun BoardSetLibraryScreen(
                             // start, also after a failure (e.g. a failed import or the last delete).
                             // The same buttons, in the same order, as above a list.
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if (statusMessage != null) {
+                                if ((status as? LibraryStatus.Failed)?.canRetry == true) {
                                     TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 56.dp)) {
                                         Text(stringResource(R.string.common_retry))
                                     }
                                 }
                                 BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
                             }
-                        } else if (statusMessage != null) {
+                        } else if ((status as? LibraryStatus.Failed)?.canRetry == true) {
                             Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
                         } else {
                             Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
@@ -540,8 +544,8 @@ private fun BoardSetLibraryScreen(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        statusMessage?.let {
-                            item { Text(it, color = MaterialTheme.colorScheme.primary) }
+                        status?.let {
+                            item(key = "status") { LibraryStatusBanner(it) }
                         }
                         items(boardSets, key = { it.id }) { boardSet ->
                             BoardSetLibraryCard(
@@ -556,6 +560,30 @@ private fun BoardSetLibraryScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The library's last result. A failure is an error container with an icon, so it does not rely
+ * on colour alone; both are announced politely.
+ */
+@Composable
+private fun LibraryStatusBanner(status: LibraryStatus) {
+    val failed = status is LibraryStatus.Failed
+    Surface(
+        color = if (failed) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = if (failed) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (failed) Icons.Default.ErrorOutline else Icons.Default.CheckCircle, contentDescription = null)
+            Text(status.message.resolve(), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
