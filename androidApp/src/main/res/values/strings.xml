@@ -25,6 +25,7 @@
     <string name="common_ok">OK</string>
     <string name="common_no_name">No Name</string>
     <string name="common_back">Back</string>
+    <string name="common_done">Done</string>
     <string name="common_continue">Continue</string>
     <string name="common_retry">Retry</string>
     <string name="communication_storage_failed">Your Message could not be loaded or saved. Keep Wingmate open and retry.</string>

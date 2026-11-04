@@ -25,6 +25,7 @@
     <string name="common_ok">OK</string>
     <string name="common_no_name">Intet navn</string>
     <string name="common_back">Tilbage</string>
+    <string name="common_done">Færdig</string>
     <string name="common_continue">Fortsæt</string>
     <string name="common_retry">Prøv igen</string>
     <string name="communication_storage_failed">Din besked kunne ikke indlæses eller gemmes. Hold Wingmate åben, og prøv igen.</string>

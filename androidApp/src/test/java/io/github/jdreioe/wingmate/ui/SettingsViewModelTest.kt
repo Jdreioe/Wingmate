@@ -125,6 +125,23 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `a chosen voice opens Hear your voice, whose Back returns to the list and Done to Speech`() = runTest {
+        val viewModel = SettingsViewModel(SavedStateHandle(), FakeSettingsOperations())
+        viewModel.onAction(SettingsAction.Initialize)
+        viewModel.onAction(SettingsAction.CategorySelected(SettingsTab.Speech))
+        viewModel.onAction(SettingsAction.VoiceSelectionOpened)
+
+        viewModel.onAction(SettingsAction.VoiceChosen)
+        assertEquals(SettingsRoute.VoiceTest, viewModel.state.value.route)
+        viewModel.onAction(SettingsAction.BackClicked)
+        assertEquals(SettingsRoute.VoiceSelection, viewModel.state.value.route)
+
+        viewModel.onAction(SettingsAction.VoiceChosen)
+        viewModel.onAction(SettingsAction.VoiceTestDone)
+        assertEquals(SettingsRoute.Category(SettingsTab.Speech), viewModel.state.value.route)
+    }
+
+    @Test
     fun `back pops speech sub-pages, categories, then closes settings`() = runTest {
         val viewModel = SettingsViewModel(SavedStateHandle(), FakeSettingsOperations())
         viewModel.onAction(SettingsAction.Initialize)

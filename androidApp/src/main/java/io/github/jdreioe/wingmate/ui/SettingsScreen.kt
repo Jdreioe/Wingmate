@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -344,6 +345,7 @@ private fun settingsRouteTitle(route: SettingsRoute): String = when (route) {
     SettingsRoute.PronunciationDictionary -> stringResource(R.string.dictionary_title)
     is SettingsRoute.Category -> settingsCategoryTitle(route.tab)
     SettingsRoute.VoiceSelection -> stringResource(R.string.voice_select_title)
+    SettingsRoute.VoiceTest -> stringResource(R.string.welcome_test_title)
     SettingsRoute.LanguageSelection -> stringResource(R.string.language_dialog_title)
     SettingsRoute.ElevenLabsSetup -> "ElevenLabs"
     SettingsRoute.GoogleSetup -> stringResource(R.string.google_setup_title)
@@ -383,8 +385,20 @@ private fun SettingsRouteContent(
             modifier = modifier
         )
         SettingsRoute.VoiceSelection -> VoiceSelectionPage(
-            onBack = { onAction(SettingsAction.BackClicked) }
+            onBack = { onAction(SettingsAction.BackClicked) },
+            onVoiceSelected = { onAction(SettingsAction.VoiceChosen) },
         )
+        SettingsRoute.VoiceTest -> {
+            var sentence by rememberSaveable { mutableStateOf<String?>(null) }
+            TestVoiceScreen(
+                sentence = sentence,
+                onSentenceChange = { sentence = it },
+                onNext = { onAction(SettingsAction.VoiceTestDone) },
+                onBack = { onAction(SettingsAction.BackClicked) },
+                primaryLabel = stringResource(R.string.common_done),
+                standalone = false,
+            )
+        }
         SettingsRoute.LanguageSelection -> LanguageSelectionPage(
             onBack = { onAction(SettingsAction.BackClicked) }
         )

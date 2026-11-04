@@ -59,6 +59,8 @@ internal sealed interface SettingsRoute {
     data object PronunciationDictionary : SettingsRoute
     data class Category(val tab: SettingsTab) : SettingsRoute
     data object VoiceSelection : SettingsRoute
+    /** "Hear your voice" for the voice just picked on [VoiceSelection]; Back returns there. */
+    data object VoiceTest : SettingsRoute
     data object LanguageSelection : SettingsRoute
     data object F0Setup : SettingsRoute
     data object GoogleSetup : SettingsRoute
@@ -108,6 +110,8 @@ internal sealed interface SettingsAction {
     data class CategorySelected(val tab: SettingsTab) : SettingsAction
     data object PronunciationOpened : SettingsAction
     data object VoiceSelectionOpened : SettingsAction
+    data object VoiceChosen : SettingsAction
+    data object VoiceTestDone : SettingsAction
     data object LanguageSelectionOpened : SettingsAction
     data object F0SetupOpened : SettingsAction
     data object GoogleSetupOpened : SettingsAction
@@ -416,6 +420,8 @@ internal class SettingsViewModel(
             SettingsAction.VoiceSelectionOpened -> openSubPage(
                 SettingsRoute.VoiceSelection, "voice_selection"
             )
+            SettingsAction.VoiceChosen -> setRoute(SettingsRoute.VoiceTest)
+            SettingsAction.VoiceTestDone -> setRoute(SettingsRoute.Category(SettingsTab.Speech))
             SettingsAction.LanguageSelectionOpened -> openSubPage(
                 SettingsRoute.LanguageSelection, "language_selection"
             )
@@ -929,6 +935,7 @@ internal class SettingsViewModel(
         SettingsRoute.Home -> SettingsRoute.Home
         is SettingsRoute.Category -> SettingsRoute.Home
         SettingsRoute.PronunciationDictionary -> SettingsRoute.Home
+        SettingsRoute.VoiceTest -> SettingsRoute.VoiceSelection
         SettingsRoute.VoiceSelection,
         SettingsRoute.LanguageSelection,
         SettingsRoute.F0Setup,

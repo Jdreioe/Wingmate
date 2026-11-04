@@ -43,26 +43,33 @@ import org.koin.compose.koinInject
 
 import com.hojmoseit.wingmate.R
 /**
- * Setup page for hearing the chosen voice. The Communicator may keep the sentence they
- * tested (for example how they introduce themselves) as a Phrase. The sentence and that
- * choice are held by the caller, so they survive side pages. Previews are not recorded in
- * History or cached, and stop when the page leaves.
+ * "Hear your voice": try the selected voice and set its speed. Used by setup and by Settings
+ * after a voice is picked. In setup the Communicator may keep the sentence they tested (for
+ * example how they introduce themselves) as a Phrase; the sentence and that choice are held
+ * by the caller, so they survive side pages. Previews are not recorded in History or cached,
+ * and stop when the page leaves.
  */
 @Composable
 fun TestVoiceScreen(
     /** The sentence shown, or null until one is typed or kept (then the default is shown). */
     sentence: String?,
-    keepAsPhrase: Boolean,
     onSentenceChange: (String) -> Unit,
-    /** Receives the choice and the sentence it applies to (the default text when none was typed). */
-    onKeepAsPhraseChange: (keep: Boolean, sentence: String) -> Unit,
-    /** A speed not yet confirmed saved, held by setup so it survives this page going away. */
-    unsavedSpeed: UnsavedSpeed?,
-    onUnsavedSpeedChange: (UnsavedSpeed?) -> Unit,
-    /** Opens language choice; offered only when the voice speaks more than one language. */
-    onChangeLanguage: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    primaryLabel: String = stringResource(R.string.common_continue),
+    keepAsPhrase: Boolean = false,
+    /**
+     * Receives the choice and the sentence it applies to (the default text when none was
+     * typed). Null hides the switch (Settings has no setup to finish and save it with).
+     */
+    onKeepAsPhraseChange: ((keep: Boolean, sentence: String) -> Unit)? = null,
+    /** A speed not yet confirmed saved, held by setup so it survives this page going away. */
+    unsavedSpeed: UnsavedSpeed? = null,
+    onUnsavedSpeedChange: (UnsavedSpeed?) -> Unit = {},
+    /** Opens language choice for a voice that speaks more than one language; null hides it. */
+    onChangeLanguage: (() -> Unit)? = null,
+    /** False inside Settings, whose top bar already shows the title and handles insets. */
+    standalone: Boolean = true,
 ) {
     val speechService = koinInject<SpeechService>()
     val voiceUseCase = koinInject<VoiceUseCase>()
@@ -173,19 +180,21 @@ fun TestVoiceScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        Column(Modifier.fillMaxSize().then(if (standalone) Modifier.safeDrawingPadding() else Modifier)) {
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
-            Text(
-                stringResource(R.string.welcome_test_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 16.dp).semantics { heading() }
-            )
+            if (standalone) {
+                Text(
+                    stringResource(R.string.welcome_test_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(bottom = 16.dp).semantics { heading() }
+                )
+            }
         
         if (loading) {
             CircularProgressIndicator()
@@ -218,7 +227,7 @@ fun TestVoiceScreen(
                     )
                 }
             }
-            if (selectedVoice.isMultilingual()) {
+            if (onChangeLanguage != null && selectedVoice.isMultilingual()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 SetupActionButton(
                     label = stringResource(R.string.welcome_change_language),
@@ -357,21 +366,22 @@ fun TestVoiceScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .toggleable(value = keepAsPhrase, role = Role.Switch, onValueChange = { onKeepAsPhraseChange(it, testText) }),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.test_voice_keep_as_phrase),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(checked = keepAsPhrase, onCheckedChange = null)
+            if (onKeepAsPhraseChange != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .toggleable(value = keepAsPhrase, role = Role.Switch, onValueChange = { onKeepAsPhraseChange(it, testText) }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.test_voice_keep_as_phrase),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(checked = keepAsPhrase, onCheckedChange = null)
+                }
             }
 
         }
@@ -379,7 +389,7 @@ fun TestVoiceScreen(
         SetupBottomBar(
             onBack = { leaveAfterSave(onBack) },
             backEnabled = !speedSaver.flushing,
-            primaryLabel = stringResource(R.string.common_continue),
+            primaryLabel = primaryLabel,
             primaryEnabled = !loading && !loadFailed,
             // Waiting on a speed save before moving on: show it, so the tap is not silent.
             primaryBusy = speedSaver.flushing,
