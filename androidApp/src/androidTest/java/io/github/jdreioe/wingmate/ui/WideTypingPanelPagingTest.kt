@@ -5,17 +5,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.Settings
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import kotlin.math.absoluteValue
 import org.junit.Rule
@@ -25,8 +30,9 @@ class WideTypingPanelPagingTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    @Test
-    fun earlierUndoesMoreOnePressAtATimeAndEndsAtTheFirstRow() {
+    private var held by mutableStateOf<String?>(null)
+
+    private fun showPanel() {
         composeRule.setContent {
             AppTheme {
                 Box(Modifier.size(900.dp, 520.dp)) {
@@ -40,7 +46,7 @@ class WideTypingPanelPagingTest {
                         onSpeak = {}, onPause = {}, onResume = {},
                         stopEnabled = false, onStop = {},
                         keyboardShown = false, onShowKeyboard = {}, onHideKeyboard = {},
-                        heldMessage = null, onSwapHeld = {},
+                        heldMessage = held, onSwapHeld = {},
                         actions = { rowModifier ->
                             Column {
                                 repeat(20) { row -> Text("Row $row", rowModifier(row).height(56.dp)) }
@@ -51,6 +57,31 @@ class WideTypingPanelPagingTest {
                 }
             }
         }
+    }
+
+    /** The top of the first row at least partly shown, in the panel's scroll area. */
+    private fun firstVisibleRowTop() = (0 until 20)
+        .map { composeRule.onNodeWithText("Row $it") }
+        .filter { it.isDisplayed() }
+        .minOf { it.getUnclippedBoundsInRoot().top }
+
+    @Test
+    fun aHeldMessageAppearingAboveTheRowsKeepsTheTopEdgeOnAWholeRow() {
+        showPanel()
+        composeRule.onNodeWithText("More actions").performClick()
+        composeRule.waitForIdle()
+        val edge = firstVisibleRowTop()
+
+        composeRule.runOnIdle { held = "Could you open the window, please?" }
+        composeRule.waitForIdle()
+
+        // No clipped sliver of a row above the edge, where a near miss on Stop would land.
+        assertEquals(edge.value, firstVisibleRowTop().value, 1f)
+    }
+
+    @Test
+    fun earlierUndoesMoreOnePressAtATimeAndEndsAtTheFirstRow() {
+        showPanel()
 
         // Row 0 is laid out even when scrolled away (the grid is not lazy), so its top tracks the scroll.
         fun rowsTop() = composeRule.onNodeWithText("Row 0").getUnclippedBoundsInRoot().top

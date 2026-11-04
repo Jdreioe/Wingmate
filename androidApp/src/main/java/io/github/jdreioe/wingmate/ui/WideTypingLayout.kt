@@ -42,10 +42,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.domain.Settings
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
 /**
  * Whether Typing uses [WideTypingLayout]: at least Medium width and tall enough for the
@@ -248,6 +251,17 @@ private fun WideTypingPanel(
             // below page through it instead, for touch, dwell and switch alike.
             val scroll = rememberScrollState()
             val items = remember { PanelItems() }
+            // The app actions row (short panels) and the held card come and go above the rest,
+            // which would leave the top edge between items. Once the new layout is placed, move
+            // back onto the whole item at or above the current top, keeping the user's place.
+            LaunchedEffect(roomy, heldMessage != null) {
+                withFrameNanos { }
+                val top = scroll.value.toFloat()
+                val tops = items.tops()
+                if (tops.none { (it - top).absoluteValue < 1f }) {
+                    scroll.scrollTo((tops.lastOrNull { it <= top } ?: 0f).toInt())
+                }
+            }
             Column(
                 Modifier
                     .weight(1f)
