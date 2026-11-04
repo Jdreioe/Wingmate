@@ -83,6 +83,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.jdreioe.wingmate.domain.Settings
+import kotlin.math.roundToInt
 
 /** Input surface under the Message bar. Geometry and IME lifecycle belong to Compose. */
 private enum class TypingInputSurface { Keyboard, Tray }
@@ -620,8 +621,9 @@ internal fun PhraseScreenContent(
                     if (wideTyping) {
                         val heldMessage = communicationState.heldMessage
                         // The Message shows whole lines, more scroll inside: three, or two while the
-                        // on-screen keyboard is up so more Phrase rows fit above it. It follows the
-                        // keyboard's animation, and the rows keep their size and order.
+                        // on-screen keyboard is up so more Phrase rows fit above it; the "Input
+                        // fields" size scales the count. It eases to the new height as the keyboard
+                        // opens or closes; the rows keep their size and order.
                         val messageStyle = MaterialTheme.typography.headlineSmall.let { style ->
                             style.copy(
                                 fontSize = style.fontSize * settings.fontSizeScale,
@@ -632,7 +634,9 @@ internal fun PhraseScreenContent(
                         val messageLine = with(LocalDensity.current) { messageStyle.lineHeight.toDp() }
                         val messageHeight by animateDpAsState(
                             // 24dp: the field's vertical padding.
-                            targetValue = messageLine * (if (isImeVisible) 2 else 3) + 24.dp,
+                            targetValue = messageLine * (
+                                (if (isImeVisible) 2 else 3) * settings.inputFieldScale.coerceIn(0.75f, 2f)
+                            ).roundToInt().coerceAtLeast(1) + 24.dp,
                             animationSpec = tween(250),
                             label = "wide-message-height",
                         )
