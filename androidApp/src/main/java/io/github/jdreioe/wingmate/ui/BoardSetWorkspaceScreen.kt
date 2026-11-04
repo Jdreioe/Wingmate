@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -56,12 +54,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -87,12 +85,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
@@ -497,70 +497,76 @@ private fun BoardSetLibraryScreen(
                     }
                 }
             }
-        Box(Modifier.widthIn(max = if (large) BoardSetLibraryMaxWidth else Dp.Unspecified).fillMaxSize()) {
-            when {
-                isCreating -> Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator()
-                    Text(stringResource(R.string.board_sets_creating))
-                }
-                isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                boardSets.isEmpty() -> Column(
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(stringResource(R.string.board_sets_empty_title), style = MaterialTheme.typography.headlineSmall)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.board_sets_empty_body),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    statusMessage?.let {
-                        Spacer(Modifier.height(12.dp))
-                        Text(it, color = MaterialTheme.colorScheme.error)
+            Box(Modifier.widthIn(max = if (large) BoardSetLibraryMaxWidth else Dp.Unspecified).fillMaxSize()) {
+                when {
+                    isCreating -> Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator()
+                        Text(stringResource(R.string.board_sets_creating))
                     }
-                    Spacer(Modifier.height(16.dp))
-                    if (statusMessage != null) {
-                        Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
-                    } else if (large) {
-                        // Without floating buttons, the empty library offers both ways to start here.
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
-                                Text(stringResource(R.string.board_sets_create))
-                            }
-                            FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
-                                Text(stringResource(R.string.speech_import_title))
-                            }
-                        }
-                    } else {
-                        Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
-                    }
-                }
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    // Room for the floating buttons, which a large window does not have.
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    statusMessage?.let {
-                        item { Text(it, color = MaterialTheme.colorScheme.primary) }
-                    }
-                    items(boardSets, key = { it.id }) { boardSet ->
-                        BoardSetLibraryCard(
-                            boardSet = boardSet,
-                            onOpen = { onOpen(boardSet) },
-                            onEdit = { onEdit(boardSet) },
-                            onDuplicate = { onDuplicate(boardSet) },
-                            onToggleLock = { onToggleLock(boardSet) },
-                            onDelete = { onDelete(boardSet) }
+                    isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    boardSets.isEmpty() -> Column(
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(stringResource(R.string.board_sets_empty_title), style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.board_sets_empty_body),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        statusMessage?.let {
+                            Spacer(Modifier.height(12.dp))
+                            Text(it, color = MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        if (large) {
+                            // Without floating buttons, the empty library always offers both ways to
+                            // start, also after a failure (e.g. a failed import or the last delete).
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
+                                    Text(stringResource(R.string.board_sets_create))
+                                }
+                                FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
+                                    Text(stringResource(R.string.speech_import_title))
+                                }
+                                if (statusMessage != null) {
+                                    TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 56.dp)) {
+                                        Text(stringResource(R.string.common_retry))
+                                    }
+                                }
+                            }
+                        } else if (statusMessage != null) {
+                            Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
+                        } else {
+                            Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
+                        }
+                    }
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        // Room for the floating buttons, which a large window does not have.
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        statusMessage?.let {
+                            item { Text(it, color = MaterialTheme.colorScheme.primary) }
+                        }
+                        items(boardSets, key = { it.id }) { boardSet ->
+                            BoardSetLibraryCard(
+                                boardSet = boardSet,
+                                onOpen = { onOpen(boardSet) },
+                                onEdit = { onEdit(boardSet) },
+                                onDuplicate = { onDuplicate(boardSet) },
+                                onToggleLock = { onToggleLock(boardSet) },
+                                onDelete = { onDelete(boardSet) }
+                            )
+                        }
                     }
                 }
             }
-        }
         }
     }
 }
