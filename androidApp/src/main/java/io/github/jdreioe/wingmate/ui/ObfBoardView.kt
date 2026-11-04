@@ -1802,17 +1802,20 @@ internal fun ObfButtonContent(
 
                 if (showLbl && !showImg) {
                     val labelText = displayLabel ?: displayVocalization ?: ""
-                    val shortWord = labelText.trim().let { it.length <= 12 && ' ' !in it }
+                    // One rule for every text-only Button: a word or short phrase ("all done",
+                    // "Hvordan går det?") is centred in the large style; a sentence reads from
+                    // the top start, like text.
+                    val shortLabel = isShortButtonLabel(labelText)
                     Box(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp),
-                        contentAlignment = if (shortWord) Alignment.Center else Alignment.TopStart,
+                        contentAlignment = if (shortLabel) Alignment.Center else Alignment.TopStart,
                     ) {
                         Text(
                             text = labelText,
-                            style = if (shortWord) shortWordStyle else phraseTextStyle,
-                            textAlign = if (shortWord) TextAlign.Center else TextAlign.Start,
+                            style = if (shortLabel) shortWordStyle else phraseTextStyle,
+                            textAlign = if (shortLabel) TextAlign.Center else TextAlign.Start,
                             color = contentColor,
-                            maxLines = if (shortWord) 1 else 3,
+                            maxLines = if (shortLabel) 2 else 3,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -2057,4 +2060,10 @@ private fun Modifier.pageBackground(color: Color, image: ImageBitmap?, fit: Page
         val offset = IntOffset(((size.width - drawn.width) / 2).roundToInt(), ((size.height - drawn.height) / 2).roundToInt())
         clipRect { drawImage(image, dstOffset = offset, dstSize = drawn, filterQuality = FilterQuality.Medium) }
     }
+}
+
+/** A word or short phrase, shown centred and large on a text-only Button: up to 3 words and 24 characters. */
+internal fun isShortButtonLabel(label: String): Boolean {
+    val text = label.trim()
+    return text.length <= 24 && text.split(Regex("\\s+")).size <= 3
 }
