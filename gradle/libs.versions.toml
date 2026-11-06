@@ -1,5 +1,5 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.0"
 android-compileSdk = "37"
 android-minSdk = "24"
 android-targetSdk = "36"
@@ -17,8 +17,8 @@ kotlinx-coroutines = "1.11.0"
 okio = "3.18.2"
 
 koin = "4.2.2"
-ktor = "3.6.0"
-kotlinx-serialization = "1.11.0"
+ktor = "3.6.1"
+kotlinx-serialization = "1.12.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
