@@ -133,7 +133,7 @@ jobs:
             target=IosX64
           fi
           ./gradlew ":shared:linkDebugFramework${target}" --build-cache --console=plain
-      - name: Build the Swift app and run Swift tests
+      - name: Build the Swift app and tests (run the tests on main)
         shell: bash
         run: bash ci_scripts/verify_ios.sh
         env:
