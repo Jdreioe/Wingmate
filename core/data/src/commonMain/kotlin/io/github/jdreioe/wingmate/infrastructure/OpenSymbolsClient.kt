@@ -20,8 +20,8 @@ import kotlinx.serialization.json.Json
 /**
  * Searches OpenSymbols through Wingmate's server-side proxy.
  *
- * The OpenSymbols shared secret must never be provided to this client: mobile
- * and desktop binaries contain only the public proxy URL.
+ * The OpenSymbols shared secret must never be provided to this client: client
+ * binaries contain only the public proxy URL.
  */
 object OpenSymbolsClient {
     private const val SEARCH_PATH = "/v1/opensymbols/search"

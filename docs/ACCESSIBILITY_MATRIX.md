@@ -5,48 +5,27 @@ Status per access feature and platform. Companion to
 
 Legend: **Shipped** · **Partial** (works with gaps) · **Planned** (tracked) · **None**
 
-| Feature | Android | iOS | Desktop |
-| --- | --- | --- | --- |
-| Dwell-to-select | Shipped (`InteractionInputRoot`, configurable ms) | Shipped (shared `AccessInputController`, driven by `IosViewModel`) | Partial (Screen buttons and communication controls; shared controller) |
-| Tremor jitter filter (dwell re-arm delay) | Shipped (settings slider) | Partial (controller supports it; Swift does not sync the setting yet) | Partial (shared setting and controller wired) |
-| Select key / switch press | Shipped (Space/Enter/F1–F12 bindings) | Shipped (bindings via settings sync) | Partial (select key acts on hovered communication target) |
-| Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) | Partial (Rest/Resume button, rest key, hold Select 2 s; toggle is click/touch only) |
-| Per-target selection debounce (#118) | Shipped (+ reject haptic) | Partial (shared logic available; not wired everywhere) | None |
-| Selection highlight (#120) | Shipped (Screens, Typing Screen and compact Phrase row; inset black/white ring) | Shipped (Screens, Typing tray, Settings > Accessibility; updated ring/timer need device verification) | Shipped (Screen Buttons; Settings > Access duration, 0 disables) |
-| Select on touch-down (#110) | Shipped (Buttons, Typing action strip, Play/Stop; grids stop scrolling) | None | None |
-| Swipe between Pages (#121) | Shipped (opt-in; Screen page order, Run mode) | None | None |
-| Hold-to-select duration | Shipped | Partial | None (setting stored, no runner support) |
-| Auditory fishing (speak on hover) | Shipped | None | None |
-| Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) | None |
-| Switch scanning (#112–#114) | None ([#226](https://github.com/Jdreioe/Wingmate/issues/226)) | Shipped (native Swift scanning UI) | None |
-| Auditory scanning prompts (#113) | None | None | None |
-| Gaze input (native TD-I13) (#123–#129) | Planned | Planned | Partial (Linux fullscreen Screen runner, settings, diagnostics and bundled daemon startup; TD-I13 verification pending) |
-| Head tracking providers (#125) | Planned | Planned | None (OS pointer only) |
-| Webcam gaze (#276) | OS input only | OS input only | Experimental Linux x86_64: camera selection, calibration, validation and shared dwell; hardware evaluation pending |
-| External gaze-provider boundary (#126) | Planned | Planned | None |
-| Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#228](https://github.com/Jdreioe/Wingmate/issues/228) | Same as Android | None — `iced` draws its own widgets and exposes no platform accessibility tree |
-| Undo for destructive phrase actions | Shipped (snackbar undo incl. sub-items) | None | None (no Phrase editing on desktop yet) |
-| Print/PDF low-tech board fallback ([#227](https://github.com/Jdreioe/Wingmate/issues/227)) | Shipped (Screen menu → Print (PDF): one sheet per Page, links name their page) | Planned | Planned |
-
-## Desktop (recorded 2026-09)
-
-The desktop client (`desktopApp/`, [#268](https://github.com/Jdreioe/Wingmate/issues/268))
-now runs pointer dwell, the dwell re-arm delay, select-key activation, and Rest
-mode through the shared `AccessInputController`. Settings > Access configures
-these behaviors. They apply to Screen Buttons, Back, Clear, Hold, and Speak.
-The target is highlighted and a progress bar shows dwell completion. Window
-focus loss, pointer exit, and leaving communication cancel pending dwell.
-
-Library, settings, and editor controls have no dwell targets yet. Rest/Resume
-requires a click or touch, the rest shortcut, or holding Select for two seconds
-and releasing to resume. Keyboard focus does not identify an access target yet;
-the select shortcut acts on the hovered target. Hold-to-select remains stored
-without runner support. Linux native gaze now connects the daemon stream to
-actual widget bounds in the fullscreen Screen runner, including spanned Buttons.
-It cancels invalid/stale input and reconnects automatically. Enabling is
-session-only; bundled daemon startup is opt-in and calibration remains external. Windows
-vendor-pointer and real TD-I13 verification remain outstanding. Desktop remains in development; see
-[supported platforms](PLATFORM_SUPPORT.md).
+| Feature | Android | iOS |
+| --- | --- | --- |
+| Dwell-to-select | Shipped (`InteractionInputRoot`, configurable ms) | Shipped (shared `AccessInputController`, driven by `IosViewModel`) |
+| Tremor jitter filter (dwell re-arm delay) | Shipped (settings slider) | Partial (controller supports it; Swift does not sync the setting yet) |
+| Select key / switch press | Shipped (Space/Enter/F1–F12 bindings) | Shipped (bindings via settings sync) |
+| Rest mode toggle | Shipped (FAB is dwell/focus-reachable; rest key; **hold Select 2 s to resume**) | Partial (rest key + pause bridge; hold-to-resume needs bridge sync) |
+| Per-target selection debounce (#118) | Shipped (+ reject haptic) | Partial (shared logic available; not wired everywhere) |
+| Selection highlight (#120) | Shipped (Screens, Typing Screen and compact Phrase row; inset black/white ring) | Shipped (Screens, Typing tray, Settings > Accessibility; updated ring/timer need device verification) |
+| Select on touch-down (#110) | Shipped (Buttons, Typing action strip, Play/Stop; grids stop scrolling) | None |
+| Swipe between Pages (#121) | Shipped (opt-in; Screen page order, Run mode) | None |
+| Hold-to-select duration | Shipped | Partial |
+| Auditory fishing (speak on hover) | Shipped | None |
+| Haptic feedback | Shipped (confirm/reject/scan-tick events) | None (UIKit haptics not wired) |
+| Switch scanning (#112–#114) | None ([#226](https://github.com/Jdreioe/Wingmate/issues/226)) | Shipped (native Swift scanning UI) |
+| Auditory scanning prompts (#113) | None | None |
+| Gaze input (native TD-I13) (#123–#129) | Planned | Planned |
+| Head tracking providers (#125) | Planned | Planned |
+| External gaze-provider boundary (#126) | Planned | Planned |
+| Screen-reader operability of core speak flow | Partial — labels/i18n fixes tracked in #225; end-to-end audit: [#228](https://github.com/Jdreioe/Wingmate/issues/228) | Same as Android |
+| Undo for destructive phrase actions | Shipped (snackbar undo incl. sub-items) | None |
+| Print/PDF low-tech board fallback ([#227](https://github.com/Jdreioe/Wingmate/issues/227)) | Shipped (Screen menu → Print (PDF): one sheet per Page, links name their page) | Planned |
 
 ## Deliberate non-goals (recorded 2026-08)
 
