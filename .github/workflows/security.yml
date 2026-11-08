@@ -57,6 +57,24 @@ jobs:
           cache-provider: basic
       - name: Compile, lint, and test Android
         run: bash ci_scripts/verify_android.sh
+
+  # Runs beside Android verification instead of after it; the emulator suite
+  # only needs the debug and test APKs, not lint or the JVM tests.
+  android-ui-tests:
+    name: Android UI tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      - name: Build the app and test APKs
+        run: ./gradlew :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest --build-cache --parallel --max-workers=4 --console=plain
       - name: Enable KVM for the Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -71,7 +89,7 @@ jobs:
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew :androidApp:connectedDebugAndroidTest --console=plain
+          script: ./gradlew :androidApp:connectedDebugAndroidTest --build-cache --console=plain
       - name: Upload Android UI test failure reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -98,7 +116,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
-      # Kotlin/Native toolchain and platform libraries, as in desktop.yml.
+      # Kotlin/Native toolchain and platform libraries.
       - id: konan
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -114,10 +132,14 @@ jobs:
           else
             target=IosX64
           fi
-          ./gradlew ":shared:linkDebugFramework${target}" --console=plain
-      - name: Build the Swift app and run Swift tests
+          ./gradlew ":shared:linkDebugFramework${target}" --build-cache --console=plain
+      - name: Build the Swift app and tests (run the tests on main)
         shell: bash
         run: bash ci_scripts/verify_ios.sh
+        env:
+          # Booting a simulator costs ~6 minutes on hosted runners, so pull
+          # requests compile the app and tests; main runs the tests.
+          WINGMATE_IOS_BUILD_ONLY: ${{ github.event_name == 'pull_request' && '1' || '' }}
       - name: Save the Kotlin/Native cache
         if: github.event_name != 'pull_request' && steps.konan.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
