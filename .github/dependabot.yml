@@ -4,8 +4,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
       github-actions:
@@ -15,8 +14,7 @@ updates:
   - package-ecosystem: gradle
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 10
     ignore:
       - dependency-name: "org.bouncycastle:bcprov-jdk18on"
@@ -111,9 +109,13 @@ updates:
   - package-ecosystem: npm
     directory: /infra/opensymbols-proxy
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
     open-pull-requests-limit: 5
+    ignore:
+      # Dev-only types published almost daily with the date as the minor
+      # version (5.20261030.1); only major updates are worth a PR.
+      - dependency-name: "@cloudflare/workers-types"
+        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
     groups:
       npm-minor-patch:
         patterns: ["*"]
