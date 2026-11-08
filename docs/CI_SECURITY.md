@@ -7,7 +7,7 @@ affected surface directly.
 | Job | What it exercises | Failure policy |
 | --- | --- | --- |
 | Android verification | Debug compilation, lint, JVM/unit tests, and focused emulator UI tests | Any failure blocks the check |
-| iOS verification | Kotlin/Native simulator framework linking, Swift app compilation, and Swift unit tests | Any failure blocks the check |
+| iOS verification | Kotlin/Native simulator framework linking and Swift app and test compilation; Swift unit tests run on pushes to `main` | Any failure blocks the check |
 | OpenSymbols Worker verification | Clean npm install, high-or-critical npm audit, Vitest, and TypeScript checking | High-or-critical vulnerabilities or build/test failures block the check |
 | Dependency vulnerability review | Dependency changes reported by GitHub for Gradle, npm, and workflow actions | Newly introduced high-or-critical vulnerabilities block the check |
 | Repository secret scan | Gitleaks over changed commits on PRs/pushes and the full fetched history weekly, with reports and PR comments disabled | High-confidence committed credentials block the check |

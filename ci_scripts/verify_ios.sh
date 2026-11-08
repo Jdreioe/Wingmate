@@ -13,7 +13,14 @@ if [[ -z "$simulator_id" ]]; then
   exit 1
 fi
 
-exec xcodebuild test \
+# WINGMATE_IOS_BUILD_ONLY=1 compiles the app and test bundle without booting
+# the simulator; the destination only selects the simulator SDK and arch.
+action=test
+if [[ "${WINGMATE_IOS_BUILD_ONLY:-}" == "1" ]]; then
+  action=build-for-testing
+fi
+
+exec xcodebuild "$action" \
   -project iosApp/iosApp.xcodeproj \
   -scheme iosApp \
   -configuration Debug \
