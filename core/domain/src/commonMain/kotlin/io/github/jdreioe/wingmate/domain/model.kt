@@ -122,8 +122,6 @@ data class Settings(
     val secondaryLanguage: String = "",
     // TTS engine selection
     val ttsEngine: TtsEngine = TtsEngine.SYSTEM,
-    // Reserved for a future desktop client: route TTS audio to a virtual microphone.
-    val virtualMicEnabled: Boolean = false,
     // UI scaling settings (multipliers)
     val fontSizeScale: Float = 1.0f,
     val playbackIconScale: Float = 1.0f,
@@ -143,8 +141,6 @@ data class Settings(
     val startupMode: StartupMode = StartupMode.Keyboard,
     // Optional screen set opened directly when startupMode is Screens.
     val startupBoardSetId: String? = null,
-    // Partner window display (TD-I13 via FTDI FT232H) — desktop only
-    val partnerWindowEnabled: Boolean = false,
     // Optional product analytics (Aptabase on Android). Default is opt-out.
     val featureUsageReportingEnabled: Boolean = false,
     // Accessibility settings (OpenAAC)

@@ -24,8 +24,8 @@ A Screen is a named set of linked Pages. Wingmate can create, duplicate, rename,
 lock, edit, import, export, and delete Screens. It reads OBF and OBZ and exports
 Screens as OBZ.
 
-**Import speech** accepts pasted text on Android and iOS from the Screens library,
-and on desktop from Settings > Screens. Blank lines separate paragraphs into
+**Import speech** accepts pasted text on Android and iOS from the Screens library.
+Blank lines separate paragraphs into
 Buttons; Markdown headings name sections without being spoken. A preview lets
 you edit paragraph breaks and choose 1–8 paragraphs per Page before saving.
 The resulting Screen stays editable, with full-paragraph speech, short labels,
@@ -72,11 +72,8 @@ hold and dwell activation, repeated-selection suppression, timed highlighting,
 an optional selection sound, auditory exploration, a Select key, Rest mode, and
 switch scanning where the native client exposes it.
 
-Operating-system eye and head tracking work as pointer input. The Linux desktop
-development client also offers native Tobii gaze and experimental local webcam
-gaze with calibration and validation. Other clients retain OS input paths. See
-[Pointer input and Rest mode](HEAD_EYE_TRACKING.md) and
-[webcam limitations and hardware validation status](WEBCAM_GAZE.md).
+Operating-system eye and head tracking work as pointer input. See
+[Pointer input and Rest mode](HEAD_EYE_TRACKING.md).
 
 Editing access can protect vocabulary changes while leaving communication
 available. Individual Screens can also be frozen against editing. Coverage and
@@ -107,22 +104,10 @@ provide account-based or automatic cross-device synchronization.
 | --- | --- | --- |
 | Android | Jetpack Compose | Optional Aptabase reporting, bulk ARASAAC symbol download, native sharing, and external or supported rear displays. |
 | iPhone and iPad | SwiftUI | Native Photos and recording flows, VoiceOver, configurable scanning areas, and OS Eye Tracking, Head Tracking, Switch Control, and Voice Control. Hardware secondary display is not exposed. |
-| Desktop (in development) | Rust with `iced` | Single native binary with no JVM; system TTS only. Not a supported client — see below. |
 
 See [supported platforms](PLATFORM_SUPPORT.md).
 
-### Desktop, in development
-
-The desktop client in `desktopApp/` runs the shared Kotlin core as a
-Kotlin/Native static library. Today it imports OBF and OBZ files, reopens recent
-files, navigates linked Pages, creates and edits Screens, composes and speaks a
-Message through the operating system's own voice, holds a Message, edits the
-pronunciation dictionary and a small set of settings, and creates or restores a
-version-1 backup. Communication targets support dwell, a Select key, and Rest
-mode, and Linux adds native Tobii and experimental webcam gaze; coverage is
-partial, as recorded in the [accessibility matrix](ACCESSIBILITY_MATRIX.md). It
-has no Typing workspace and no cloud voices. Track it in
-[#268](https://github.com/Jdreioe/Wingmate/issues/268).
+The paused desktop client is preserved at the [`desktop-archive`](https://github.com/Jdreioe/Wingmate/tree/desktop-archive) tag.
 
 ## Current parity limits
 

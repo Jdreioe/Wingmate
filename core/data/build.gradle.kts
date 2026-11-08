@@ -21,10 +21,6 @@ kotlin {
     iosX64()
     iosArm64()
     iosSimulatorArm64()
-    linuxX64()
-    mingwX64()
-    macosX64()
-    macosArm64()
 
     sourceSets {
         val commonMain by getting {

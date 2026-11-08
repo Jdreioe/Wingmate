@@ -1,8 +1,7 @@
 # Local predictions
 
 Android's Typing and Screens workspaces and the iOS prediction bridge use one
-`LocalTextPredictionService` per application process. Desktop currently has no
-text-prediction caller. Typing's existing debug-build restriction remains.
+`LocalTextPredictionService` per application process. Typing's existing debug-build restriction remains.
 
 Callers observe `TextPredictionService.predictions(text, maxWords, maxLetters)`.
 The first observation starts loading. All observers share that work, and closing

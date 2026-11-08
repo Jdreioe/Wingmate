@@ -33,9 +33,6 @@ local.properties
 service-account.json
 androidApp/release/
 
-## Desktop
-desktopApp/target/
-
 ## iOS / Xcode
 iosApp/iosApp.xcodeproj/xcuserdata/
 iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/

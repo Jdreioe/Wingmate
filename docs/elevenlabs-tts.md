@@ -44,7 +44,7 @@ fallback remains available when cloud speech fails. Account quotas and provider
 retention policies apply; Wingmate does not request enterprise-only zero retention.
 Removing a key does not delete cached audio, History, or ElevenLabs account data.
 
-Desktop has no cloud speech adapter; this source is available on Android and iOS.
+This source is available on Android and iOS.
 
 References: [account voices](https://elevenlabs.io/docs/api-reference/voices/search),
 [synthesis API](https://elevenlabs.io/docs/api-reference/text-to-speech/convert),

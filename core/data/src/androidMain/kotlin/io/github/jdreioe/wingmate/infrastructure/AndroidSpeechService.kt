@@ -667,7 +667,7 @@ class AndroidSpeechService(
                     showDefaultVoiceWarning()
                 }
 
-                // Determine effective language similar to desktop implementation
+                // Prefer the voice's selected language, then the app's, then the voice's primary one.
                 val effectiveLang =
                     v.selectedLanguage.takeIf(String::isNotBlank)
                         ?: uiSettings?.primaryLanguage?.takeIf(String::isNotBlank)

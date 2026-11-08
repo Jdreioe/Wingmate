@@ -10,10 +10,8 @@ acceptance testing.
 | Android | Jetpack Compose | Supported | Supported | Required for shared features and native Android UX |
 | iOS | SwiftUI with the shared Kotlin bridge | Supported | Supported | Required for shared features; native UI and accessibility work must be included |
 
-Wingmate is rebuilding a cross-platform desktop client (`desktopApp/`, Rust +
-`iced`, Windows + macOS + Linux) on the shared Kotlin core through a
-Kotlin/Native C API; see #268. It is in development and is not
-yet a supported client.
+Desktop development is paused. The Rust client and its Linux gaze work are
+preserved at the [`desktop-archive`](https://github.com/Jdreioe/Wingmate/tree/desktop-archive) tag.
 
 ## Feature acceptance policy
 
@@ -25,8 +23,7 @@ yet a supported client.
   Android and iOS or document a deliberate platform exception.
 - Screen, symbol, layout, and customization issues are complete only when their
   released shared behavior works in Android and iOS SwiftUI.
-- Jetpack Compose UI behavior is verified on Android. The desktop client's
-  native `iced` UI is not part of feature acceptance until it is supported.
+- Jetpack Compose UI behavior is verified on Android.
 - iOS features must expose the required data and operations through the shared
   bridge and provide equivalent SwiftUI and VoiceOver behavior.
 - Hardware-specific features may remain native when they use a platform adapter
@@ -37,15 +34,3 @@ yet a supported client.
 
 This document describes product support scope, not a promise that every existing
 feature has already reached full parity.
-
-Linux desktop native gaze is an intentional hardware capability exception:
-fullscreen Screen selection, USB discovery, Access settings, opt-in live
-diagnostics and optional startup of the bundled `tobiifreed` are implemented.
-Android, iOS, macOS and Windows retain their OS input paths. TD-I13 hardware,
-calibration and release AppImage verification remain required before claiming
-production support; see [setup](HEAD_EYE_TRACKING.md).
-
-Linux x86_64 desktop also implements experimental webcam gaze through a local
-EyeTrax runtime. Camera selection, calibration and validation use native UI;
-selection reuses the gaze runner. Real-camera AAC accuracy remains unverified.
-See [webcam setup and evaluation](WEBCAM_GAZE.md).
