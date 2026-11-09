@@ -23,7 +23,7 @@ kotlin {
             dependencies {
                 api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 implementation(libs.kotlinx.serialization.json)
-                implementation("io.github.oshai:kotlin-logging:8.0.4")
+                implementation("io.github.oshai:kotlin-logging:8.0.6")
             }
         }
         val commonTest by getting {
