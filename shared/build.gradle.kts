@@ -49,7 +49,7 @@ kotlin {
                 implementation(libs.okio)
 
                 // MVIKotlin for BLoC pattern
-                val mviKotlinVersion = "3.3.0"
+                val mviKotlinVersion = "4.4.0"
                 implementation("com.arkivanov.mvikotlin:mvikotlin:$mviKotlinVersion")
                 implementation("com.arkivanov.mvikotlin:mvikotlin-main:$mviKotlinVersion")
                 implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:$mviKotlinVersion")
