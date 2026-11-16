@@ -4,9 +4,17 @@ import io.github.jdreioe.wingmate.application.BackupManager
 import io.github.jdreioe.wingmate.application.BackupOperationStatus
 import io.github.jdreioe.wingmate.application.BackupRestoreResult
 import io.github.jdreioe.wingmate.application.BackupSharingFacade
+import io.github.jdreioe.wingmate.application.SettingsStateManager
+import io.github.jdreioe.wingmate.application.WingmateBackupPayload
+import io.github.jdreioe.wingmate.infrastructure.InMemorySettingsRepository
 import io.github.jdreioe.wingmate.platform.ShareService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -42,6 +50,42 @@ class BackupFacadeTest {
         assertEquals(BackupOperationStatus.ValidationFailure, result.status)
         assertEquals("Invalid backup", result.message)
         assertFalse(result.isRetryable)
+    }
+
+    @Test
+    fun successfulRestoreAppliesRestoredSettingsSoConsentFollowsTheBackup() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        try {
+            val repository = InMemorySettingsRepository()
+            val settings = SettingsStateManager(repository)
+            settings.updateSettings { it.copy(featureUsageReportingEnabled = true) }
+            val facade = BackupFacade(
+                backupManager = object : BackupManager {
+                    override suspend fun exportBackup(): ByteArray = byteArrayOf()
+                    override suspend fun restoreBackup(path: String): BackupRestoreResult {
+                        val restored = repository.update(repository.get().copy(featureUsageReportingEnabled = false))
+                        return BackupRestoreResult.Success(
+                            WingmateBackupPayload(
+                                boards = emptyList(),
+                                boardSets = emptyList(),
+                                phrases = emptyList(),
+                                settings = restored,
+                                voices = emptyList(),
+                                selectedVoice = null,
+                                history = emptyList(),
+                                dictionary = emptyList(),
+                            )
+                        )
+                    }
+                },
+                settingsStateManager = settings,
+            )
+
+            assertTrue(facade.restoreBackup("backup.zip").isSuccess)
+            assertFalse(settings.settings.value.featureUsageReportingEnabled)
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     @Test

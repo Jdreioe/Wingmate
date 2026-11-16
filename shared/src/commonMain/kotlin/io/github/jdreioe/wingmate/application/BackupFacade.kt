@@ -40,6 +40,7 @@ data class BackupExportResult(
 class BackupFacade(
     private val backupManager: BackupManager,
     private val predictionService: io.github.jdreioe.wingmate.domain.TextPredictionService? = null,
+    private val settingsStateManager: SettingsStateManager? = null,
 ) {
     suspend fun exportBackup(): BackupExportResult = try {
         BackupExportResult(
@@ -66,6 +67,9 @@ class BackupFacade(
         when (val result = backupManager.restoreBackup(path)) {
             is BackupRestoreResult.Success -> {
                 predictionService?.refresh()
+                // The restore writes settings around the manager; apply them so
+                // observers such as the feature usage reporter follow the restored consent.
+                settingsStateManager?.applyLoadedSettings(result.payload.settings)
                 BackupOperationResult(BackupOperationStatus.Success)
             }
             is BackupRestoreResult.Failure -> BackupOperationResult(

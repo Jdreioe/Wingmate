@@ -80,7 +80,6 @@ struct ContentView: View {
                             model: model,
                             onComplete: {
                                 model.setStartupUsesScreens(model.boardModeEnabled)
-                                model.setFeatureUsageReportingEnabled(UserDefaults.standard.bool(forKey: "analytics_enabled"))
                                 hasCompletedWelcome = true
                                 showWelcomeFlow = false
                                 UserDefaults.standard.set(true, forKey: "welcome_flow_completed")

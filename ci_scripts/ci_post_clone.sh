@@ -50,6 +50,19 @@ if [ "${CI_XCODE_CLOUD:-}" = "TRUE" ] && [ "${REQUIRE_RELEASE_TAG:-}" = "TRUE" ]
   echo "Configured $RELEASE_CHANNEL release version $RELEASE_VERSION (build $CI_BUILD_NUMBER)"
 fi
 
+# === Aptabase app key ===
+# A public client identifier (docs/SECRET_BOUNDARIES.md). Without it the app
+# keeps feature usage reporting off.
+if [ -n "${WINGMATE_APTABASE_APP_KEY:-}" ]; then
+  if ! [[ "$WINGMATE_APTABASE_APP_KEY" =~ ^A-(EU|US)-[A-Za-z0-9]+$ ]]; then
+    echo "error: WINGMATE_APTABASE_APP_KEY is not an Aptabase EU/US app key"
+    exit 1
+  fi
+  perl -pi -e "s/^APTABASE_APP_KEY =.*/APTABASE_APP_KEY = $WINGMATE_APTABASE_APP_KEY/" \
+    iosApp/Configuration/Config.xcconfig
+  echo "Configured Aptabase app key"
+fi
+
 # === JDK Setup ===
 # Xcode Cloud requires JDK 21 for Kotlin Multiplatform (jvmToolchain 21)
 install_jdk() {

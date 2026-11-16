@@ -132,7 +132,7 @@ internal fun createCoreDataModule(): Module = module {
             )
         }
         single<BackupManager> { get<CompleteBackupManager>() }
-        single { BackupFacade(get(), getOrNull()) }
+        single { BackupFacade(get(), getOrNull(), get()) }
         singleOf(::SpeechFacade)
         singleOf(::SettingsFacade)
         singleOf(::BoardsFacade)

@@ -8,7 +8,7 @@ artifacts: values compiled into them can be extracted.
 |---|---|---|
 | `OPENSYMBOLS_SECRET` | Developer-owned secret | Cloudflare Worker only, through an Infisical Worker Secret Sync |
 | OpenSymbols proxy URL | Public configuration | Android BuildConfig or iOS Info.plist build setting |
-| Aptabase app key | Public client identifier | Android BuildConfig only |
+| Aptabase app key | Public client identifier | Android BuildConfig or iOS Info.plist build setting (Xcode Cloud `WINGMATE_APTABASE_APP_KEY`) |
 | Azure Speech subscription key | User-owned secret | Android Keystore or iOS Keychain |
 | Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore or iOS Keychain |
 | Android keystore and passwords | Build secret | Android release CI process only |
@@ -24,6 +24,8 @@ Use separate folders and machine identities with least-privilege access:
   directly to the Worker. Client build identities must not read it.
 - `/ci/android`: signing keystore, signing passwords, Play service account, and
   the Aptabase app key. Only the Google Play workflow identity may read it.
+  Xcode Cloud cannot read Infisical, so its `WINGMATE_APTABASE_APP_KEY`
+  environment variable is a manual copy of the same public key.
 - `/ci/worker`: Cloudflare deployment credentials if deployment is later
   automated. The Worker runtime itself does not need these.
 
