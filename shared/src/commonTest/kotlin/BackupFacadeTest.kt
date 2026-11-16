@@ -53,7 +53,7 @@ class BackupFacadeTest {
     }
 
     @Test
-    fun successfulRestoreReloadsSettingsSoConsentFollowsTheBackup() = runTest {
+    fun successfulRestoreAppliesRestoredSettingsSoConsentFollowsTheBackup() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         try {
             val repository = InMemorySettingsRepository()
