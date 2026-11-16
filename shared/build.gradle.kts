@@ -33,6 +33,17 @@ kotlin {
         }
     }
 
+    // Apple checks each dynamic framework for its own privacy manifest, so Shared
+    // ships the app's manifest, which also covers the APIs Kotlin code uses.
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink>().configureEach {
+        if (binary is org.jetbrains.kotlin.gradle.plugin.mpp.Framework) {
+            val manifest = rootProject.file("iosApp/iosApp/PrivacyInfo.xcprivacy")
+            val framework = outputFile
+            inputs.file(manifest)
+            doLast { manifest.copyTo(framework.get().resolve("PrivacyInfo.xcprivacy"), overwrite = true) }
+        }
+    }
+
     sourceSets {
     val commonMain by getting {
             dependencies {
@@ -60,6 +71,7 @@ kotlin {
                 implementation(kotlin("test"))
                 // Fake Main dispatcher for MVIKotlin CoroutineExecutor in tests
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+                implementation(libs.ktor.client.mock)
             }
         }
         val androidMain by getting {

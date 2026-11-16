@@ -6,5 +6,9 @@ PRODUCT_BUNDLE_IDENTIFIER=com.hojmoseit.wingmate
 CURRENT_PROJECT_VERSION=109
 MARKETING_VERSION=1.6.0
 
+// Public Aptabase client identifier. Empty keeps feature usage reporting off;
+// Xcode Cloud fills it from WINGMATE_APTABASE_APP_KEY in ci_post_clone.sh.
+APTABASE_APP_KEY =
+
 // Public endpoint only. The OpenSymbols secret is stored in the Worker.
 OPEN_SYMBOLS_PROXY_URL = https:/$()/wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev

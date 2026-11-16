@@ -1,6 +1,6 @@
 # Privacy Policy for Wingmate
 
-**Last Updated: November 8, 2026**
+**Last Updated: November 16, 2026**
 
 Wingmate ("the App") is committed to protecting your privacy. This Privacy Policy explains how we handle your information.
 
@@ -23,14 +23,15 @@ Wingmate uses third-party services to convert text into speech:
 - **ElevenLabs**: When selected, text is sent directly to ElevenLabs using your own API key. The key stays in Android Keystore-backed storage or iOS Keychain and is excluded from Wingmate backups. ElevenLabs account terms, usage limits, and retention policies apply, including provider-side generation history.
 - **System Voices**: If you use your device's built-in text-to-speech engine, data handling is subject to your operating system's privacy policy (e.g., Google's on Android, Apple's on iOS).
 
-### 1.3 Optional Feature Usage Reporting (Android)
-Wingmate includes optional, **opt-in** feature usage reporting on Android using Aptabase.
+### 1.3 Optional Feature Usage Reporting
+Wingmate includes optional, **opt-in** feature usage reporting on Android and iOS using Aptabase.
 
 - **Default state**: Disabled by default.
 - **Control**: You can enable or disable this at any time in Settings.
-- **What may be reported**: Anonymous feature interaction events, such as opening screens, playback button usage, phrase/category management actions, board import/board editor actions, and voice/language/settings changes.
+- **What may be reported**: Anonymous feature interaction events, such as opening screens, playback button usage, phrase/category management actions, board import/board editor actions, and voice/language/settings changes, together with the app version, operating system and version, device language, and (on Android) device model.
 - **What is not reported**: Phrase text, vocalization text, Azure keys, board JSON content, and local file paths.
 - **Purpose**: To understand which features are used and improve app quality.
+- **Approximate location**: Aptabase derives a country and region from the connection's IP address and stores those; it never stores the IP address itself.
 - **Provider privacy model**: Aptabase does not use device identifiers, cookies, fingerprinting, or long-term user identification for these anonymous events.
 
 ## 2. Data Storage

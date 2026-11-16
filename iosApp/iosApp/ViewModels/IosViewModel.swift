@@ -375,7 +375,11 @@ final class IosViewModel: ObservableObject {
 
     func start() async {
         await MainActor.run {
-            IosDiBridge().start(deviceSpeech: SystemTtsManager.shared, openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl())
+            IosDiBridge().start(
+                deviceSpeech: SystemTtsManager.shared,
+                openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
+                aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
+            )
         }
         sessionSubscription?.cancel()
         sessionSubscription = session.observe { [weak self] state in

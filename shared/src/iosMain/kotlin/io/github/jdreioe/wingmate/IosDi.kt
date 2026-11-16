@@ -14,6 +14,12 @@ import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
+import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.infrastructure.AptabaseEndpoint
+import io.github.jdreioe.wingmate.application.SettingsStateManager
+import io.github.jdreioe.wingmate.infrastructure.AptabaseFeatureUsageReporter
+import io.github.jdreioe.wingmate.infrastructure.iosAptabaseSystemProps
+import kotlinx.coroutines.flow.map
 import io.github.jdreioe.wingmate.infrastructure.IosBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.IosBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.IosCommunicationSessionDataSource
@@ -57,7 +63,7 @@ import org.koin.dsl.module
 
 // Every iOS platform binding (persistence, HTTP, speech, sharing, files), overriding the
 // in-memory defaults from initKoin.
-private fun iosModule(deviceSpeech: IosDeviceSpeech) =
+private fun iosModule(deviceSpeech: IosDeviceSpeech, aptabaseEndpoint: AptabaseEndpoint?) =
     module(createdAtStart = false) {
         // Ktor client for iOS (Darwin engine)
         single<HttpClient> {
@@ -108,6 +114,18 @@ private fun iosModule(deviceSpeech: IosDeviceSpeech) =
         singleOf(::IosFilePicker) { bind<FilePicker>() }
         // Usage-log destination for RealAacLogger (app documents dir)
         single(named("logDir")) { IosFileStorage.documentsDirectory() }
+        // Without an app key the common no-op reporter stays in place.
+        if (aptabaseEndpoint != null) {
+            val systemProps = iosAptabaseSystemProps()
+            single<FeatureUsageReporter> {
+                AptabaseFeatureUsageReporter(
+                    httpClient = get(),
+                    endpoint = aptabaseEndpoint,
+                    systemProps = systemProps,
+                    consent = get<SettingsStateManager>().settings.map { it.featureUsageReportingEnabled },
+                )
+            }
+        }
     }
 
 /**
@@ -115,11 +133,14 @@ private fun iosModule(deviceSpeech: IosDeviceSpeech) =
  * calls [start] once on the main thread; Swift then resolves feature facades here.
  */
 class IosDiBridge {
-    /** Starts the shared graph with iOS bindings. Later calls are ignored. */
-    fun start(deviceSpeech: IosDeviceSpeech, openSymbolsProxyUrl: String?) {
+    /**
+     * Starts the shared graph with iOS bindings. Later calls are ignored.
+     * [aptabaseAppKey] enables opt-in feature usage reporting; blank leaves it off.
+     */
+    fun start(deviceSpeech: IosDeviceSpeech, openSymbolsProxyUrl: String?, aptabaseAppKey: String?) {
         if (KoinPlatform.getKoinOrNull() != null) return
         OpenSymbolsClient.setProxyBaseUrl(openSymbolsProxyUrl)
-        initKoin(iosModule(deviceSpeech))
+        initKoin(iosModule(deviceSpeech, AptabaseEndpoint.fromAppKey(aptabaseAppKey)))
     }
 
     fun backupFacade(): BackupSharingFacade = KoinPlatform.getKoin().get()

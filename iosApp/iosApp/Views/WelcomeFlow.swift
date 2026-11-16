@@ -16,7 +16,6 @@ struct WelcomeFlow: View {
     @State private var pendingLanguageSelection = false
     @State private var languageOptions: [String] = []
     @State private var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
-    @State private var analyticsEnabled: Bool = UserDefaults.standard.bool(forKey: "analytics_enabled")
     @State private var importingBackup = false
     @State private var confirmRestoreURL: URL? = nil
     @State private var restoreStatus: String? = nil
@@ -596,7 +595,11 @@ struct WelcomeFlow: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Toggle(isOn: $analyticsEnabled) {
+            // Bound to the shared setting, like Settings, so both screens show the same consent.
+            Toggle(isOn: Binding(
+                get: { model.featureUsageReportingEnabled },
+                set: { model.setFeatureUsageReportingEnabled($0) }
+            )) {
                 Text(NSLocalizedString("welcome_analytics.opt_in", comment: ""))
                     .font(.headline)
             }
@@ -605,9 +608,6 @@ struct WelcomeFlow: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(.secondarySystemBackground))
             )
-            .onChange(of: analyticsEnabled) { _, val in
-                UserDefaults.standard.set(val, forKey: "analytics_enabled")
-            }
         }
     }
 

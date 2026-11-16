@@ -4,6 +4,8 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>APTABASE_APP_KEY</key>
+	<string>$(APTABASE_APP_KEY)</string>
 	<key>OPEN_SYMBOLS_PROXY_URL</key>
 	<string>$(OPEN_SYMBOLS_PROXY_URL)</string>
 </dict>

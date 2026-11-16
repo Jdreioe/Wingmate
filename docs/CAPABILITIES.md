@@ -102,8 +102,10 @@ provide account-based or automatic cross-device synchronization.
 
 | Client | Native UI | Notable platform-specific behavior |
 | --- | --- | --- |
-| Android | Jetpack Compose | Optional Aptabase reporting, bulk ARASAAC symbol download, native sharing, and external or supported rear displays. |
+| Android | Jetpack Compose | Bulk ARASAAC symbol download, native sharing, and external or supported rear displays. |
 | iPhone and iPad | SwiftUI | Native Photos and recording flows, VoiceOver, configurable scanning areas, and OS Eye Tracking, Head Tracking, Switch Control, and Voice Control. Hardware secondary display is not exposed. |
+
+Both clients offer the same opt-in, anonymous Aptabase feature usage reporting.
 
 See [supported platforms](PLATFORM_SUPPORT.md).
 
