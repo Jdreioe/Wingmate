@@ -25,9 +25,9 @@ kotlin {
                 implementation(project(":feature:communication:data"))
                 implementation(project(":core:presentation"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin:3.3.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-main:3.3.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:3.3.0")
+                implementation("com.arkivanov.mvikotlin:mvikotlin:4.4.0")
+                implementation("com.arkivanov.mvikotlin:mvikotlin-main:4.4.0")
+                implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:4.4.0")
             }
         }
         val commonTest by getting {
