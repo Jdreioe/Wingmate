@@ -58,11 +58,6 @@ class SettingsStateManager(
     fun getCurrentSettings(): Settings = _settings.value
 
     /** Applies settings that another trusted startup/restore read already loaded. */
-    /** Re-reads settings written around this manager, such as by a backup restore. */
-    suspend fun reload() {
-        _settings.value = settingsRepository.get()
-    }
-
     fun applyLoadedSettings(settings: Settings) {
         _settings.value = settings
     }

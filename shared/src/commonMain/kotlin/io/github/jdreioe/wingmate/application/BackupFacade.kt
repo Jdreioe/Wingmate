@@ -67,9 +67,9 @@ class BackupFacade(
         when (val result = backupManager.restoreBackup(path)) {
             is BackupRestoreResult.Success -> {
                 predictionService?.refresh()
-                // Restored settings bypass the manager; reload so observers such as
-                // the feature usage reporter follow the restored consent.
-                settingsStateManager?.reload()
+                // The restore writes settings around the manager; apply them so
+                // observers such as the feature usage reporter follow the restored consent.
+                settingsStateManager?.applyLoadedSettings(result.payload.settings)
                 BackupOperationResult(BackupOperationStatus.Success)
             }
             is BackupRestoreResult.Failure -> BackupOperationResult(
