@@ -68,12 +68,12 @@ struct TypingWorkspaceView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            // Use the resting (pre-keyboard) height so raising the on-screen keyboard on
-            // unfolded iPhone Duo landscape never flips the workspace back to compact mode.
+            // Decide wide vs compact from the full window height (ignoring the keyboard inset)
+            // so raising the on-screen keyboard on unfolded Duo landscape never flips layouts.
             let wide = WindowLayoutClass.usesWideTyping(
                 size: proxy.size,
                 restingHeight: restingHeight,
-                keyboardVisible: onScreenKeyboard
+                keyboardVisible: onScreenKeyboard || restingHeight > proxy.size.height
             )
             let foldDivision = proxy.activeFoldDivision
             let bottomInset = proxy.safeAreaInsets.bottom
@@ -85,17 +85,20 @@ struct TypingWorkspaceView: View {
                     compactTypingLayout(bottomSafeInset: bottomInset)
                 }
             }
+            .onChange(of: wide) { _, newWide in
+                isWideWindow = newWide
+            }
             .onAppear {
-                if !onScreenKeyboard { restingHeight = proxy.size.height }
-                isWideWindow = WindowLayoutClass.usesWideTyping(
-                    size: CGSize(width: proxy.size.width, height: max(proxy.size.height, restingHeight))
-                )
+                isWideWindow = wide
             }
-            .onChange(of: proxy.size) { _, newSize in
-                if !onScreenKeyboard { restingHeight = newSize.height }
-                let h = onScreenKeyboard ? max(newSize.height, restingHeight) : newSize.height
-                isWideWindow = WindowLayoutClass.usesWideTyping(size: CGSize(width: newSize.width, height: h))
+        }
+        .background {
+            GeometryReader { windowProxy in
+                Color.clear
+                    .onAppear { restingHeight = windowProxy.size.height }
+                    .onChange(of: windowProxy.size.height) { _, h in restingHeight = h }
             }
+            .ignoresSafeArea(.keyboard)
         }
         // On compact windows the app bar gives way to the Message while the keyboard is up.
         .toolbar((!isWideWindow && onScreenKeyboard) ? .hidden : .visible, for: .navigationBar)
