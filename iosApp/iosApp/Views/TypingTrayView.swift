@@ -25,14 +25,22 @@ struct TypingTrayView: View {
     let onEditPhrase: (Shared.Phrase) -> Void
     let requestMic: (String) -> Void
     let onShowKeyboard: () -> Void
+    /// False in the wide layout, where the Action buttons live in the side control panel.
+    var showActionStrip: Bool = true
 
     @AccessibilityFocusState private var focusedPage: TypingPage?
     @State private var categoryMenu: Shared.Phrase? = nil
     @State private var confirmDeleteCategory: Shared.Phrase? = nil
 
+    private var visibleElements: [Shared.TypingTrayElement] {
+        showActionStrip
+            ? tray.elements
+            : tray.elements.filter { $0.kind.name != "ActionStrip" }
+    }
+
     var body: some View {
         TypingTrayLayout(columns: max(1, Int(tray.gridColumns))) {
-            ForEach(Array(tray.elements.enumerated()), id: \.offset) { _, element in
+            ForEach(Array(visibleElements.enumerated()), id: \.offset) { _, element in
                 elementView(element)
                     .layoutValue(
                         key: TrayPlacement.self,
@@ -300,10 +308,34 @@ struct TypingActionStrip: View {
     }
 }
 
-private struct TypingActionButton: View {
+/// Two-column Action grid for the wide Typing side panel (unfolded iPhone Duo and iPad).
+struct TypingActionGrid: View {
+    @ObservedObject var model: IosViewModel
+    let actions: [Shared.TypingTrayAction]
+    let onShowKeyboard: () -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(actions, id: \.id) { action in
+                TypingActionButton(model: model, action: action, onShowKeyboard: onShowKeyboard, fillsWidth: true)
+                    .frame(height: 56)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+    }
+}
+
+struct TypingActionButton: View {
     @ObservedObject var model: IosViewModel
     let action: Shared.TypingTrayAction
     let onShowKeyboard: () -> Void
+    var fillsWidth: Bool = false
 
     private var single: Shared.TypingEffectKind? {
         action.effects.count == 1 ? action.effects.first?.kind : nil
@@ -360,8 +392,8 @@ private struct TypingActionButton: View {
                     .font(isSsml ? .system(.body, design: .monospaced) : .body.weight(.medium))
                     .lineLimit(1)
             }
-            .padding(.horizontal, isSsml ? 14 : 16)
-            .frame(maxHeight: .infinity)
+            .padding(.horizontal, isSsml ? 12 : 14)
+            .frame(maxWidth: fillsWidth ? .infinity : nil, maxHeight: .infinity)
             .frame(minWidth: 44)
             .background {
                 if isSsml {

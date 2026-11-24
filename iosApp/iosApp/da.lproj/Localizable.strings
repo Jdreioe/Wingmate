@@ -579,6 +579,7 @@
 
 /* Typing composer */
 "typing.show_keyboard" = "Vis tastatur";
+"typing.hide_keyboard" = "Skjul tastatur";
 "typing.show_screen" = "Vis skriveskærm";
 "typing.held_message" = "Parkeret: %@";
 "typing.held_message.swap" = "Byt";
@@ -680,3 +681,14 @@
 "settings.pointer_emphasis.style" = "Markørstil";
 "settings.pointer_emphasis.system" = "System";
 "settings.pointer_emphasis.title" = "Markørfremhævning";
+
+/* Partner display (outward / external display) */
+"settings.partner_display.section" = "Partnerskærm";
+"settings.partner_display.mode" = "Vis på partnerskærm";
+"settings.partner_display.off" = "Fra";
+"settings.partner_display.when_speaking" = "Kun ved oplæsning";
+"settings.partner_display.while_communicating" = "Under skrivning og oplæsning";
+"settings.partner_display.footer" = "Viser din besked med stor tekst på en tilsluttet ekstern eller udadvendt partnerskærm, når enheden er åben. Skjules under opsætning, indstillinger, PIN-kode og redigering af skærme.";
+"partner_display.speaking" = "Taler";
+"toolbar.partner_display.pause" = "Skjul partnerskærm";
+"toolbar.partner_display.resume" = "Vis på partnerskærm";

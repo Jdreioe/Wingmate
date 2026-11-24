@@ -336,17 +336,22 @@ struct VoiceRow: View {
 /// onto another Phrase's place. VoiceOver gets the same actions, including moves.
 struct PhraseItemView: View {
     @ObservedObject var model: IosViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let phrase: Shared.Phrase
     let recorder: AudioRecorder
     /// False for History and while hold-to-select owns long presses.
     let editable: Bool
-    var minHeight: CGFloat = UIDevice.current.userInterfaceIdiom == .pad ? 120 : 88
+    var minHeight: CGFloat? = nil
     let onEdit: () -> Void
     let requestMic: (String) -> Void
     let onDelete: (String) -> Void
     var onMoveEarlier: (() -> Void)? = nil
     var onMoveLater: (() -> Void)? = nil
     var onDrop: ((String) -> Void)? = nil
+
+    private var resolvedMinHeight: CGFloat {
+        minHeight ?? WindowLayoutClass.phraseTileMinHeight(isLarge: horizontalSizeClass == .regular)
+    }
 
     var body: some View {
         let bgHex = phrase.backgroundColor ?? "#00000000"
@@ -399,7 +404,7 @@ struct PhraseItemView: View {
                 }
             }
             .padding(12)
-            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: resolvedMinHeight, alignment: .topLeading)
             .background(tileShape.fill(model.highContrastMode ? Color(.systemBackground) : bgColor))
             .overlay {
                 if model.highContrastMode { tileShape.stroke(Color.primary, lineWidth: 2) }
