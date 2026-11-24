@@ -11,6 +11,8 @@ import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.MAX_MESSAGE_BAR_ACTIONS
+import io.github.jdreioe.wingmate.domain.obf.MessageBarAction
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
@@ -67,6 +69,8 @@ data class IosResolvedBoardSettings(
     val activationBehavior: String,
     val returnBehavior: String,
     val speechPolicy: String? = null,
+    /** [MessageBarAction] names, in order: `Speak`, `Hold`, `DeleteLast`, `Clear`. */
+    val messageBarActions: List<String> = emptyList(),
 )
 
 data class IosBoardCell(
@@ -323,6 +327,7 @@ class BoardsFacade(
             activationBehavior = resolved.activationBehavior.name,
             returnBehavior = resolved.returnBehavior.name,
             speechPolicy = resolved.speechPolicy?.name,
+            messageBarActions = resolved.messageBarActions.map { it.name },
         )
     }
 
@@ -602,6 +607,11 @@ class BoardsFacade(
         val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
         if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
         if (boardId !in graph.boardSet.boardIds) throw NativeFailure(NativeFailureKind.NotFound)
+        val current = if (forPage) {
+            graph.boardsById[boardId]?.pageSettingsOverrides()
+        } else {
+            graph.boardSet.screenSettings
+        } ?: BoardSettingsOverrides()
         val overrides = BoardSettingsOverrides(
             showLabels = showLabels.toOptionalBoolean(),
             showSymbols = showSymbols.toOptionalBoolean(),
@@ -612,6 +622,8 @@ class BoardsFacade(
             activationBehavior = activationBehavior.toActivation(),
             returnBehavior = returnBehavior.toReturnBehavior(),
             cacheSpeech = cacheSpeech.toOptionalBoolean(),
+            // Edited on the Screen itself, not in this form.
+            messageBarActions = current.messageBarActions,
         )
         val updated = if (forPage) {
             val board = graph.boardsById[boardId] ?: throw NativeFailure(NativeFailureKind.NotFound)
@@ -622,6 +634,22 @@ class BoardsFacade(
             graph.copy(boardSet = graph.boardSet.copy(screenSettings = overrides))
         }
         boardSetUseCase.saveBoardSetGraph(updated).getOrElse { throw NativeFailure(NativeFailureKind.Persistence) }
+    }
+
+    /**
+     * Sets the Screen's message bar buttons, in order. Takes [MessageBarAction] names;
+     * unknown names are rejected, and duplicates or more than four are dropped.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateMessageBarActions(boardSetId: String, actions: List<String>) = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
+        val parsed = actions.map { name ->
+            MessageBarAction.entries.firstOrNull { it.name == name } ?: throw NativeFailure(NativeFailureKind.Validation)
+        }.distinct().take(MAX_MESSAGE_BAR_ACTIONS)
+        val screen = graph.boardSet.screenSettings.copy(messageBarActions = parsed)
+        boardSetUseCase.saveBoardSetGraph(graph.copy(boardSet = graph.boardSet.copy(screenSettings = screen)))
+            .getOrElse { throw NativeFailure(NativeFailureKind.Persistence) }
     }
 
     @Throws(NativeFailure::class, CancellationException::class)

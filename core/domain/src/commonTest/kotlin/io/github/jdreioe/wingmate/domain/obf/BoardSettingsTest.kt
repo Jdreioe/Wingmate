@@ -12,6 +12,22 @@ import kotlin.test.assertTrue
 class BoardSettingsTest {
 
     @Test
+    fun messageBarButtonsFallBackToTheSpeakSettingUntilAScreenChoosesThem() {
+        assertEquals(listOf(MessageBarAction.Speak), resolveBoardSettings(true, true, false).messageBarActions)
+        val noSpeak = resolveBoardSettings(true, true, false, appShowSpeakButton = false)
+        assertEquals(emptyList(), noSpeak.messageBarActions)
+
+        val screen = BoardSettingsOverrides(
+            messageBarActions = listOf(MessageBarAction.Hold, MessageBarAction.Clear, MessageBarAction.Hold),
+        )
+        val chosen = resolveBoardSettings(true, true, false, screen = screen)
+        assertEquals(listOf(MessageBarAction.Hold, MessageBarAction.Clear), chosen.messageBarActions)
+        // Speak was left out, so clients that only know the speak toggle hide it too.
+        assertFalse(chosen.showSpeakButton)
+        assertEquals(screen, decodeBoardSettings(encodeBoardSettings(screen)))
+    }
+
+    @Test
     fun speechPreloadingDefaultsOffAndPersistsAnExplicitPageOptOut() {
         val defaults = resolveBoardSettings(true, true, false)
         assertFalse(defaults.cacheSpeech)

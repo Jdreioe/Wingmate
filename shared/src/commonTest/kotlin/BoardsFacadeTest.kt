@@ -207,6 +207,25 @@ class BoardsFacadeTest {
     }
 
     @Test
+    fun messageBarButtonsAreChosenPerScreenAndSurviveTheSettingsForm() = runBlocking {
+        val facade = facade()
+        val set = facade.createBoardSet("Test", rows = 1, columns = 1)
+        assertEquals(listOf("Speak"), facade.resolveBoardSettings(set.rootBoardId).messageBarActions)
+
+        facade.updateMessageBarActions(set.id, listOf("Hold", "Speak", "Clear"))
+        facade.updateBoardSettings(
+            boardSetId = set.id, boardId = set.rootBoardId, forPage = false,
+            showLabels = "inherit", showSymbols = "inherit", labelAtTop = "inherit",
+            showMessageBar = "inherit", showSpeakButton = "inherit", messageBarEditable = "inherit",
+            activationBehavior = "inherit", returnBehavior = "inherit", cacheSpeech = "inherit",
+        )
+        assertEquals(listOf("Hold", "Speak", "Clear"), facade.resolveBoardSettings(set.rootBoardId).messageBarActions)
+
+        val unknown = assertFailsWith<NativeFailure> { facade.updateMessageBarActions(set.id, listOf("Dance")) }
+        assertEquals(NativeFailureKind.Validation, unknown.kind)
+    }
+
+    @Test
     fun screenAndPageSettingsInheritUntilOverriddenAndRejectALockedScreen() = runBlocking {
         val facade = facade()
         val set = facade.createBoardSet("Test", rows = 1, columns = 1)
