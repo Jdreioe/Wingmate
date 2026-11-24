@@ -669,7 +669,8 @@ struct SymbolBoardWorkspaceView: View {
                         workspaceMenu(boardSetId: boardSetId)
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal)
+                    // Clear of the rounded corner when it sits beside the Dynamic Island.
+                    .padding(.horizontal, horizontalSizeClass == .regular ? 16 : 28)
                     if model.boardMessageBarVisible {
                     HStack(alignment: .center, spacing: 8) {
                     ScreensMessageBar(
@@ -727,6 +728,10 @@ struct SymbolBoardWorkspaceView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden(true)
+        // With the status bar hidden, use mode's Menu row moves up beside the
+        // Dynamic Island, where the clock was. Only the top edge: in landscape the
+        // cutout is on the side and keeps its inset.
+        .ignoresSafeArea(.container, edges: mode == .run ? .top : [])
     }
 
     private func pageChip(id: String, isStartPage: Bool, isSelected: Bool) -> some View {
