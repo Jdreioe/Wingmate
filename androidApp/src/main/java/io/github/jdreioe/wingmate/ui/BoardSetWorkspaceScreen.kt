@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -114,6 +116,7 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationSession
@@ -254,11 +257,60 @@ fun BoardSetManagerRoot(
         }
     }
 
+    // Remote Screens: sync when the Screens workspace opens, and reload the library after any sync.
+    val remoteActions = koinInject<RemoteScreenActions>()
+    val remoteScope = rememberCoroutineScope()
+    LaunchedEffect(remoteActions) {
+        remoteActions.startAutoSync()
+        withContext(Dispatchers.IO) { remoteActions.syncAllAutomatic() }
+    }
+    LaunchedEffect(remoteActions, viewModel) {
+        var first = true
+        remoteActions.syncVersion.collect {
+            if (first) {
+                first = false
+            } else {
+                viewModel.onAction(BoardSetManagerAction.RetryLoad)
+            }
+        }
+    }
+    var showRemote by remember { mutableStateOf(false) }
+    var remoteTargetId by remember { mutableStateOf<String?>(null) }
+    var unlockRemote by remember { mutableStateOf(false) }
+    // Remote storage changes vocabulary, so it needs Editing access like other Screen edits.
+    fun manageRemote(target: ObfBoardSet?) {
+        remoteTargetId = target?.id
+        remoteScope.launch {
+            if (editingAccessController?.requiresUnlock() == true) unlockRemote = true
+            else showRemote = true
+        }
+    }
+    if (unlockRemote && editingAccessController != null) {
+        EditingAccessDialog(
+            controller = editingAccessController,
+            mode = EditingAccessDialogMode.Unlock,
+            onDismiss = { unlockRemote = false },
+            onSuccess = {
+                unlockRemote = false
+                showRemote = true
+            },
+        )
+    }
+    if (showRemote) {
+        RemoteScreenDialog(
+            target = state.boardSets.firstOrNull { it.id == remoteTargetId },
+            actions = remoteActions,
+            onRefresh = { viewModel.onAction(BoardSetManagerAction.RetryLoad) },
+            onDismiss = { showRemote = false },
+        )
+    }
+
     when (val route = state.route) {
         BoardSetManagerRoute.Library -> BoardSetManagerScreen(
             state = state,
             status = state.status,
             importAvailable = boardImportService != null,
+            onManageRemote = ::manageRemote,
             onAction = viewModel::onAction,
         )
         is BoardSetManagerRoute.Workspace -> BoardSetWorkspaceRoot(
@@ -352,6 +404,7 @@ internal fun BoardSetManagerScreen(
     state: BoardSetManagerState,
     status: LibraryStatus?,
     importAvailable: Boolean,
+    onManageRemote: ((ObfBoardSet?) -> Unit)? = null,
     onAction: (BoardSetManagerAction) -> Unit,
 ) {
     BoardSetLibraryScreen(
@@ -369,6 +422,7 @@ internal fun BoardSetManagerScreen(
         } else {
             null
         },
+        onManageRemote = onManageRemote,
         onOpen = { onAction(BoardSetManagerAction.OpenClicked(it.id)) },
         onEdit = { onAction(BoardSetManagerAction.EditClicked(it.id)) },
         onDuplicate = { onAction(BoardSetManagerAction.DuplicateClicked(it.id)) },
@@ -424,6 +478,7 @@ private fun BoardSetLibraryScreen(
     onImportSpeech: () -> Unit,
     onRetry: () -> Unit,
     onImport: (() -> Unit)?,
+    onManageRemote: ((ObfBoardSet?) -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
@@ -459,6 +514,14 @@ private fun BoardSetLibraryScreen(
                             Icons.Default.Settings,
                             contentDescription = stringResource(R.string.phrase_screen_app_settings)
                         )
+                    }
+                    if (onManageRemote != null) {
+                        IconButton(onClick = { onManageRemote(null) }) {
+                            Icon(
+                                Icons.Default.CloudDownload,
+                                contentDescription = stringResource(R.string.remote_screen_open),
+                            )
+                        }
                     }
                     if (onImport != null) {
                         IconButton(onClick = onImport) {
@@ -555,6 +618,7 @@ private fun BoardSetLibraryScreen(
                         items(boardSets, key = { it.id }) { boardSet ->
                             BoardSetLibraryCard(
                                 boardSet = boardSet,
+                                onManageRemote = onManageRemote?.let { manage -> { manage(boardSet) } },
                                 onOpen = { onOpen(boardSet) },
                                 onEdit = { onEdit(boardSet) },
                                 onDuplicate = { onDuplicate(boardSet) },
@@ -643,6 +707,7 @@ private val BoardSetLibraryMaxWidth = 840.dp
 @OptIn(ExperimentalMaterial3Api::class)
 private fun BoardSetLibraryCard(
     boardSet: ObfBoardSet,
+    onManageRemote: (() -> Unit)?,
     onOpen: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
@@ -661,7 +726,15 @@ private fun BoardSetLibraryCard(
             ListItem(
                 headlineContent = { Text(boardSet.name, fontWeight = FontWeight.SemiBold) },
                 supportingContent = {
-                    Text(pluralStringResource(R.plurals.board_sets_board_count, boardSet.boardIds.size, boardSet.boardIds.size))
+                    val countText = pluralStringResource(R.plurals.board_sets_board_count, boardSet.boardIds.size, boardSet.boardIds.size)
+                    val remoteText = boardSet.remoteLink?.let { link ->
+                        if (link.hasConflict) {
+                            stringResource(R.string.remote_screen_conflict_badge)
+                        } else {
+                            stringResource(R.string.remote_screen_linked_badge, link.resolvedDisplayName())
+                        }
+                    }
+                    Text(if (remoteText != null) "$countText · $remoteText" else countText)
                 },
                 leadingContent = {
                     Icon(
@@ -677,6 +750,21 @@ private fun BoardSetLibraryCard(
                     .testTag("$BOARD_SET_OPEN_TEST_TAG_PREFIX${boardSet.id}"),
             )
             Row {
+                if (onManageRemote != null) {
+                    IconButton(onClick = onManageRemote) {
+                        Icon(
+                            Icons.Default.Cloud,
+                            contentDescription = stringResource(R.string.remote_screen_title_for, boardSet.name),
+                            tint = if (boardSet.remoteLink?.hasConflict == true) {
+                                MaterialTheme.colorScheme.error
+                            } else if (boardSet.remoteLink != null) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
                 IconButton(onClick = onEdit, enabled = !boardSet.isLocked) {
                     Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.board_sets_edit))
                 }
@@ -706,6 +794,7 @@ private fun BoardSetWorkspaceRoot(
     onExitToLibrary: () -> Unit
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val remoteActions = koinInject<RemoteScreenActions>()
     val communicationSession = koinInject<CommunicationSession>()
     val communicationState by communicationSession.state.collectAsStateWithLifecycle()
     val voiceUseCase = koinInject<VoiceUseCase>()
@@ -826,6 +915,28 @@ private fun BoardSetWorkspaceRoot(
             workspaceViewModel.onAction(
                 BoardWorkspaceAction.LoadFailed(loadErrorMessage)
             )
+        }
+    }
+
+    // A remote sync replaces the Screen in Run mode. The Message lives in CommunicationSession,
+    // so it is kept; edit mode is never interrupted (RefreshGraph ignores it).
+    LaunchedEffect(boardSetId, remoteActions) {
+        var first = true
+        remoteActions.syncVersion.collect {
+            if (first) {
+                first = false
+            } else if (workspaceViewModel.state.value.mode == BoardWorkspaceMode.Run) {
+                val refreshed = runCatching {
+                    withContext(Dispatchers.Default) {
+                        useCase.loadBoardSetGraph(boardSetId)
+                            ?.takeIf { it.boardSet.kind == ScreenKind.User }
+                            ?.withHomeFieldsBottomLeft()
+                    }
+                }.getOrNull()
+                if (refreshed != null) {
+                    workspaceViewModel.onAction(BoardWorkspaceAction.RefreshGraph(refreshed))
+                }
+            }
         }
     }
 

@@ -11,6 +11,11 @@ struct BoardSetInfo: Codable, Identifiable, Equatable {
     var isLocked: Bool
     var cacheWholeSentences: Bool
     var updatedAt: TimeInterval
+    var remoteName: String? = nil
+    var remoteWritable: Bool = false
+    var remoteConflict: Bool = false
+    var remoteKind: String? = nil
+    var remoteLocation: String? = nil
 }
 
 struct ScreenPreviewCell: Identifiable, Equatable {
@@ -1452,7 +1457,12 @@ final class IosViewModel: ObservableObject {
             boardIds: set.boardIds,
             isLocked: set.isLocked,
             cacheWholeSentences: set.cacheWholeSentences,
-            updatedAt: TimeInterval(set.updatedAt) / 1_000
+            updatedAt: TimeInterval(set.updatedAt) / 1_000,
+            remoteName: set.remoteLink?.resolvedDisplayName(),
+            remoteWritable: set.remoteLink?.isWritable == true,
+            remoteConflict: set.remoteLink?.hasConflict == true,
+            remoteKind: set.remoteLink?.kind.wireValue,
+            remoteLocation: set.remoteLink?.location
         )
     }
 
@@ -1623,6 +1633,20 @@ final class IosViewModel: ObservableObject {
             return set.id
         } catch {
             return nil
+        }
+    }
+
+    /// Pulls and pushes linked Screens in the background; communication never waits on it.
+    func syncRemoteScreensAutomatic(force: Bool = false) async {
+        let actions = IosDiBridge().remoteScreenActions()
+        actions.startAutoSync()
+        do {
+            let changed = try await actions.syncAllAutomatic(force: force)
+            if changed.boolValue {
+                await loadBoardSets()
+            }
+        } catch {
+            // Automatic sync is non-blocking; communication continues offline.
         }
     }
 

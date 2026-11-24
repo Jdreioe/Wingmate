@@ -34,7 +34,8 @@ enum class BoardImportErrorCode {
     ARCHIVE_TOO_LARGE,
     COMPRESSION_RATIO_EXCEEDED,
     MEDIA_UNRESOLVED,
-    PERSISTENCE_FAILED
+    PERSISTENCE_FAILED,
+    SCREEN_CHANGED,
 }
 
 data class ObzImportLimits(

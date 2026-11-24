@@ -163,6 +163,7 @@ class CompleteBackupManager(
             },
         )
         val portable = original.copy(
+            boardSets = original.boardSets.map { it.copy(remoteLink = null) },
             boards = original.boards.map { board ->
                 board.copy(
                     images = board.images.map { it.copy(path = archivePath(it.path), url = archiveLocalUrl(it.url)) },
@@ -259,6 +260,7 @@ class CompleteBackupManager(
                 },
             )
             payload = payload.copy(
+                boardSets = payload.boardSets.map { it.copy(remoteLink = null) },
                 boards = payload.boards.map { board ->
                     board.copy(
                         images = board.images.map { it.copy(path = restored(it.path), url = restoredLocalUrl(it.url)) },

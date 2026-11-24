@@ -1,10 +1,13 @@
 import SwiftUI
+import CloudKit
 import Shared
 
 @main
 struct iOSApp: App {
     @State private var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
     @Environment(\.scenePhase) private var scenePhase
+    @UIApplicationDelegateAdaptor(WingmateAppDelegate.self) private var appDelegate
+
     // Avoid heavy work in App init to prevent a blank screen; DI is initialized on first view appearance
     var body: some Scene {
         WindowGroup {
@@ -20,5 +23,43 @@ struct iOSApp: App {
                     }
                 }
         }
+    }
+}
+
+final class WingmateAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Lightweight: only hands the Swift CloudKit and sign-in adapters to the shared module.
+        IosDiBridge().registerCloudKitScreenBridge(bridge: CloudKitScreenShareService.shared)
+        CloudDriveWebAuthentication.register()
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        // Only the main app window receives iCloud share links; other roles keep the system defaults.
+        if connectingSceneSession.role == .windowApplication {
+            configuration.delegateClass = WingmateSceneDelegate.self
+        }
+        return configuration
+    }
+}
+
+/// Receives iCloud share links for shared Screens (CKSharingSupported in Info.plist).
+final class WingmateSceneDelegate: NSObject, UIWindowSceneDelegate {
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        if let metadata = connectionOptions.cloudKitShareMetadata {
+            Task { await CloudKitScreenShareService.shared.accept(metadata) }
+        }
+    }
+
+    func windowScene(_ windowScene: UIWindowScene, userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata) {
+        Task { await CloudKitScreenShareService.shared.accept(cloudKitShareMetadata) }
     }
 }

@@ -83,6 +83,18 @@ import io.github.jdreioe.wingmate.infrastructure.RealAacLogger
 import io.github.jdreioe.wingmate.infrastructure.SymbolSearchClient
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
+import io.github.jdreioe.wingmate.application.RemoteScreenSyncUseCase
+import io.github.jdreioe.wingmate.domain.obf.RemoteScreenStorage
+import io.github.jdreioe.wingmate.domain.obf.UnsupportedCloudShareScreenStorage
+import io.github.jdreioe.wingmate.domain.obf.UnsupportedLinkedRemoteFileStorage
+import io.github.jdreioe.wingmate.domain.obf.UnsupportedRemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.infrastructure.CompositeRemoteScreenStorage
+import io.ktor.client.plugins.HttpTimeout
+import io.github.jdreioe.wingmate.domain.obf.CloudDriveFiles
+import io.github.jdreioe.wingmate.domain.obf.CloudDriveSignIn
+import io.github.jdreioe.wingmate.domain.obf.UnsupportedCloudDriveSignIn
+import io.github.jdreioe.wingmate.infrastructure.CloudDriveTokenManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.map
@@ -219,6 +231,56 @@ internal val screensModule: Module = module {
             fileStorage = getOrNull(),
             speechCache = get(),
             gridsetExporter = get(),
+            remoteCredentials = getOrNull(),
+            linkedFileStorage = getOrNull(),
+            cloudShareStorage = getOrNull(),
+        )
+    }
+    single(named(REMOTE_SCREEN_HTTP)) {
+        HttpClient {
+            followRedirects = false
+            install(HttpTimeout) {
+                requestTimeoutMillis = 60_000
+                connectTimeoutMillis = 15_000
+            }
+        }
+    }
+    single<CloudDriveSignIn> { UnsupportedCloudDriveSignIn }
+    single {
+        CompositeRemoteScreenStorage(
+            httpClient = get(named(REMOTE_SCREEN_HTTP)),
+            linkedFileStorage = getOrNull() ?: UnsupportedLinkedRemoteFileStorage,
+            cloudShareStorage = getOrNull() ?: UnsupportedCloudShareScreenStorage,
+            cloudDriveTokens = CloudDriveTokenManager(
+                httpClient = get(named(REMOTE_SCREEN_HTTP)),
+                credentials = getOrNull() ?: UnsupportedRemoteScreenCredentialStorage,
+                signIn = get(),
+            ),
+        )
+    }
+    single<RemoteScreenStorage> { get<CompositeRemoteScreenStorage>() }
+    single<CloudDriveFiles> { get<CompositeRemoteScreenStorage>().cloudDriveFiles }
+    single {
+        RemoteScreenSyncUseCase(
+            boardSetUseCase = get(),
+            boardSetRepository = get(),
+            importService = get(),
+            storage = get(),
+            credentials = getOrNull() ?: UnsupportedRemoteScreenCredentialStorage,
+            speechCache = getOrNull(),
+            linkedFileStorage = getOrNull() ?: UnsupportedLinkedRemoteFileStorage,
+            backgroundScope = get(),
+            cloudShareStorage = getOrNull() ?: UnsupportedCloudShareScreenStorage,
+            cloudDriveFiles = get(),
+        )
+    }
+    single {
+        RemoteScreenActions(
+            sync = get(),
+            editingAccess = get(),
+            linkedFileStorage = getOrNull() ?: UnsupportedLinkedRemoteFileStorage,
+            cloudDriveSignIn = get(),
+            cloudDriveFiles = get(),
         )
     }
     single {
@@ -275,3 +337,5 @@ fun sharedModules(): List<Module> = listOf(
     screensModule,
     backupModule,
 )
+
+private const val REMOTE_SCREEN_HTTP = "remoteScreenHttp"

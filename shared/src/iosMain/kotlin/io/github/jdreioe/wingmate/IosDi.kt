@@ -57,6 +57,18 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.core.qualifier.named
 import org.koin.mp.KoinPlatform
+import io.github.jdreioe.wingmate.infrastructure.IosLinkedRemoteFileStorage
+import io.github.jdreioe.wingmate.infrastructure.IosCloudKitScreenBridge
+import io.github.jdreioe.wingmate.infrastructure.IosCloudKitScreenShareStorage
+import io.github.jdreioe.wingmate.domain.obf.CloudShareScreenStorage
+import io.github.jdreioe.wingmate.domain.obf.CloudDriveSignIn
+import io.github.jdreioe.wingmate.infrastructure.IosCloudDriveSignIn
+import io.github.jdreioe.wingmate.infrastructure.IosWebAuthenticationBridge
+import io.github.jdreioe.wingmate.application.KeyedRemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
+import io.github.jdreioe.wingmate.domain.obf.LinkedFileHandle
+import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
+import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -108,7 +120,15 @@ private fun iosModule(deviceSpeech: IosDeviceSpeech, aptabaseEndpoint: AptabaseE
         // Pronunciation dictionary (persisted)
         singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
         singleOf(::IosFileStorage) { bind<FileStorage>() }
-        singleOf(::IosSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+        single<SecureEditingCredentialStorage> { IosSecureEditingCredentialStorage() }
+        single<RemoteScreenCredentialStorage> {
+            KeyedRemoteScreenCredentialStorage { id ->
+                IosSecureEditingCredentialStorage(service = "io.github.jdreioe.wingmate.remote-screen", account = id)
+            }
+        }
+        singleOf(::IosLinkedRemoteFileStorage) { bind<LinkedRemoteFileStorage>() }
+        singleOf(::IosCloudKitScreenShareStorage) { bind<CloudShareScreenStorage>() }
+        single<CloudDriveSignIn> { IosCloudDriveSignIn(get()) }
         singleOf(::IosBackupMediaAccess) { bind<BackupMediaAccess>() }
         singleOf(::IosFilePicker) { bind<FilePicker>() }
         // Usage-log destination for RealAacLogger (app documents dir)
@@ -146,6 +166,16 @@ class IosDiBridge {
     fun speechFacade(): SpeechFacade = KoinPlatform.getKoin().get()
     fun settingsFacade(): SettingsFacade = KoinPlatform.getKoin().get()
     fun boardsFacade(): BoardsFacade = KoinPlatform.getKoin().get()
+    fun remoteScreenActions(): RemoteScreenActions = KoinPlatform.getKoin().get()
+    fun registerLinkedRemoteFile(urlString: String, displayName: String? = null): LinkedFileHandle {
+        val storage = KoinPlatform.getKoin().get<LinkedRemoteFileStorage>() as IosLinkedRemoteFileStorage
+        return storage.registerUrl(urlString, displayName)
+    }
+    /** Registers the Swift CloudKit adapter used for iCloud shared Screens (iOS → iOS). */
+    fun registerCloudKitScreenBridge(bridge: IosCloudKitScreenBridge) = IosCloudKitScreenShareStorage.register(bridge)
+    /** Registers Google Drive / OneDrive sign-in. Blank client IDs leave that provider hidden. */
+    fun registerCloudDriveSignIn(bridge: IosWebAuthenticationBridge, googleClientId: String?, microsoftClientId: String?) =
+        IosCloudDriveSignIn.register(bridge, googleClientId, microsoftClientId)
     fun communicationFacade(): CommunicationFacade = KoinPlatform.getKoin().get()
     fun communicationSessionFacade(): CommunicationSessionFacade = KoinPlatform.getKoin().get()
     fun typingScreenFacade(): TypingScreenFacade = KoinPlatform.getKoin().get()

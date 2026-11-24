@@ -454,6 +454,12 @@ extension SymbolBoardWorkspaceView {
 
     @MainActor
     func finishEditingAccessSuccess() async {
+        if pendingRemoteScreen {
+            // Present remote storage once the PIN sheet has finished dismissing.
+            pendingRemoteScreen = false
+            openRemoteAfterUnlock = true
+            return
+        }
         if let lockId = pendingBoardLockId {
             let unlocks = pendingBoardLockUnlocks
             pendingBoardLockId = nil
@@ -467,6 +473,38 @@ extension SymbolBoardWorkspaceView {
         } else if let id = pendingEditingBoardSetId {
             pendingEditingBoardSetId = nil
             route = .workspace(boardSetId: id, mode: .edit)
+        }
+    }
+
+    /// Remote storage (linking, opening, conflicts) is protected by Editing access.
+    func manageRemoteScreen(id: String?) {
+        Task {
+            remoteScreenId = id
+            if await model.editingIsAuthorized() {
+                showRemoteScreen = true
+            } else {
+                pendingEditingBoardSetId = nil
+                pendingDeleteBoardSetId = nil
+                pendingBoardLockId = nil
+                pendingRemoteScreen = true
+                pinMode = .unlock
+                showEditingAccessSheet = true
+            }
+        }
+    }
+
+    /// An iCloud share link was tapped: show the Screen if it is already here, otherwise offer to open it.
+    func openAcceptedShare(_ share: AcceptedCloudKitScreenShare) {
+        Task {
+            await model.loadBoardSets()
+            if let existing = model.boardSets.first(where: { $0.remoteLocation == share.location }) {
+                cloudShares.pendingShare = nil
+                await model.selectBoardSet(id: existing.id)
+                route = .workspace(boardSetId: existing.id, mode: .run)
+                await model.syncRemoteScreensAutomatic(force: true)
+            } else if !showRemoteScreen {
+                manageRemoteScreen(id: nil)
+            }
         }
     }
 

@@ -40,7 +40,10 @@ import platform.Security.kSecValueData
 import platform.posix.memcpy
 
 @OptIn(ExperimentalForeignApi::class)
-class IosSecureEditingCredentialStorage : SecureEditingCredentialStorage {
+class IosSecureEditingCredentialStorage(
+    private val service: String = SERVICE,
+    private val account: String = ACCOUNT,
+) : SecureEditingCredentialStorage {
     override val isSupported: Boolean = true
 
     override suspend fun read(): String? = memScoped {
@@ -87,8 +90,8 @@ class IosSecureEditingCredentialStorage : SecureEditingCredentialStorage {
 
     private fun baseQuery() = CFDictionaryCreateMutable(null, 0, null, null)!!.also { query ->
         CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, cfString(SERVICE))
-        CFDictionarySetValue(query, kSecAttrAccount, cfString(ACCOUNT))
+        CFDictionarySetValue(query, kSecAttrService, cfString(service))
+        CFDictionarySetValue(query, kSecAttrAccount, cfString(account))
     }
 
     private fun cfString(value: String) = CFStringCreateWithCString(null, value, kCFStringEncodingUTF8)!!

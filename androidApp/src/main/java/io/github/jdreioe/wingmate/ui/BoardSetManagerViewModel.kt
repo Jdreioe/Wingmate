@@ -65,6 +65,7 @@ internal fun BoardImportErrorCode.messageRes(): Int = when (this) {
     BoardImportErrorCode.COMPRESSION_RATIO_EXCEEDED -> R.string.board_import_error_too_large
     BoardImportErrorCode.MEDIA_UNRESOLVED -> R.string.board_import_error_media
     BoardImportErrorCode.PERSISTENCE_FAILED -> R.string.board_import_error_not_saved
+    BoardImportErrorCode.SCREEN_CHANGED -> R.string.board_import_error_screen_changed
 }
 
 internal data class CreateBoardSetDraft(

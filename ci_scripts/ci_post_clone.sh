@@ -63,6 +63,27 @@ if [ -n "${WINGMATE_APTABASE_APP_KEY:-}" ]; then
   echo "Configured Aptabase app key"
 fi
 
+# === Cloud drive OAuth client IDs ===
+# Public client identifiers for Google Drive and OneDrive sign-in. Empty hides that option.
+if [ -n "${WINGMATE_GOOGLE_IOS_CLIENT_ID:-}" ]; then
+  if ! [[ "$WINGMATE_GOOGLE_IOS_CLIENT_ID" =~ ^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$ ]]; then
+    echo "error: WINGMATE_GOOGLE_IOS_CLIENT_ID is not a Google OAuth client ID"
+    exit 1
+  fi
+  perl -pi -e "s/^WINGMATE_GOOGLE_IOS_CLIENT_ID =.*/WINGMATE_GOOGLE_IOS_CLIENT_ID = $WINGMATE_GOOGLE_IOS_CLIENT_ID/" \
+    iosApp/Configuration/Config.xcconfig
+  echo "Configured Google Drive client ID"
+fi
+if [ -n "${WINGMATE_MICROSOFT_CLIENT_ID:-}" ]; then
+  if ! [[ "$WINGMATE_MICROSOFT_CLIENT_ID" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+    echo "error: WINGMATE_MICROSOFT_CLIENT_ID is not a Microsoft Entra application ID"
+    exit 1
+  fi
+  perl -pi -e "s/^WINGMATE_MICROSOFT_CLIENT_ID =.*/WINGMATE_MICROSOFT_CLIENT_ID = $WINGMATE_MICROSOFT_CLIENT_ID/" \
+    iosApp/Configuration/Config.xcconfig
+  echo "Configured OneDrive client ID"
+fi
+
 # === JDK Setup ===
 # Xcode Cloud requires JDK 21 for Kotlin Multiplatform (jvmToolchain 21)
 install_jdk() {

@@ -45,6 +45,19 @@ import io.github.jdreioe.wingmate.platform.AndroidShareService
 import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
+import io.github.jdreioe.wingmate.infrastructure.AndroidLinkedRemoteFileStorage
+import io.github.jdreioe.wingmate.application.KeyedRemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
+import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.domain.obf.CloudDriveSignIn
+import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
+import io.github.jdreioe.wingmate.infrastructure.AndroidCustomTabsOAuthBrowser
+import io.github.jdreioe.wingmate.infrastructure.AndroidGoogleDriveSignIn
+import io.github.jdreioe.wingmate.infrastructure.CloudDriveOAuth
+import io.github.jdreioe.wingmate.infrastructure.CompositeCloudDriveSignIn
+import io.github.jdreioe.wingmate.infrastructure.OAuthPkceSignIn
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
 import okio.FileSystem
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.bind
@@ -57,7 +70,14 @@ import org.koin.dsl.module
  * credentials, and optional feature usage reporting), overriding the defaults
  * from [io.github.jdreioe.wingmate.di.sharedModules].
  */
-fun androidModule(context: Context, aptabaseAppKey: String): Module = module {
+fun androidModule(
+    context: Context,
+    aptabaseAppKey: String,
+    /** Microsoft Entra public client ID for OneDrive; blank turns OneDrive off. */
+    microsoftClientId: String = "",
+    /** True once this app's Android OAuth client exists in Google Cloud; false turns Google Drive off. */
+    googleDriveEnabled: Boolean = false,
+): Module = module {
     single<Context> { context }
     single<GoogleApiRequestHeaders> { AndroidGoogleApiRequestHeaders(context) }
     singleOf(::AndroidSpeechService) { bind<SpeechService>() }
@@ -77,7 +97,30 @@ fun androidModule(context: Context, aptabaseAppKey: String): Module = module {
     singleOf(::AndroidFileStorage) { bind<FileStorage>() }
     singleOf(::AndroidSoundPlayer) { bind<SoundPlayer>() }
     singleOf(::AndroidFilePicker) { bind<FilePicker>() }
-    singleOf(::AndroidSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+    single<SecureEditingCredentialStorage> { AndroidSecureEditingCredentialStorage(context) }
+    single<RemoteScreenCredentialStorage> {
+        KeyedRemoteScreenCredentialStorage { id ->
+            AndroidSecureEditingCredentialStorage(context = context, credentialKey = id)
+        }
+    }
+    singleOf(::AndroidLinkedRemoteFileStorage) { bind<LinkedRemoteFileStorage>() }
+    single { AndroidGoogleDriveSignIn(context) }
+    single<CloudDriveSignIn> {
+        val adapters = buildMap<RemoteStorageKind, CloudDriveSignIn> {
+            if (microsoftClientId.isNotBlank()) {
+                put(
+                    RemoteStorageKind.ONEDRIVE,
+                    OAuthPkceSignIn(
+                        httpClient = HttpClient(OkHttp),
+                        configs = listOf(CloudDriveOAuth.microsoft(microsoftClientId)),
+                        browser = AndroidCustomTabsOAuthBrowser(),
+                    ),
+                )
+            }
+            if (googleDriveEnabled) put(RemoteStorageKind.GOOGLE_DRIVE, get<AndroidGoogleDriveSignIn>())
+        }
+        CompositeCloudDriveSignIn(adapters)
+    }
     singleOf(::AndroidBackupMediaAccess) { bind<BackupMediaAccess>() }
     singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
     single<FeatureUsageReporter> {

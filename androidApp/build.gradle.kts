@@ -76,13 +76,19 @@ android {
         return sequenceOf(
             System.getenv("WINGMATE_$key"),
             localProperties.getProperty("WINGMATE_$key"),
-            localProperties.getProperty(key)
+            localProperties.getProperty(key),
+            providers.gradleProperty("WINGMATE_$key").orNull,
         ).firstOrNull { !it.isNullOrBlank() } ?: ""
     }
 
     val aptabaseAppKey = resolveConfigValue("APTABASE_APP_KEY")
     val openSymbolsProxyUrl = resolveConfigValue("OPENSYMBOLS_PROXY_URL")
         .ifBlank { "https://wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev" }
+    // Remote Screens cloud drives. Both are public client configuration, not secrets.
+    // OneDrive: the Microsoft Entra app (client) ID whose redirect is wingmate-auth://oauth.
+    val microsoftClientId = resolveConfigValue("MICROSOFT_CLIENT_ID")
+    // Google Drive: true once an Android OAuth client (package + signing SHA-1) exists in Google Cloud.
+    val googleDriveAndroidEnabled = resolveConfigValue("GOOGLE_DRIVE_ANDROID_ENABLED").toBoolean()
 
     defaultConfig {
         applicationId = "com.hojmoseit.wingmate"
@@ -100,6 +106,16 @@ android {
             "String",
             "APTABASE_APP_KEY",
             toBuildConfigStringLiteral(aptabaseAppKey)
+        )
+        buildConfigField(
+            "String",
+            "MICROSOFT_CLIENT_ID",
+            toBuildConfigStringLiteral(microsoftClientId)
+        )
+        buildConfigField(
+            "boolean",
+            "GOOGLE_DRIVE_ANDROID_ENABLED",
+            googleDriveAndroidEnabled.toString()
         )
     }
 

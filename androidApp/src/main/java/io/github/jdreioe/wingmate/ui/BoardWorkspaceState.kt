@@ -88,6 +88,7 @@ internal sealed interface BoardWorkspaceContentStatus {
 
 internal sealed interface BoardWorkspaceAction {
     data class Initialize(val graph: BoardSetGraph?, val startInEditMode: Boolean) : BoardWorkspaceAction
+    data class RefreshGraph(val graph: BoardSetGraph) : BoardWorkspaceAction
     data class LoadFailed(val message: String) : BoardWorkspaceAction
     data object RetryLoad : BoardWorkspaceAction
     data class SelectBoard(val boardId: String) : BoardWorkspaceAction
@@ -176,6 +177,20 @@ internal class BoardWorkspaceViewModel(
                         statusMessage = null,
                     )
                 }
+            }
+            is BoardWorkspaceAction.RefreshGraph -> {
+                val current = _state.value
+                if (current.mode != BoardWorkspaceMode.Run || current.editSession != null) return
+                val graph = action.graph
+                val validIds = graph.boardsById.keys
+                val nextSelected = current.selectedBoardId?.takeIf { it in validIds } ?: graph.boardSet.rootBoardId
+                val nextStack = current.boardStack.filter { it in validIds }
+                current.copy(
+                    contentStatus = BoardWorkspaceContentStatus.Ready,
+                    savedGraph = graph,
+                    selectedBoardId = nextSelected,
+                    boardStack = nextStack,
+                )
             }
             is BoardWorkspaceAction.LoadFailed -> _state.value.copy(
                 contentStatus = BoardWorkspaceContentStatus.RecoverableFailure(action.message),

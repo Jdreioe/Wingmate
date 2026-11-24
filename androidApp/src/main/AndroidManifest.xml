@@ -38,6 +38,22 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
+        <!-- OneDrive sign-in redirect for remote Screens. Forwards the URL and finishes at once. -->
+        <activity
+            android:name="io.github.jdreioe.wingmate.auth.OAuthRedirectActivity"
+            android:exported="true"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wingmate-auth" android:host="oauth" />
+            </intent-filter>
+        </activity>
 
     </application>
 </manifest>

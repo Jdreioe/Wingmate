@@ -21,6 +21,12 @@ extension SymbolBoardWorkspaceView {
 
                     Spacer()
 
+                    Button(action: { manageRemoteScreen(id: nil) }) {
+                        Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
+                            .font(.headline)
+                            .frame(minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
                     Button(action: { showSpeechImport = true }) {
                         Label("speech_import.title", systemImage: "text.badge.plus")
                             .font(.headline)
@@ -45,6 +51,13 @@ extension SymbolBoardWorkspaceView {
                             .foregroundColor(.secondary)
                     }
                     HStack(spacing: 8) {
+                        Button(action: { manageRemoteScreen(id: nil) }) {
+                            Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
+                                .labelStyle(.iconOnly)
+                                .font(.subheadline.weight(.semibold))
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
                         Button(action: { showSpeechImport = true }) {
                             Label("speech_import.title", systemImage: "text.badge.plus")
                                 .font(.subheadline.weight(.semibold))
@@ -97,6 +110,7 @@ extension SymbolBoardWorkspaceView {
                                     exportTargetSetId = set.id
                                 },
                                 onPrint: { printScreen(id: set.id) },
+                                onRemote: { manageRemoteScreen(id: set.id) },
                                 onDelete: {
                                     deleteTargetSet = set
                                 }
@@ -175,6 +189,7 @@ struct BoardSetLibraryCard: View {
     let onToggleLock: () -> Void
     let onExport: () -> Void
     let onPrint: () -> Void
+    let onRemote: () -> Void
     let onDelete: () -> Void
 
     @State private var preview: ScreenPreview?
@@ -198,6 +213,11 @@ struct BoardSetLibraryCard: View {
                     Text(updatedSummary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    if let remoteSummary {
+                        Label(remoteSummary, systemImage: set.remoteConflict ? "exclamationmark.icloud" : "icloud")
+                            .font(.subheadline)
+                            .foregroundStyle(set.remoteConflict ? Color.red : Color.accentColor)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -240,6 +260,9 @@ struct BoardSetLibraryCard: View {
                     Button(action: onPrint) {
                         Label("boardset.print_pdf", systemImage: "printer")
                     }
+                    Button(action: onRemote) {
+                        Label("remote_screen.storage", systemImage: "icloud")
+                    }
                     Divider()
                     Button(role: .destructive, action: onDelete) {
                         Label("common.delete", systemImage: "trash")
@@ -275,11 +298,17 @@ struct BoardSetLibraryCard: View {
         return String(format: NSLocalizedString("board_sets.library.updated", comment: ""), relative)
     }
 
+    private var remoteSummary: String? {
+        guard let remoteName = set.remoteName else { return nil }
+        if set.remoteConflict { return NSLocalizedString("remote_screen.conflict_badge", comment: "") }
+        return String(format: NSLocalizedString("remote_screen.linked_badge", comment: ""), remoteName)
+    }
+
     private var openAccessibilityLabel: String {
-        if set.isLocked {
-            return "\(set.name), \(pageSummary), \(NSLocalizedString("board_sets.library.locked", comment: ""))"
-        }
-        return "\(set.name), \(pageSummary)"
+        let parts = [set.name, pageSummary]
+            + (set.isLocked ? [NSLocalizedString("board_sets.library.locked", comment: "")] : [])
+            + [remoteSummary].compactMap { $0 }
+        return parts.joined(separator: ", ")
     }
 }
 

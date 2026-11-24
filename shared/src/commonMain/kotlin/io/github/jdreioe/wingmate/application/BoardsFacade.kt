@@ -446,7 +446,10 @@ class BoardsFacade(
         val grid = board.grid.orRejected()
         val buttonId = grid.order.getOrNull(row)?.getOrNull(col).orRejected()
         val resized = grid.withFieldSpan(row, col, buttonId, rowSpan, columnSpan).orRejected()
-        if (resized != grid) boardRepository.saveBoard(board.copy(grid = resized))
+        if (resized != grid) {
+            boardRepository.saveBoard(board.copy(grid = resized))
+            touchContainingBoardSet(boardId)
+        }
     }
 
     /**
@@ -460,7 +463,10 @@ class BoardsFacade(
         val board = requireBoard(boardId)
         val grid = board.grid.orRejected()
         val moved = grid.moveOrSwapField(fromRow, fromCol, toRow, toCol) ?: return@nativeCall false
-        if (moved != grid) boardRepository.saveBoard(board.copy(grid = moved))
+        if (moved != grid) {
+            boardRepository.saveBoard(board.copy(grid = moved))
+            touchContainingBoardSet(boardId)
+        }
         true
     }
 
@@ -557,6 +563,7 @@ class BoardsFacade(
             grid = grid.copy(order = order),
         ).also {
             boardRepository.saveBoard(it)
+            touchContainingBoardSet(it.id)
             boardSetSpeechCache.cacheField(it, button)
         }
     }
@@ -574,7 +581,17 @@ class BoardsFacade(
         val buttons = board.buttons.filter { it.id != removedId || it.id in stillUsed }
         val usedImages = board.usedImageIds(buttons)
         board.copy(buttons = buttons, images = board.images.filter { it.id in usedImages }, grid = grid.copy(order = order))
-            .also { boardRepository.saveBoard(it) }
+            .also {
+                boardRepository.saveBoard(it)
+                touchContainingBoardSet(boardId)
+            }
+    }
+
+    /** Marks the Screen as edited so linked remote storage receives the change automatically. */
+    private suspend fun touchContainingBoardSet(boardId: String) {
+        boardSetUseCase.listBoardSets()
+            .firstOrNull { boardId in it.boardIds }
+            ?.let { boardSetUseCase.touchBoardSet(it.id) }
     }
 
     @Throws(NativeFailure::class, CancellationException::class)

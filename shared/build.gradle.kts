@@ -77,6 +77,10 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
+                // Remote Screens cloud drives: Custom Tabs for OneDrive sign-in,
+                // Google Identity Services authorization for Google Drive.
+                implementation("androidx.browser:browser:1.10.0")
+                implementation("com.google.android.gms:play-services-auth:21.5.1")
                 implementation(
                     "com.github.aptabase:aptabase-kotlin:${libs.versions.aptabase.get()}"
                 ) {
