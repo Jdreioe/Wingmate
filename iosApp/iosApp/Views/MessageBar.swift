@@ -153,7 +153,8 @@ struct ScreensMessageBar: View {
     private var showNavigationLabels: Bool { horizontalSizeClass != .compact }
     /// On iPad the bar is a large, readable strip above the board; phones keep it compact.
     private var isLarge: Bool { horizontalSizeClass == .regular }
-    private var barHeight: CGFloat { isLarge ? 120 : speakSize }
+    /// Matches the 2×2 button square beside the bar (two buttons plus their gap).
+    private var barHeight: CGFloat { isLarge ? 120 : 104 }
     private var chipImageSize: CGFloat { isLarge ? 64 : 32 }
 
     var body: some View {

@@ -111,7 +111,8 @@ struct ContentView: View {
                                 mainContent
                             }
                             // Pad inside the proxy width so the content never overflows it.
-                            .padding(currentWideLayout ? 0 : 16)
+                            // Screens pad themselves so the board can use the width.
+                            .padding(currentWideLayout || model.boardModeEnabled ? 0 : 16)
                             .frame(width: proxy.size.width)
                         }
                     }

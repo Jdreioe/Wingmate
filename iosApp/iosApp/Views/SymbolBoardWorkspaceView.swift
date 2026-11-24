@@ -607,13 +607,18 @@ struct SymbolBoardWorkspaceView: View {
                 Button(action: {
                     route = .library
                 }) {
+                    // Phones keep only the chevron so the header stays on one line.
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                        Text(NSLocalizedString("board_workspace.exit_library", comment: ""))
+                        if horizontalSizeClass == .regular {
+                            Text(NSLocalizedString("board_workspace.exit_library", comment: ""))
+                        }
                     }
                     .font(.headline)
                     .foregroundColor(.blue)
+                    .frame(minWidth: 44, minHeight: 44)
                 }
+                .accessibilityLabel(Text("board_workspace.exit_library"))
 
                 // The Screen's own actions sit on its title.
                 Menu {
@@ -649,6 +654,7 @@ struct SymbolBoardWorkspaceView: View {
                         .foregroundColor(.blue)
                         .frame(minHeight: 44)
                 }
+                .fixedSize()
             }
             .padding(.horizontal)
             .padding(.top, 8)
@@ -695,7 +701,7 @@ struct SymbolBoardWorkspaceView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color(.secondarySystemFill))
                             .frame(maxWidth: .infinity)
-                            .frame(height: horizontalSizeClass == .regular ? 120 : 56)
+                            .frame(height: horizontalSizeClass == .regular ? 120 : 104)
                             .accessibilityHidden(true)
                         messageControls(boardSetId: boardSetId, editing: true)
                     }
