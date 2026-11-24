@@ -1,0 +1,4 @@
+• Export Screens as Smartbox Grid 3 (.gridset) files on Android, iPhone, and iPad.
+• iPhone and iPad: full-screen Screens layout with per-Screen message bar buttons and tap any Message part to speak it again.
+• iPhone Duo and foldable support, plus an outward Partner Display option in Settings.
+• Canvas-only Screen editing and fixes for Screen sharing and Settings navigation.

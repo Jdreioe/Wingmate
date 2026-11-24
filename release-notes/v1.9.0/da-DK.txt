@@ -1,0 +1,4 @@
+• Eksportér Skærme som Smartbox Grid 3-filer (.gridset) på Android, iPhone og iPad.
+• iPhone og iPad: fuldskærmslayout til Skærme med valgfrie knapper ved beskedlinjen og tryk på et ord i beskeden for at gentage det.
+• Understøttelse af iPhone Duo og foldbare skærme samt ny Partner Display-indstilling.
+• Redigering direkte på lærredet samt rettelser til deling af Skærme og Indstillinger.
