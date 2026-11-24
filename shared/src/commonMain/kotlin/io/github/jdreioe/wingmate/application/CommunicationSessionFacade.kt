@@ -141,12 +141,16 @@ class CommunicationSessionFacade(
         pageId: String,
         buttonId: String,
         spellingMode: Boolean,
+        languageTag: String? = null,
+        mathMode: Boolean = false,
     ) {
         session.accept(
             CommunicationAction.AppendPart(
                 part = MessagePart(
                     displayText = text,
                     source = MessagePartSource.ScreenButton(screenId, pageId, buttonId),
+                    languageTag = languageTag?.trim()?.takeIf(String::isNotEmpty),
+                    mathMode = mathMode,
                 ),
                 spellingMode = spellingMode,
             )

@@ -1,6 +1,5 @@
 import SwiftUI
 import Shared
-import LocalAuthentication
 import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
@@ -48,6 +47,34 @@ struct GridFieldSpanInfo: Hashable {
     let columns: Int
 }
 
+private struct BoardCellAnchor: Equatable {
+    var row: Int
+    var column: Int
+}
+
+private enum FieldResizeEdge {
+    case corner
+    case end
+    case bottom
+}
+
+private struct BoardGridMetrics {
+    var cellWidth: CGFloat = 1
+    var cellHeight: CGFloat = 1
+    var gap: CGFloat = 8
+    var rows: Int = 1
+    var columns: Int = 1
+}
+
+private struct FieldDragState: Equatable {
+    var buttonId: String
+    var fromRow: Int
+    var fromColumn: Int
+    var translation: CGSize
+    var targetRow: Int
+    var targetColumn: Int
+}
+
 private enum BoardSetCreationKind: String, CaseIterable, Identifiable {
     case blank
     case qwerty
@@ -87,6 +114,14 @@ private enum BoardWorkspaceMode: Equatable {
     case edit
 }
 
+private enum BoardSettingsTarget: String, Identifiable {
+    case screen
+    case page
+
+    var id: String { rawValue }
+    var forPage: Bool { self == .page }
+}
+
 private enum BoardManagementSheet: String, Identifiable {
     case renameSet
     case renameBoard
@@ -99,6 +134,34 @@ private enum BoardManagementSheet: String, Identifiable {
 private enum BoardSetRoute: Equatable {
     case library
     case workspace(boardSetId: String, mode: BoardWorkspaceMode)
+}
+
+private struct FieldEditActions: ViewModifier {
+    var enabled: Bool
+    var moveUp: () -> Void
+    var moveDown: () -> Void
+    var moveLeft: () -> Void
+    var moveRight: () -> Void
+    var wider: () -> Void
+    var narrower: () -> Void
+    var taller: () -> Void
+    var shorter: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .accessibilityAction(named: Text("boardset.cell.move.up"), moveUp)
+                .accessibilityAction(named: Text("boardset.cell.move.down"), moveDown)
+                .accessibilityAction(named: Text("boardset.cell.move.left"), moveLeft)
+                .accessibilityAction(named: Text("boardset.cell.move.right"), moveRight)
+                .accessibilityAction(named: Text("boardset.cell.size.wider"), wider)
+                .accessibilityAction(named: Text("boardset.cell.size.narrower"), narrower)
+                .accessibilityAction(named: Text("boardset.cell.size.taller"), taller)
+                .accessibilityAction(named: Text("boardset.cell.size.shorter"), shorter)
+        } else {
+            content
+        }
+    }
 }
 
 struct SymbolBoardWorkspaceView: View {
@@ -133,7 +196,6 @@ struct SymbolBoardWorkspaceView: View {
     @State private var addBoardKeyboardLayout: String = "qwerty"
 
     @State private var deleteTargetSet: BoardSetInfo? = nil
-    @State private var authErrorMessage: String? = nil
     @State private var isFullscreen: Bool = false
     @State private var showEditCellSheet: Bool = false
     @State private var managementSheet: BoardManagementSheet? = nil
@@ -155,7 +217,24 @@ struct SymbolBoardWorkspaceView: View {
     @State private var editingInsertedTextFollowsLabel = false
     @State private var editingBackgroundPickerColor: Color = Color(.tertiarySystemBackground)
     @State private var editingWordType: String = ""
+    @State private var editingHidden = false
+    @State private var editingMathMode = false
+    @State private var editingShape = "rounded"
+    @State private var editingLanguage = ""
+    @State private var editingOpensPage = false
+    @State private var editingRecordingPath: String? = nil
+    @State private var editingClearsRecording = false
+    @State private var isRecordingCell = false
+    @State private var cellMicDenied = false
+    @State private var cellRecorder = AudioRecorder()
     @State private var editingBorderPickerColor: Color = Color(.separator)
+    @State private var settingsTarget: BoardSettingsTarget? = nil
+    @State private var selectedFieldAnchor: BoardCellAnchor? = nil
+    @State private var selectedFieldSpans: [GridFieldSpanInfo] = []
+    @State private var fieldDrag: FieldDragState? = nil
+    @State private var resizePreview: GridFieldSpanInfo? = nil
+    @State private var resizePreviewValid = true
+    @State private var suppressNextCellTap = false
     @State private var useCustomBackgroundColor: Bool = false
     @State private var useCustomBorderColor: Bool = false
     @State private var editingLinkedBoardId: String = ""
@@ -174,10 +253,11 @@ struct SymbolBoardWorkspaceView: View {
     @State private var activeSentenceAnimation: ActiveSentenceAnimation? = nil
     @State private var showHiddenButtons = false
     @State private var showEditingAccessSheet = false
-    @State private var editingAccessCode = ""
+    @State private var pinMode: EditingAccessPinMode = .unlock
     @State private var pendingEditingBoardSetId: String? = nil
     @State private var pendingDeleteBoardSetId: String? = nil
-    @State private var editingAccessError = false
+    @State private var pendingBoardLockId: String? = nil
+    @State private var pendingBoardLockUnlocks = false
 
     private struct ActiveSentenceAnimation: Equatable {
         let sourceCellId: String
@@ -270,6 +350,12 @@ struct SymbolBoardWorkspaceView: View {
         }
         .sheet(isPresented: $showEditCellSheet) {
             editCellSheet
+                .presentationBackground(Color(.systemGroupedBackground))
+        }
+        .sheet(item: $settingsTarget) { target in
+            BoardSettingsSheet(model: model, forPage: target.forPage) {
+                settingsTarget = nil
+            }
         }
         .sheet(isPresented: $showNativeKeyboardSheet) {
             NavigationStack {
@@ -295,38 +381,15 @@ struct SymbolBoardWorkspaceView: View {
             boardManagementSheet(sheet)
         }
         .sheet(isPresented: $showEditingAccessSheet) {
-            NavigationStack {
-                Form {
-                    SecureField("editing_access.current_code", text: $editingAccessCode)
-                        .keyboardType(.numberPad)
-                    if editingAccessError { Text("editing_access.incorrect").foregroundStyle(.red) }
-                }
-                .navigationTitle(Text("editing_access.title"))
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("common.cancel") { showEditingAccessSheet = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("common.ok") {
-                            Task {
-                                guard await model.unlockEditingAccess(editingAccessCode) else {
-                                    editingAccessError = true
-                                    return
-                                }
-                                showEditingAccessSheet = false
-                                editingAccessCode = ""
-                                if let deleteId = pendingDeleteBoardSetId {
-                                    pendingDeleteBoardSetId = nil
-                                    await model.deleteBoardSet(id: deleteId)
-                                } else if let id = pendingEditingBoardSetId {
-                                    pendingEditingBoardSetId = nil
-                                    route = .workspace(boardSetId: id, mode: .edit)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            EditingAccessPinSheet(model: model, mode: pinMode, onSuccess: {
+                showEditingAccessSheet = false
+                Task { await finishEditingAccessSuccess() }
+            }, onCancel: {
+                showEditingAccessSheet = false
+                pendingEditingBoardSetId = nil
+                pendingDeleteBoardSetId = nil
+                pendingBoardLockId = nil
+            })
         }
         .onChange(of: editingSelectedPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -364,8 +427,8 @@ struct SymbolBoardWorkspaceView: View {
                         } else {
                             pendingDeleteBoardSetId = target.id
                             pendingEditingBoardSetId = nil
-                            editingAccessCode = ""
-                            editingAccessError = false
+                            pendingBoardLockId = nil
+                            pinMode = .unlock
                             showEditingAccessSheet = true
                         }
                         deleteTargetSet = nil
@@ -377,19 +440,6 @@ struct SymbolBoardWorkspaceView: View {
             }
         } message: {
             Text(String(format: NSLocalizedString("board_sets.library.delete_message", comment: ""), deleteTargetSet?.name ?? ""))
-        }
-        .alert(
-            NSLocalizedString("boardset.unlock.failed_title", comment: ""),
-            isPresented: Binding(
-                get: { authErrorMessage != nil },
-                set: { if !$0 { authErrorMessage = nil } }
-            )
-        ) {
-            Button(NSLocalizedString("common.ok", comment: ""), role: .cancel) {
-                authErrorMessage = nil
-            }
-        } message: {
-            Text(authErrorMessage ?? NSLocalizedString("common.unknown_error", comment: ""))
         }
         .alert("boardset.delete_board", isPresented: $showDeleteBoardConfirmation) {
             Button("common.cancel", role: .cancel) {}
@@ -419,19 +469,21 @@ struct SymbolBoardWorkspaceView: View {
 
                 Spacer()
 
+                Button(action: { showSpeechImport = true }) {
+                    Label("speech_import.title", systemImage: "text.badge.plus")
+                        .font(.headline)
+                        .frame(minHeight: 48)
+                }
+                .buttonStyle(.bordered)
                 Button(action: { showCreateBoardsetSheet = true }) {
                     Label("boardset.create", systemImage: "plus")
                         .font(.headline)
+                        .frame(minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal)
             .padding(.top, 12)
-
-            Button("speech_import.title") { showSpeechImport = true }
-                .buttonStyle(.bordered)
-                .frame(minHeight: 44)
-                .padding(.horizontal)
 
             if model.boardSets.isEmpty {
                 emptyLibraryState
@@ -457,14 +509,7 @@ struct SymbolBoardWorkspaceView: View {
                                     Task { await model.duplicateBoardSet(id: set.id) }
                                 },
                                 onToggleLock: {
-                                    if set.isLocked {
-                                        authenticateAndUnlock(for: set)
-                                    } else {
-                                        Task {
-                                            await model.selectBoardSet(id: set.id)
-                                            model.setSelectedBoardSetLocked(true)
-                                        }
-                                    }
+                                    Task { await beginScreenLockToggle(set) }
                                 },
                                 onExport: {
                                     Task { await exportBoardSet(id: set.id) }
@@ -507,16 +552,26 @@ struct SymbolBoardWorkspaceView: View {
             Text(NSLocalizedString("board_sets.library.empty_body", comment: ""))
                 .font(.body)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.primary)
+                .padding(.horizontal)
+
+            Text("board_sets.library.empty_guidance")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal)
 
             Button(action: { showCreateBoardsetSheet = true }) {
                 Text(NSLocalizedString("boardset.create_first", comment: ""))
                     .font(.headline)
+                    .frame(minHeight: 48)
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
+            Button("speech_import.title") { showSpeechImport = true }
+                .font(.headline)
+                .frame(minHeight: 48)
+                .buttonStyle(.bordered)
             Spacer(minLength: 40)
         }
     }
@@ -525,7 +580,9 @@ struct SymbolBoardWorkspaceView: View {
     @ViewBuilder
     private func workspaceView(boardSetId: String, mode: BoardWorkspaceMode) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Workspace Header
+            // Title sits on the leading side. A centered title lands on the iPad
+            // form sheet's header, which is what made "Editing School" overlap it.
+            VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Button(action: {
                     route = .library
@@ -536,19 +593,6 @@ struct SymbolBoardWorkspaceView: View {
                     }
                     .font(.headline)
                     .foregroundColor(.blue)
-                }
-
-                Spacer()
-
-                if mode == .edit {
-                    Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.selectedBoardSet?.name ?? ""))
-                        .font(.headline)
-                        .fontWeight(.bold)
-                } else {
-                    Text(model.selectedBoard?.name ?? NSLocalizedString("boardset.untitled_board", comment: ""))
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .accessibilityFocused($pageTitleFocused)
                 }
 
                 Spacer()
@@ -596,6 +640,12 @@ struct SymbolBoardWorkspaceView: View {
                                 backgroundFit = model.boardBackgroundImageFit
                                 showBackgroundEditor = true
                             } label: { Label("boardset.background_image", systemImage: "photo") }
+                            Button {
+                                settingsTarget = .screen
+                            } label: { Label("board_settings.screen_title", systemImage: "gearshape") }
+                            Button {
+                                settingsTarget = .page
+                            } label: { Label("board_settings.page_title", systemImage: "slider.horizontal.3") }
                             if let set = model.selectedBoardSet,
                                let boardId = model.selectedBoardId,
                                boardId != set.rootBoardId {
@@ -641,8 +691,8 @@ struct SymbolBoardWorkspaceView: View {
                     Button(action: {
                         if model.canEditSelectedBoardSet {
                             Task { await requestEnterEditing(boardSetId: boardSetId) }
-                        } else {
-                            authenticateAndUnlock(for: model.selectedBoardSet)
+                        } else if let set = model.selectedBoardSet {
+                            Task { await beginScreenLockToggle(set) }
                         }
                     }) {
                         Image(systemName: "pencil")
@@ -654,13 +704,34 @@ struct SymbolBoardWorkspaceView: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
+            Group {
+                if mode == .edit {
+                    Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.selectedBoardSet?.name ?? ""))
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .lineLimit(1)
+                } else {
+                    Text(model.selectedBoard?.name ?? NSLocalizedString("boardset.untitled_board", comment: ""))
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .lineLimit(1)
+                        .accessibilityFocused($pageTitleFocused)
+                        .accessibilityAddTraits(.isHeader)
+                }
+            }
+            .padding(.horizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if mode == .edit, let anchor = selectedFieldAnchor, model.cellAt(row: anchor.row, col: anchor.column) != nil {
+                selectedFieldControls(anchor)
+            }
             // Sub-board Strip (in Edit Mode for quick switching)
             if mode == .edit, let selectedSet = model.selectedBoardSet, selectedSet.boardIds.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(selectedSet.boardIds, id: \.self) { id in
                             Button(action: {
-                                Task { await model.selectBoard(id: id) }
+                                Task { await model.selectBoard(id: id, resetStack: true) }
                             }) {
                                 HStack(spacing: 5) {
                                     if id == selectedSet.rootBoardId {
@@ -714,7 +785,12 @@ struct SymbolBoardWorkspaceView: View {
                         },
                         onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
                         animationNamespace: sentenceAnimationNamespace,
-                        animatedTokenId: activeSentenceAnimation?.tokenId
+                        animatedTokenId: activeSentenceAnimation?.tokenId,
+                        showsPageNavigation: (model.selectedBoardSet?.boardIds.count ?? 0) > 1,
+                        canGoBack: model.canNavigateBoardBack,
+                        atStartPage: model.isOnStartPage,
+                        onBack: { Task { await model.navigateBoardBack() } },
+                        onStartPage: { Task { await model.navigateBoardHome() } }
                     )
                     .padding(.horizontal)
                 }
@@ -739,7 +815,12 @@ struct SymbolBoardWorkspaceView: View {
                             tokens: boardSentenceTokens,
                             showSpeakControl: model.boardSpeakButtonVisible,
                             onDelete: { index in model.removeMessagePart(at: index) },
-                            onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) }
+                            onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
+                            showsPageNavigation: (model.selectedBoardSet?.boardIds.count ?? 0) > 1,
+                            canGoBack: model.canNavigateBoardBack,
+                            atStartPage: model.isOnStartPage,
+                            onBack: { Task { await model.navigateBoardBack() } },
+                            onStartPage: { Task { await model.navigateBoardHome() } }
                         )
                     }
                     Button("common.done") { isFullscreen = false }
@@ -787,22 +868,49 @@ struct SymbolBoardWorkspaceView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
                         ForEach(model.boardFieldItems) { field in
+                            let occupied = model.cellAt(row: field.row, col: field.column) != nil
                             let x = CGFloat(field.column) * (cellWidth + gridGap)
                             let y = CGFloat(field.row) * (cellHeight + gridGap)
                             let spanWidth = (cellWidth * CGFloat(field.columnSpan)) + (gridGap * CGFloat(field.columnSpan - 1))
                             let spanHeight = (cellHeight * CGFloat(field.rowSpan)) + (gridGap * CGFloat(field.rowSpan - 1))
-                            boardCellButton(
-                                row: field.row,
-                                col: field.column,
-                                isEditMode: isEditMode,
-                                width: max(0, spanWidth),
-                                height: max(0, spanHeight),
-                                rowSpan: field.rowSpan,
-                                columnSpan: field.columnSpan
+                            // Use mode leaves empty cells blank. They are not buttons.
+                            if occupied || isEditMode {
+                                boardCellButton(
+                                    row: field.row,
+                                    col: field.column,
+                                    isEditMode: isEditMode,
+                                    width: max(0, spanWidth),
+                                    height: max(0, spanHeight),
+                                    rowSpan: field.rowSpan,
+                                    columnSpan: field.columnSpan,
+                                    metrics: BoardGridMetrics(
+                                        cellWidth: cellWidth,
+                                        cellHeight: cellHeight,
+                                        gap: gridGap,
+                                        rows: rows,
+                                        columns: cols
+                                    )
+                                )
+                                .offset(fieldDragOffset(for: field.buttonId, fallback: CGSize(width: x, height: y)))
+                            } else {
+                                Color.clear
+                                    .frame(width: max(0, spanWidth), height: max(0, spanHeight))
+                                    .offset(x: x, y: y)
+                                    .accessibilityHidden(true)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        if isEditMode {
+                            fieldEditChrome(
+                                cellWidth: cellWidth,
+                                cellHeight: cellHeight,
+                                gap: gridGap,
+                                rows: rows,
+                                columns: cols
                             )
-                            .offset(x: x, y: y)
                         }
                     }
+                    .coordinateSpace(name: "boardGrid")
                     .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
                     .padding(gridInset)
                 }
@@ -833,11 +941,13 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
-    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
+    private func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1, metrics: BoardGridMetrics = BoardGridMetrics()) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let cornerRadius = boardCellCornerRadius(cell, width: width, height: height)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
+        let anchor = BoardCellAnchor(row: row, column: col)
+        let isSelected = isEditMode && selectedFieldAnchor == anchor && cell != nil
         let hiddenInRunMode = !model.boardButtonIsVisible(
             hidden: cell?.hidden == true,
             isEditMode: isEditMode,
@@ -846,8 +956,18 @@ struct SymbolBoardWorkspaceView: View {
 
         return ZStack(alignment: .topTrailing) {
             Button {
+                if suppressNextCellTap {
+                    suppressNextCellTap = false
+                    return
+                }
                 if isEditMode && model.canEditSelectedBoardSet {
-                    openCellEditor(row: row, col: col, existing: cell)
+                    if cell == nil {
+                        openCellEditor(row: row, col: col, existing: nil)
+                    } else if selectedFieldAnchor == anchor {
+                        openCellEditor(row: row, col: col, existing: cell)
+                    } else {
+                        selectField(anchor)
+                    }
                 } else {
                     guard model.holdToSelectMillis <= 0 else { return }
                     if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
@@ -912,9 +1032,31 @@ struct SymbolBoardWorkspaceView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .accessibilityLabel(Text(boardCellDisplayLabel(cell)))
-            .accessibilityHint(Text(boardCellAccessibilityHint(cell)))
+            .accessibilityLabel(Text(cell == nil
+                ? NSLocalizedString("boardset.cell.add", comment: "")
+                : boardCellDisplayLabel(cell)))
+            .accessibilityHint(Text(cell == nil ? "" : boardCellAccessibilityHint(cell)))
             .accessibilitySortPriority(Double(max(0, 10_000 - (row * 100 + col))))
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityAction(.default) {
+                if isEditMode && model.canEditSelectedBoardSet {
+                    openCellEditor(row: row, col: col, existing: cell)
+                } else if cell != nil {
+                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                }
+            }
+            .modifier(FieldEditActions(
+                enabled: isEditMode && cell != nil && model.canEditSelectedBoardSet,
+                moveUp: { Task { await moveField(from: anchor, directionRow: -1, directionColumn: 0) } },
+                moveDown: { Task { await moveField(from: anchor, directionRow: 1, directionColumn: 0) } },
+                moveLeft: { Task { await moveField(from: anchor, directionRow: 0, directionColumn: -1) } },
+                moveRight: { Task { await moveField(from: anchor, directionRow: 0, directionColumn: 1) } },
+                wider: { Task { await resizeField(anchor, deltaRows: 0, deltaColumns: 1) } },
+                narrower: { Task { await resizeField(anchor, deltaRows: 0, deltaColumns: -1) } },
+                taller: { Task { await resizeField(anchor, deltaRows: 1, deltaColumns: 0) } },
+                shorter: { Task { await resizeField(anchor, deltaRows: -1, deltaColumns: 0) } }
+            ))
+            .simultaneousGesture(editMoveGesture(anchor: anchor, cell: cell, isEditMode: isEditMode, metrics: metrics))
 
             if isEditMode, model.canEditSelectedBoardSet, cell != nil {
                 Button(role: .destructive) {
@@ -962,8 +1104,9 @@ struct SymbolBoardWorkspaceView: View {
                                 .strokeBorder(Color(.separator), style: StrokeStyle(lineWidth: 1, dash: [4]))
                         )
                     Image(systemName: "plus")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
+                        .font(.largeTitle)
+                        .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
                 }
                 .frame(width: width, height: height)
             )
@@ -1041,14 +1184,18 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
+    @ViewBuilder
     private func boardCellLabel(_ cell: BoardCellInfo?, fontScale: CGFloat = 1) -> some View {
-        Text(boardCellDisplayLabel(cell))
-            .font(.subheadline)
-            .fontWeight(cell == nil ? .regular : .semibold)
-            .lineLimit(2)
-            .foregroundStyle(model.highContrastMode ? Color.primary : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .scaleEffect(fontScale, anchor: .leading)
+        let text = boardCellDisplayLabel(cell)
+        if !text.isEmpty {
+            Text(text)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .lineLimit(2)
+                .foregroundStyle(model.highContrastMode ? Color.primary : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .scaleEffect(fontScale, anchor: .leading)
+        }
     }
 
     @ViewBuilder
@@ -1311,16 +1458,64 @@ struct SymbolBoardWorkspaceView: View {
                     TextField(NSLocalizedString("boardset.cell.vocalization", comment: ""), text: $editingVocalization)
                 }
 
-                if model.canEditSelectedBoardSet, !model.isKeyboardBoard {
+                Section {
+                    Toggle("boardset.cell.hidden", isOn: $editingHidden)
+                } footer: {
+                    Text("boardset.cell.hidden_footer")
+                }
+
+                if model.ttsEngine.contains("AZURE") {
                     Section {
-                        Picker("boardset.cell.merge_size", selection: $editingSpan) {
-                            Text("boardset.cell.merge_1x1").tag(GridFieldSpanSelection.single)
-                            ForEach(editingSpanOptions, id: \.self) { span in
-                                Text("\(span.rows) × \(span.columns)")
-                                    .tag(GridFieldSpanSelection.custom(span))
+                        Toggle("boardset.cell.math", isOn: $editingMathMode)
+                    } footer: {
+                        Text("boardset.cell.math_footer")
+                    }
+                }
+
+                if model.canEditSelectedBoardSet, editingCellHasButton {
+                    Section {
+                        HStack(spacing: 12) {
+                            fieldNudgeButton("boardset.cell.move.up", systemImage: "arrow.up") {
+                                Task { await moveField(from: BoardCellAnchor(row: editingRow, column: editingCol), directionRow: -1, directionColumn: 0, fromEditor: true) }
+                            }
+                            fieldNudgeButton("boardset.cell.move.down", systemImage: "arrow.down") {
+                                Task { await moveField(from: BoardCellAnchor(row: editingRow, column: editingCol), directionRow: 1, directionColumn: 0, fromEditor: true) }
+                            }
+                            fieldNudgeButton("boardset.cell.move.left", systemImage: "arrow.left") {
+                                Task { await moveField(from: BoardCellAnchor(row: editingRow, column: editingCol), directionRow: 0, directionColumn: -1, fromEditor: true) }
+                            }
+                            fieldNudgeButton("boardset.cell.move.right", systemImage: "arrow.right") {
+                                Task { await moveField(from: BoardCellAnchor(row: editingRow, column: editingCol), directionRow: 0, directionColumn: 1, fromEditor: true) }
                             }
                         }
-                        .pickerStyle(.menu)
+                        .frame(maxWidth: .infinity)
+                    } header: {
+                        Text("boardset.cell.move")
+                    } footer: {
+                        Text("boardset.cell.move.footer")
+                    }
+
+                    Section {
+                        spanAdjustRow(
+                            title: "boardset.cell.size.width",
+                            value: currentEditingSpan.columns,
+                            decreaseKey: "boardset.cell.size.narrower",
+                            increaseKey: "boardset.cell.size.wider",
+                            canDecrease: spanIsAllowed(rows: currentEditingSpan.rows, columns: currentEditingSpan.columns - 1),
+                            canIncrease: spanIsAllowed(rows: currentEditingSpan.rows, columns: currentEditingSpan.columns + 1),
+                            decrease: { Task { await resizeField(BoardCellAnchor(row: editingRow, column: editingCol), deltaRows: 0, deltaColumns: -1, fromEditor: true) } },
+                            increase: { Task { await resizeField(BoardCellAnchor(row: editingRow, column: editingCol), deltaRows: 0, deltaColumns: 1, fromEditor: true) } }
+                        )
+                        spanAdjustRow(
+                            title: "boardset.cell.size.height",
+                            value: currentEditingSpan.rows,
+                            decreaseKey: "boardset.cell.size.shorter",
+                            increaseKey: "boardset.cell.size.taller",
+                            canDecrease: spanIsAllowed(rows: currentEditingSpan.rows - 1, columns: currentEditingSpan.columns),
+                            canIncrease: spanIsAllowed(rows: currentEditingSpan.rows + 1, columns: currentEditingSpan.columns),
+                            decrease: { Task { await resizeField(BoardCellAnchor(row: editingRow, column: editingCol), deltaRows: -1, deltaColumns: 0, fromEditor: true) } },
+                            increase: { Task { await resizeField(BoardCellAnchor(row: editingRow, column: editingCol), deltaRows: 1, deltaColumns: 0, fromEditor: true) } }
+                        )
                     } header: {
                         Text("boardset.cell.merge")
                     } footer: {
@@ -1337,6 +1532,10 @@ struct SymbolBoardWorkspaceView: View {
                                 editingInsertedTextFollowsLabel = false
                                 if !text.isEmpty { editingActions = [] }
                             }
+                    }
+                }
+
+                Section {
                         ForEach(BoardKeyAction.allCases.filter { $0 != .none }) { action in
                             Toggle(
                                 action.localizationKey,
@@ -1367,16 +1566,21 @@ struct SymbolBoardWorkspaceView: View {
                                         Image(systemName: "arrow.up")
                                     }
                                     .disabled(index == 0)
+                                    .accessibilityLabel(Text("boardset.cell.action.move_up"))
                                     Button {
                                         moveEditingAction(at: index, by: 1)
                                     } label: {
                                         Image(systemName: "arrow.down")
                                     }
                                     .disabled(index == editingActions.count - 1)
+                                    .accessibilityLabel(Text("boardset.cell.action.move_down"))
                                 }
                             }
                         }
-                    }
+                } header: {
+                    Text("boardset.cell.special_actions")
+                } footer: {
+                    Text("boardset.cell.special_actions_footer")
                 }
 
                 Section("phrase.symbol.section") {
@@ -1499,13 +1703,75 @@ struct SymbolBoardWorkspaceView: View {
                     }
                 }
 
-                Section("boardset.cell.linked_board") {
-                    Picker("boardset.cell.linked_board", selection: $editingLinkedBoardId) {
-                        Text("boardset.cell.no_link").tag("")
-                        ForEach(linkableBoardIds, id: \.self) { boardId in
-                            Text(model.boardDisplayName(id: boardId)).tag(boardId)
+                Section {
+                    Picker("boardset.cell.behavior", selection: $editingOpensPage) {
+                        Text("boardset.cell.behavior.speak").tag(false)
+                        Text("boardset.cell.behavior.open_page").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(linkableBoardIds.isEmpty)
+                    if editingOpensPage {
+                        Picker("boardset.cell.linked_board", selection: $editingLinkedBoardId) {
+                            Text("boardset.cell.choose_page").tag("")
+                            ForEach(linkableBoardIds, id: \.self) { boardId in
+                                Text(model.boardDisplayName(id: boardId)).tag(boardId)
+                            }
                         }
                     }
+                } header: {
+                    Text("boardset.cell.behavior")
+                }
+
+                Section("boardset.cell.shape") {
+                    Picker("boardset.cell.shape", selection: $editingShape) {
+                        Text("boardset.cell.shape.rounded").tag("rounded")
+                        Text("boardset.cell.shape.square").tag("square")
+                        Text("boardset.cell.shape.pill").tag("pill")
+                        Text("boardset.cell.shape.speech").tag("speech")
+                        Text("boardset.cell.shape.thought").tag("thought")
+                    }
+                }
+
+                Section("boardset.cell.language") {
+                    Picker("boardset.cell.language", selection: $editingLanguage) {
+                        Text("boardset.cell.language.default").tag("")
+                        ForEach(cellLanguageChoices, id: \.tag) { choice in
+                            Text(choice.title).tag(choice.tag)
+                        }
+                    }
+                }
+
+                Section {
+                    if isRecordingCell {
+                        Button("common.stop", role: .destructive) {
+                            Task { await stopCellRecording() }
+                        }
+                    } else {
+                        Button(LocalizedStringKey(editingRecordingPath == nil ? "phrase.record" : "phrase.record.replace")) {
+                            AVAudioApplication.requestRecordPermission { granted in
+                                Task { @MainActor in
+                                    guard granted else { cellMicDenied = true; return }
+                                    cellMicDenied = false
+                                    _ = try? await cellRecorder.startRecording()
+                                    isRecordingCell = true
+                                }
+                            }
+                        }
+                    }
+                    if let path = editingRecordingPath {
+                        Button("phrase.play_recording") { cellRecorder.play(url: URL(fileURLWithPath: path)) }
+                        Button("common.clear", role: .destructive) {
+                            editingRecordingPath = nil
+                            editingClearsRecording = true
+                        }
+                    }
+                    if cellMicDenied {
+                        Text("phrase.mic_permission_denied")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("phrase.recording")
                 }
 
                 Section("boardset.cell.colors") {
@@ -1530,10 +1796,25 @@ struct SymbolBoardWorkspaceView: View {
                 }
             }
             .navigationTitle(Text("boardset.cell.edit_title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color(.systemGroupedBackground), for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("common.cancel") {
+                        if isRecordingCell { Task { await stopCellRecording() } }
                         showEditCellSheet = false
+                    }
+                }
+                if editingCellHasButton {
+                    ToolbarItem(placement: .bottomBar) {
+                        Button("boardset.cell.clear", role: .destructive) {
+                            Task {
+                                await model.clearSelectedBoardCell(row: editingRow, col: editingCol)
+                                showEditCellSheet = false
+                            }
+                        }
+                        .disabled(!model.canEditSelectedBoardSet)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -1551,11 +1832,17 @@ struct SymbolBoardWorkspaceView: View {
                                 vocalization: editingVocalization,
                                 backgroundColor: backgroundColorHex,
                                 borderColor: borderColorHex,
-                                linkedBoardId: editingLinkedBoardId,
+                                linkedBoardId: editingOpensPage ? editingLinkedBoardId : "",
                                 imageUrl: editingSelectedSymbolUrl,
                                 clearImage: shouldClearEditingSymbol,
                                 actions: actions,
-                                wordType: editingWordType
+                                wordType: editingWordType,
+                                hidden: editingHidden,
+                                shape: editingShape,
+                                language: editingLanguage,
+                                mathMode: editingMathMode,
+                                recordingPath: editingClearsRecording ? nil : editingRecordingPath,
+                                clearRecording: editingClearsRecording
                             )
                             if case .custom(let span) = editingSpan, editingCellHasButton {
                                 await model.resizeSelectedBoardField(
@@ -1568,10 +1855,35 @@ struct SymbolBoardWorkspaceView: View {
                             showEditCellSheet = false
                         }
                     }
-                    .disabled(!model.canEditSelectedBoardSet)
+                    .disabled(!model.canEditSelectedBoardSet || trimmed(editingLabel) == nil || (editingOpensPage && trimmed(editingLinkedBoardId) == nil))
                 }
             }
         }
+    }
+
+    private var cellLanguageChoices: [(tag: String, title: String)] {
+        var choices: [(tag: String, title: String)] = []
+        let primary = model.primaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !primary.isEmpty {
+            choices.append((primary, String(format: NSLocalizedString("boardset.cell.language.primary", comment: ""), primary)))
+        }
+        let secondary = model.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !secondary.isEmpty, secondary != primary {
+            choices.append((secondary, String(format: NSLocalizedString("boardset.cell.language.secondary", comment: ""), secondary)))
+        }
+        let current = editingLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !current.isEmpty, !choices.contains(where: { $0.tag == current }) {
+            choices.append((current, current))
+        }
+        return choices
+    }
+
+    private func stopCellRecording() async {
+        if let url = try? await cellRecorder.stopRecording() {
+            editingRecordingPath = url.path
+            editingClearsRecording = false
+        }
+        isRecordingCell = false
     }
 
     private var linkableBoardIds: [String] {
@@ -1609,7 +1921,7 @@ struct SymbolBoardWorkspaceView: View {
 
     private func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
         guard let cell else { return }
-        if trimmed(cell.linkedBoardId) != nil {
+        if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
             if let current = model.selectedBoardId {
                 model.pushBoardNavigationStack(current)
             }
@@ -1621,15 +1933,12 @@ struct SymbolBoardWorkspaceView: View {
             let shouldAdd = behavior != "SpeakOnly"
             let shouldSpeak = model.shouldSpeakSelectionImmediately
             // A Button's own sound replaces its spoken text, so it is said once.
-            let sound = shouldSpeak ? trimmed(cell.soundDataUrl) : nil
-            if let sound {
-                model.playBoardButtonSound(sound)
-            }
+            if shouldSpeak { playCellSound(cell) }
             if shouldAdd {
                 appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
             }
             Task {
-                if shouldSpeak && sound == nil {
+                if shouldSpeak && trimmed(cell.soundPath) == nil && trimmed(cell.soundDataUrl) == nil {
                     await model.activateSelectedBoardCell(row: row, col: col)
                 }
                 await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
@@ -1653,9 +1962,17 @@ struct SymbolBoardWorkspaceView: View {
                     model.speakBoardMessage(boardSetId: boardSetId)
                 }
             case ":home":
-                if let rootId = model.selectedBoardSet?.rootBoardId {
-                    Task { await model.selectBoard(id: rootId) }
-                }
+                Task { await model.navigateBoardHome() }
+            case ":pause":
+                model.pauseSpeech()
+            case ":resume":
+                model.resumeSpeech()
+            case ":stop":
+                model.stopSpeech()
+            case ":hold-message":
+                model.toggleHoldThatThought()
+            case ":secondary-language":
+                model.boardStatusMessage = NSLocalizedString("boardset.status.unsupported_action", comment: "")
             case ":native-keyboard":
                 nativeKeyboardDraft = boardSentenceText
                 showNativeKeyboardSheet = true
@@ -1678,9 +1995,7 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         if isContentActivation {
-            if let sound = trimmed(cell.soundDataUrl) {
-                model.playBoardButtonSound(sound)
-            }
+            playCellSound(cell)
             Task { await model.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
             Task { await model.applyBoardReturnBehavior() }
         }
@@ -1688,13 +2003,11 @@ struct SymbolBoardWorkspaceView: View {
 
     private func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?, textOverride: String? = nil, sourceCellId: String? = nil) {
         guard let cell else { return }
-        if trimmed(cell.linkedBoardId) != nil { return }
-
         let text = textOverride ?? trimmed(cell.vocalization) ?? trimmed(cell.label)
         guard let text, !text.isEmpty else { return }
 
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-            model.appendScreenPart(text: text, buttonId: cell.buttonId)
+            model.appendScreenPart(text: text, buttonId: cell.buttonId, languageTag: cell.language, mathMode: cell.mathMode)
         }
         let tokenId = "part-\(model.messageParts.count - 1)"
         activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)
@@ -1708,6 +2021,14 @@ struct SymbolBoardWorkspaceView: View {
         }
     }
 
+    private func playCellSound(_ cell: BoardCellInfo) {
+        if let path = trimmed(cell.soundPath) {
+            model.playBoardButtonFile(path)
+        } else if let sound = trimmed(cell.soundDataUrl) {
+            model.playBoardButtonSound(sound)
+        }
+    }
+
     private func backspaceBoardSentence() {
         model.removeLastMessagePart()
     }
@@ -1717,12 +2038,12 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func boardCellDisplayLabel(_ cell: BoardCellInfo?) -> String {
-        guard let cell else { return NSLocalizedString("boardset.cell.empty", comment: "") }
+        guard let cell else { return "" }
         if cell.actions.contains(where: { $0.lowercased() == ":prediction" || $0.lowercased() == ":predictions" }),
            let prediction = model.boardPrediction(for: cell.buttonId) {
             return prediction
         }
-        return trimmed(cell.label) ?? NSLocalizedString("boardset.cell.empty", comment: "")
+        return trimmed(cell.label) ?? trimmed(cell.vocalization) ?? ""
     }
 
     private func boardCellAccessibilityHint(_ cell: BoardCellInfo?) -> String {
@@ -1755,6 +2076,368 @@ struct SymbolBoardWorkspaceView: View {
         case .home: return NSLocalizedString("boardset.cell.action.home", comment: "")
         case .speak: return NSLocalizedString("boardset.cell.action.speak", comment: "")
         case .prediction: return NSLocalizedString("boardset.cell.action.prediction", comment: "")
+        }
+    }
+
+    private var currentEditingSpan: GridFieldSpanInfo {
+        if case .custom(let span) = editingSpan { return span }
+        return GridFieldSpanInfo(rows: 1, columns: 1)
+    }
+
+    private func spanIsAllowed(rows: Int, columns: Int) -> Bool {
+        rows >= 1 && columns >= 1 && editingSpanOptions.contains(GridFieldSpanInfo(rows: rows, columns: columns))
+    }
+
+    private func fieldNudgeButton(_ key: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .frame(minWidth: 56, minHeight: 56)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityLabel(Text(key))
+    }
+
+    private func spanAdjustRow(
+        title: LocalizedStringKey,
+        value: Int,
+        decreaseKey: LocalizedStringKey,
+        increaseKey: LocalizedStringKey,
+        canDecrease: Bool,
+        canIncrease: Bool,
+        decrease: @escaping () -> Void,
+        increase: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: decrease) {
+                Image(systemName: "minus")
+                    .frame(minWidth: 56, minHeight: 56)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!canDecrease)
+            .accessibilityLabel(Text(decreaseKey))
+            Text("\(value)")
+                .font(.title3)
+                .frame(minWidth: 32)
+                .accessibilityHidden(true)
+            Button(action: increase) {
+                Image(systemName: "plus")
+                    .frame(minWidth: 56, minHeight: 56)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!canIncrease)
+            .accessibilityLabel(Text(increaseKey))
+        }
+    }
+
+    @ViewBuilder
+    private func selectedFieldControls(_ anchor: BoardCellAnchor) -> some View {
+        let span = model.boardFieldItems.first { $0.row == anchor.row && $0.column == anchor.column }
+        ScrollView(.horizontal, showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    openCellEditor(row: anchor.row, col: anchor.column, existing: model.cellAt(row: anchor.row, col: anchor.column))
+                } label: {
+                    Label("boardset.cell.edit", systemImage: "pencil")
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                fieldNudgeButton("boardset.cell.move.up", systemImage: "arrow.up") {
+                    Task { await moveField(from: anchor, directionRow: -1, directionColumn: 0) }
+                }
+                fieldNudgeButton("boardset.cell.move.down", systemImage: "arrow.down") {
+                    Task { await moveField(from: anchor, directionRow: 1, directionColumn: 0) }
+                }
+                fieldNudgeButton("boardset.cell.move.left", systemImage: "arrow.left") {
+                    Task { await moveField(from: anchor, directionRow: 0, directionColumn: -1) }
+                }
+                fieldNudgeButton("boardset.cell.move.right", systemImage: "arrow.right") {
+                    Task { await moveField(from: anchor, directionRow: 0, directionColumn: 1) }
+                }
+            }
+            HStack(spacing: 8) {
+                fieldNudgeButton("boardset.cell.size.narrower", systemImage: "arrow.left.and.right") {
+                    Task { await resizeField(anchor, deltaRows: 0, deltaColumns: -1) }
+                }
+                fieldNudgeButton("boardset.cell.size.wider", systemImage: "arrow.left.and.right") {
+                    Task { await resizeField(anchor, deltaRows: 0, deltaColumns: 1) }
+                }
+                fieldNudgeButton("boardset.cell.size.shorter", systemImage: "arrow.up.and.down") {
+                    Task { await resizeField(anchor, deltaRows: -1, deltaColumns: 0) }
+                }
+                fieldNudgeButton("boardset.cell.size.taller", systemImage: "arrow.up.and.down") {
+                    Task { await resizeField(anchor, deltaRows: 1, deltaColumns: 0) }
+                }
+                Text(String(format: NSLocalizedString("boardset.cell.size.value", comment: ""), span?.columnSpan ?? 1, span?.rowSpan ?? 1))
+                    .font(.body)
+                Spacer(minLength: 0)
+                Button(role: .destructive) {
+                    selectedFieldAnchor = nil
+                    Task { await model.clearSelectedBoardCell(row: anchor.row, col: anchor.column) }
+                } label: {
+                    Label("boardset.cell.clear", systemImage: "trash")
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        }
+        .padding(.horizontal)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func selectField(_ anchor: BoardCellAnchor) {
+        selectedFieldAnchor = anchor
+        Task {
+            let options = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+            await MainActor.run {
+                guard selectedFieldAnchor == anchor else { return }
+                selectedFieldSpans = options
+            }
+        }
+    }
+
+    private func fieldDragOffset(for buttonId: String?, fallback: CGSize) -> CGSize {
+        guard let buttonId, let drag = fieldDrag, drag.buttonId == buttonId else { return fallback }
+        return CGSize(width: fallback.width + drag.translation.width, height: fallback.height + drag.translation.height)
+    }
+
+    private func cellAddress(at location: CGPoint, metrics: BoardGridMetrics) -> (row: Int, column: Int)? {
+        let strideX = metrics.cellWidth + metrics.gap
+        let strideY = metrics.cellHeight + metrics.gap
+        guard strideX > 0, strideY > 0 else { return nil }
+        let column = Int(location.x / strideX)
+        let row = Int(location.y / strideY)
+        guard row >= 0, column >= 0, row < metrics.rows, column < metrics.columns else { return nil }
+        let xInCell = location.x - CGFloat(column) * strideX
+        let yInCell = location.y - CGFloat(row) * strideY
+        guard xInCell <= metrics.cellWidth + 0.5, yInCell <= metrics.cellHeight + 0.5 else { return nil }
+        return (row, column)
+    }
+
+    private func editMoveGesture(anchor: BoardCellAnchor, cell: BoardCellInfo?, isEditMode: Bool, metrics: BoardGridMetrics) -> some Gesture {
+        let enabled = isEditMode && cell != nil && model.canEditSelectedBoardSet
+        return LongPressGesture(minimumDuration: enabled ? 0.35 : 10_000)
+            .sequenced(before: DragGesture(minimumDistance: 8, coordinateSpace: .named("boardGrid")))
+            .onChanged { value in
+                guard enabled, let cell else { return }
+                if case .second(true, let drag?) = value {
+                    suppressNextCellTap = true
+                    let target = cellAddress(at: drag.location, metrics: metrics)
+                    fieldDrag = FieldDragState(
+                        buttonId: cell.buttonId,
+                        fromRow: anchor.row,
+                        fromColumn: anchor.column,
+                        translation: drag.translation,
+                        targetRow: target?.row ?? anchor.row,
+                        targetColumn: target?.column ?? anchor.column
+                    )
+                }
+            }
+            .onEnded { value in
+                guard enabled, let cell else { return }
+                guard case .second(true, let drag?) = value else { return }
+                let target = cellAddress(at: drag.location, metrics: metrics) ?? (anchor.row, anchor.column)
+                let buttonId = cell.buttonId
+                fieldDrag = nil
+                suppressNextCellTap = true
+                guard target.0 != anchor.row || target.1 != anchor.column else { return }
+                Task {
+                    let moved = await model.moveBoardField(
+                        fromRow: anchor.row,
+                        fromCol: anchor.column,
+                        toRow: target.0,
+                        toCol: target.1
+                    )
+                    if moved, let item = model.boardFieldItems.first(where: { $0.buttonId == buttonId }) {
+                        selectField(BoardCellAnchor(row: item.row, column: item.column))
+                    } else if !moved {
+                        model.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
+                    }
+                }
+            }
+    }
+
+    private func fieldEditChrome(cellWidth: CGFloat, cellHeight: CGFloat, gap: CGFloat, rows: Int, columns: Int) -> some View {
+        let contentWidth = cellWidth * CGFloat(columns) + gap * CGFloat(max(0, columns - 1))
+        let contentHeight = cellHeight * CGFloat(rows) + gap * CGFloat(max(0, rows - 1))
+        return ZStack(alignment: .topLeading) {
+        if let drag = fieldDrag {
+            let target = model.boardFieldItems.first { item in
+                drag.targetRow >= item.row && drag.targetRow < item.row + item.rowSpan &&
+                    drag.targetColumn >= item.column && drag.targetColumn < item.column + item.columnSpan
+            }
+            if let target, target.buttonId != drag.buttonId {
+                let width = cellWidth * CGFloat(target.columnSpan) + gap * CGFloat(target.columnSpan - 1)
+                let height = cellHeight * CGFloat(target.rowSpan) + gap * CGFloat(target.rowSpan - 1)
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .frame(width: max(0, width), height: max(0, height))
+                    .offset(
+                        x: CGFloat(target.column) * (cellWidth + gap),
+                        y: CGFloat(target.row) * (cellHeight + gap)
+                    )
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        if let anchor = selectedFieldAnchor,
+           let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) {
+            let span = resizePreview ?? GridFieldSpanInfo(rows: field.rowSpan, columns: field.columnSpan)
+            let width = cellWidth * CGFloat(span.columns) + gap * CGFloat(max(0, span.columns - 1))
+            let height = cellHeight * CGFloat(span.rows) + gap * CGFloat(max(0, span.rows - 1))
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(resizePreview == nil || resizePreviewValid ? Color.accentColor : Color.red, lineWidth: 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill((resizePreviewValid ? Color.accentColor : Color.red).opacity(resizePreview == nil ? 0 : 0.18))
+                )
+                .frame(width: max(0, width), height: max(0, height))
+                .offset(x: CGFloat(field.column) * (cellWidth + gap), y: CGFloat(field.row) * (cellHeight + gap))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            resizeHandle(.end, field: field, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap, rows: rows, columns: columns, span: span)
+            resizeHandle(.bottom, field: field, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap, rows: rows, columns: columns, span: span)
+            resizeHandle(.corner, field: field, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap, rows: rows, columns: columns, span: span)
+        }
+        }
+        .frame(width: max(0, contentWidth), height: max(0, contentHeight), alignment: .topLeading)
+    }
+
+    private func resizeHandle(
+        _ edge: FieldResizeEdge,
+        field: BoardFieldItem,
+        cellWidth: CGFloat,
+        cellHeight: CGFloat,
+        gap: CGFloat,
+        rows: Int,
+        columns: Int,
+        span: GridFieldSpanInfo
+    ) -> some View {
+        let width = cellWidth * CGFloat(span.columns) + gap * CGFloat(max(0, span.columns - 1))
+        let height = cellHeight * CGFloat(span.rows) + gap * CGFloat(max(0, span.rows - 1))
+        let originX = CGFloat(field.column) * (cellWidth + gap)
+        let originY = CGFloat(field.row) * (cellHeight + gap)
+        let centerX: CGFloat = switch edge {
+        case .bottom: originX + width / 2
+        case .end, .corner: originX + width
+        }
+        let centerY: CGFloat = switch edge {
+        case .end: originY + height / 2
+        case .bottom, .corner: originY + height
+        }
+        let metrics = BoardGridMetrics(
+            cellWidth: cellWidth,
+            cellHeight: cellHeight,
+            gap: gap,
+            rows: rows,
+            columns: columns
+        )
+        return Circle()
+            .fill(Color.accentColor)
+            .frame(width: 44, height: 44)
+            .overlay {
+                Image(systemName: edge == .corner ? "arrow.up.left.and.arrow.down.right" : "circle.fill")
+                    .font(edge == .corner ? .body : .caption2)
+                    .foregroundStyle(Color(.systemBackground))
+                    .accessibilityHidden(true)
+            }
+            .offset(x: centerX - 22, y: centerY - 22)
+            .accessibilityLabel(Text("boardset.cell.merge"))
+            .accessibilityAddTraits(.isButton)
+            .gesture(
+                DragGesture(minimumDistance: 4, coordinateSpace: .named("boardGrid"))
+                    .onChanged { value in
+                        guard let address = cellAddress(at: value.location, metrics: metrics) else {
+                            resizePreviewValid = false
+                            return
+                        }
+                        let next = snappedSpan(edge: edge, field: field, row: address.row, column: address.column)
+                        resizePreview = next
+                        resizePreviewValid = selectedFieldSpans.contains(next) || next == GridFieldSpanInfo(rows: field.rowSpan, columns: field.columnSpan)
+                    }
+                    .onEnded { value in
+                        let address = cellAddress(at: value.location, metrics: metrics)
+                        let next = address.map { snappedSpan(edge: edge, field: field, row: $0.row, column: $0.column) }
+                        resizePreview = nil
+                        guard let next, selectedFieldSpans.contains(next),
+                              next.rows != field.rowSpan || next.columns != field.columnSpan else {
+                            if next != nil && (next?.rows != field.rowSpan || next?.columns != field.columnSpan) {
+                                model.boardStatusMessage = NSLocalizedString("boardset.cell.size.blocked", comment: "")
+                            }
+                            return
+                        }
+                        Task {
+                            await model.resizeSelectedBoardField(
+                                row: field.row,
+                                col: field.column,
+                                rows: next.rows,
+                                columns: next.columns
+                            )
+                            selectField(BoardCellAnchor(row: field.row, column: field.column))
+                        }
+                    }
+            )
+    }
+
+    private func snappedSpan(edge: FieldResizeEdge, field: BoardFieldItem, row: Int, column: Int) -> GridFieldSpanInfo {
+        GridFieldSpanInfo(
+            rows: edge == .end ? field.rowSpan : max(1, row - field.row + 1),
+            columns: edge == .bottom ? field.columnSpan : max(1, column - field.column + 1)
+        )
+    }
+
+    private func moveField(from anchor: BoardCellAnchor, directionRow: Int, directionColumn: Int, fromEditor: Bool = false) async {
+        guard let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) else { return }
+        let targetRow = anchor.row + (directionRow > 0 ? field.rowSpan : directionRow)
+        let targetColumn = anchor.column + (directionColumn > 0 ? field.columnSpan : directionColumn)
+        guard targetRow >= 0, targetColumn >= 0 else {
+            model.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
+            return
+        }
+        let buttonId = field.buttonId
+        let moved = await model.moveBoardField(fromRow: anchor.row, fromCol: anchor.column, toRow: targetRow, toCol: targetColumn)
+        guard moved, let buttonId, let item = model.boardFieldItems.first(where: { $0.buttonId == buttonId }) else {
+            model.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
+            return
+        }
+        let next = BoardCellAnchor(row: item.row, column: item.column)
+        selectField(next)
+        if fromEditor {
+            editingRow = next.row
+            editingCol = next.column
+            await reloadEditingSpans(anchor: next)
+        }
+    }
+
+    private func resizeField(_ anchor: BoardCellAnchor, deltaRows: Int, deltaColumns: Int, fromEditor: Bool = false) async {
+        guard let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) else { return }
+        let options = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+        let next = GridFieldSpanInfo(rows: field.rowSpan + deltaRows, columns: field.columnSpan + deltaColumns)
+        guard options.contains(next) else {
+            model.boardStatusMessage = NSLocalizedString("boardset.cell.size.blocked", comment: "")
+            return
+        }
+        await model.resizeSelectedBoardField(row: anchor.row, col: anchor.column, rows: next.rows, columns: next.columns)
+        selectedFieldSpans = options
+        if fromEditor {
+            editingSpan = next.rows == 1 && next.columns == 1 ? .single : .custom(next)
+            editingSpanOptions = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+        } else {
+            selectField(anchor)
+        }
+    }
+
+    private func reloadEditingSpans(anchor: BoardCellAnchor) async {
+        let options = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+        let field = model.boardFieldItems.first { $0.row == anchor.row && $0.column == anchor.column }
+        editingSpanOptions = options
+        if let field, let match = options.first(where: { $0.rows == field.rowSpan && $0.columns == field.columnSpan }) {
+            editingSpan = match.rows == 1 && match.columns == 1 ? .single : .custom(match)
         }
     }
 
@@ -1797,6 +2480,16 @@ struct SymbolBoardWorkspaceView: View {
             editingBorderPickerColor = Color(.separator)
         }
         editingLinkedBoardId = existing?.linkedBoardId ?? ""
+        editingOpensPage = trimmed(existing?.linkedBoardId) != nil
+        editingHidden = existing?.hidden ?? false
+        editingMathMode = existing?.mathMode ?? false
+        let shape = existing?.shape.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        editingShape = shape.isEmpty ? "rounded" : shape
+        editingLanguage = existing?.language ?? ""
+        editingRecordingPath = existing?.soundPath
+        editingClearsRecording = false
+        isRecordingCell = false
+        cellMicDenied = false
         editingWordType = existing?.wordType ?? ""
         editingSelectedSymbolUrl = existing?.imageUrl
         shouldClearEditingSymbol = false
@@ -1974,30 +2667,39 @@ struct SymbolBoardWorkspaceView: View {
         return destination.absoluteString
     }
 
-    private func authenticateAndUnlock(for set: BoardSetInfo?) {
-        guard let set else { return }
-        let context = LAContext()
-        var authError: NSError?
-
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &authError) else {
-            authErrorMessage = authError?.localizedDescription ?? NSLocalizedString("boardset.unlock.not_available", comment: "")
+    /// Locking a screen for the first time asks the carer to choose a PIN.
+    /// Unlocking always asks for that PIN. The device passcode is not used.
+    @MainActor
+    private func beginScreenLockToggle(_ set: BoardSetInfo) async {
+        await model.refreshEditingAccess()
+        pendingEditingBoardSetId = nil
+        pendingDeleteBoardSetId = nil
+        if !set.isLocked && model.editingAccessEnabled {
+            await model.selectBoardSet(id: set.id)
+            model.setSelectedBoardSetLocked(true)
             return
         }
+        pendingBoardLockId = set.id
+        pendingBoardLockUnlocks = set.isLocked
+        pinMode = model.editingAccessEnabled ? .unlock : .create
+        showEditingAccessSheet = true
+    }
 
-        context.evaluatePolicy(
-            .deviceOwnerAuthentication,
-            localizedReason: NSLocalizedString("boardset.unlock.reason", comment: "")
-        ) { success, error in
-            DispatchQueue.main.async {
-                if success {
-                    Task {
-                        await model.selectBoardSet(id: set.id)
-                        model.setSelectedBoardSetLocked(false)
-                    }
-                } else {
-                    authErrorMessage = error?.localizedDescription ?? NSLocalizedString("boardset.unlock.failed", comment: "")
-                }
-            }
+    @MainActor
+    private func finishEditingAccessSuccess() async {
+        if let lockId = pendingBoardLockId {
+            let unlocks = pendingBoardLockUnlocks
+            pendingBoardLockId = nil
+            await model.selectBoardSet(id: lockId)
+            model.setSelectedBoardSetLocked(!unlocks)
+            return
+        }
+        if let deleteId = pendingDeleteBoardSetId {
+            pendingDeleteBoardSetId = nil
+            await model.deleteBoardSet(id: deleteId)
+        } else if let id = pendingEditingBoardSetId {
+            pendingEditingBoardSetId = nil
+            route = .workspace(boardSetId: id, mode: .edit)
         }
     }
 
@@ -2007,8 +2709,9 @@ struct SymbolBoardWorkspaceView: View {
             route = .workspace(boardSetId: boardSetId, mode: .edit)
         } else {
             pendingEditingBoardSetId = boardSetId
-            editingAccessCode = ""
-            editingAccessError = false
+            pendingDeleteBoardSetId = nil
+            pendingBoardLockId = nil
+            pinMode = .unlock
             showEditingAccessSheet = true
         }
     }
@@ -2051,86 +2754,94 @@ struct BoardSetLibraryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+            Button(action: onOpen) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: set.isLocked ? "lock.fill" : "square.grid.2x2")
+                        .font(.title2)
+                        .foregroundStyle(set.isLocked ? Color.orange : Color.primary)
+                        .frame(width: 44, height: 44)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(set.name)
-                            .font(.headline)
+                            .font(.title3)
                             .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-
-                        if set.isLocked {
-                            Image(systemName: "lock.fill")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                        }
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                        Text(pageSummary)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                        Text(updatedSummary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-
-                    Text(String(format: NSLocalizedString("boardset.grid_summary", comment: ""), set.boardIds.count, 0, 0))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Spacer(minLength: 0)
                 }
-
-                Spacer()
-
-                Button(action: onOpen) {
-                    HStack {
-                        Image(systemName: "play.fill")
-                        Text(NSLocalizedString("board_sets.library.open", comment: ""))
-                    }
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                }
-                .buttonStyle(.borderedProminent)
+                .contentShape(Rectangle())
             }
-
-            Divider()
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("board_sets.library.open_hint"))
 
             HStack(spacing: 12) {
                 Button(action: onEdit) {
-                    Label("board_sets.library.open", systemImage: "pencil")
-                        .font(.caption)
+                    Label("board_sets.library.edit", systemImage: "pencil")
+                        .font(.headline)
+                        .frame(minHeight: 56)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(set.isLocked)
 
-                Button(action: onDuplicate) {
-                    Label("board_sets.library.duplicate", systemImage: "doc.on.doc")
-                        .font(.caption)
+                Menu {
+                    Button(action: onDuplicate) {
+                        Label("board_sets.library.duplicate", systemImage: "doc.on.doc")
+                    }
+                    if set.isLocked {
+                        Button(action: onToggleLock) {
+                            Label("boardset.unlock", systemImage: "lock.open.fill")
+                        }
+                    } else {
+                        Button(action: onToggleLock) {
+                            Label("boardset.lock", systemImage: "lock.fill")
+                        }
+                    }
+                    Button(action: onExport) {
+                        Label("boardset.export_obz", systemImage: "square.and.arrow.up")
+                    }
+                    Button(action: onPrint) {
+                        Label("boardset.print_pdf", systemImage: "printer")
+                    }
+                    Divider()
+                    Button(role: .destructive, action: onDelete) {
+                        Label("common.delete", systemImage: "trash")
+                    }
+                } label: {
+                    Label("board_sets.library.more", systemImage: "ellipsis.circle")
+                        .font(.headline)
+                        .frame(minWidth: 56, minHeight: 56)
                 }
-                .buttonStyle(.bordered)
-
-                Button(action: onToggleLock) {
-                    Label(set.isLocked ? "boardset.unlock" : "boardset.lock", systemImage: set.isLocked ? "lock.open.fill" : "lock.fill")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: onExport) {
-                    Label("boardset.export_obz", systemImage: "square.and.arrow.up")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: onPrint) {
-                    Image(systemName: "printer").frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel(Text("boardset.print_pdf"))
-                Spacer()
-
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-                .buttonStyle(.bordered)
+                .accessibilityLabel(Text("board_sets.library.more"))
             }
         }
-        .padding()
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 16)
                 .fill(Color(.secondarySystemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
         )
+    }
+
+    private var pageSummary: String {
+        let count = set.boardIds.count
+        if count == 1 {
+            return String(format: NSLocalizedString("board_sets.library.pages_one", comment: ""), count)
+        }
+        return String(format: NSLocalizedString("board_sets.library.pages_other", comment: ""), count)
+    }
+
+    private var updatedSummary: String {
+        let date = Date(timeIntervalSince1970: set.updatedAt)
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        let relative = formatter.localizedString(for: date, relativeTo: Date())
+        return String(format: NSLocalizedString("board_sets.library.updated", comment: ""), relative)
     }
 }

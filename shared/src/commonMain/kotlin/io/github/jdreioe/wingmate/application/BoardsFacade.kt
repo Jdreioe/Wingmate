@@ -8,16 +8,20 @@ import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
 import io.github.jdreioe.wingmate.domain.obf.PrintedPage
 import io.github.jdreioe.wingmate.domain.obf.printableScreen
 import io.github.jdreioe.wingmate.domain.obf.usedImageIds
+import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.WordType
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
 import io.github.jdreioe.wingmate.domain.obf.fieldItems
@@ -26,6 +30,7 @@ import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
 import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
+import io.github.jdreioe.wingmate.domain.obf.moveOrSwapField
 import io.github.jdreioe.wingmate.domain.obf.withFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.withWordType
 import io.github.jdreioe.wingmate.domain.obf.wordType
@@ -81,7 +86,10 @@ data class IosBoardCell(
     val actions: List<String>,
     val soundId: String? = null,
     val soundDataUrl: String? = null,
+    val soundPath: String? = null,
     val shape: String = "square",
+    val language: String? = null,
+    val mathMode: Boolean = false,
 )
 
 data class IosBoardFieldItem(
@@ -100,6 +108,23 @@ data class IosGridFieldSpan(
 data class IosBoardReturnResult(
     val boardId: String?,
     val boardStack: List<String>,
+)
+
+/**
+ * Tri-state Screen or Page settings. Boolean choices are `inherit`, `on`, or `off`.
+ * Activation is `inherit`, `SpeakAndAdd`, `AddOnly`, or `SpeakOnly`.
+ * Return is `inherit`, `Stay`, `Previous`, or `StartPage`.
+ */
+data class IosBoardSettingsDraft(
+    val showLabels: String = "inherit",
+    val showSymbols: String = "inherit",
+    val labelAtTop: String = "inherit",
+    val showMessageBar: String = "inherit",
+    val showSpeakButton: String = "inherit",
+    val messageBarEditable: String = "inherit",
+    val activationBehavior: String = "inherit",
+    val returnBehavior: String = "inherit",
+    val cacheSpeech: String = "inherit",
 )
 
 /**
@@ -333,10 +358,11 @@ class BoardsFacade(
                     button.imageId, button.imageId?.let { images[it]?.url }, button.hidden,
                     button.resolvedActions(),
                     button.soundId,
-                    board.sounds.firstOrNull { it.id == button.soundId }?.let { sound ->
-                        sound.dataUrl ?: sound.data?.let { "data:audio;base64,$it" } ?: sound.url
-                    },
+                    board.sounds.firstOrNull { it.id == button.soundId }?.playableUrl(),
+                    board.sounds.firstOrNull { it.id == button.soundId }?.path,
                     button.shape.wireValue,
+                    button.locale,
+                    button.mathMode,
                 )
             }
         }
@@ -381,6 +407,21 @@ class BoardsFacade(
         if (resized != grid) boardRepository.saveBoard(board.copy(grid = resized))
     }
 
+    /**
+     * Move the Button at [fromRow], [fromCol] onto [toRow], [toCol].
+     * An empty cell receives the Button and keeps its span. Another Button swaps
+     * places when both spans fit. Returns false when the move would overlap or
+     * leave the page, and leaves the grid unchanged.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun moveBoardField(boardId: String, fromRow: Int, fromCol: Int, toRow: Int, toCol: Int): Boolean = nativeCall {
+        val board = requireBoard(boardId)
+        val grid = board.grid.orRejected()
+        val moved = grid.moveOrSwapField(fromRow, fromCol, toRow, toCol) ?: return@nativeCall false
+        if (moved != grid) boardRepository.saveBoard(board.copy(grid = moved))
+        true
+    }
+
     // --- Shared board-session logic ---
     fun nGramPredictionInsertion(sentence: String, suggestion: String): String =
         io.github.jdreioe.wingmate.domain.obf.nGramPredictionInsertion(sentence, suggestion)
@@ -409,6 +450,13 @@ class BoardsFacade(
         boardId: String, row: Int, col: Int, label: String?, vocalization: String?,
         backgroundColor: String?, borderColor: String?, linkedBoardId: String?,
         imageUrl: String?, clearImage: Boolean, actions: List<String>, wordType: String?,
+        applyAppearance: Boolean = false,
+        hidden: Boolean = false,
+        shape: String? = null,
+        language: String? = null,
+        mathMode: Boolean = false,
+        recordingPath: String? = null,
+        clearRecording: Boolean = false,
     ): ObfBoard = nativeCall {
         val board = requireBoard(boardId)
         val grid = board.cellGrid(row, col)
@@ -422,21 +470,48 @@ class BoardsFacade(
             val image = ObfImage(id = imageId, url = imageUrl)
             images = images.filterNot { it.id == imageId } + image
         }
-        val button = (existing ?: ObfButton(id = buttonId)).copy(
+        var soundId = existing?.soundId
+        var sounds = board.sounds
+        if (applyAppearance) {
+            val normalizedRecording = recordingPath?.trim()?.takeIf(String::isNotEmpty)
+            when {
+                clearRecording -> soundId = null
+                normalizedRecording != null && soundId != null -> sounds = sounds.map { sound ->
+                    if (sound.id == soundId) sound.copy(path = normalizedRecording, url = null, data = null, dataUrl = null) else sound
+                }
+                normalizedRecording != null -> {
+                    val created = "sound-${kotlin.random.Random.nextLong().toString().replace('-', '0')}"
+                    soundId = created
+                    sounds = sounds + ObfSound(id = created, contentType = "audio/mp4", path = normalizedRecording)
+                }
+            }
+        }
+        var button = (existing ?: ObfButton(id = buttonId)).copy(
             label = label, vocalization = vocalization,
             imageId = imageId, backgroundColor = backgroundColor, borderColor = borderColor,
             loadBoard = linkedBoardId?.let { ObfLoadBoard(id = it) },
             action = actions.singleOrNull(),
             actions = if (actions.size > 1) actions else emptyList(),
-        ).withWordType(wordType?.let { value -> WordType.entries.firstOrNull { it.wireValue == value } })
+            hidden = if (applyAppearance) hidden else existing?.hidden ?: false,
+            locale = if (applyAppearance) language?.trim()?.takeIf(String::isNotEmpty) else existing?.locale,
+            soundId = soundId,
+        )
+        if (applyAppearance) {
+            button = button
+                .withMathMode(mathMode)
+                .withShape(ObfButtonShape.entries.firstOrNull { it.wireValue == shape } ?: ObfButtonShape.Rounded)
+        }
+        button = button.withWordType(wordType?.let { value -> WordType.entries.firstOrNull { it.wireValue == value } })
         val buttons = board.buttons.filterNot { it.id == buttonId } + button
         val order = grid.order.mapIndexed { r, columns ->
             columns.mapIndexed { c, id -> if (r == row && c == col) buttonId else id }
         }
         val usedImageIds = board.usedImageIds(buttons)
+        val usedSoundIds = buttons.mapNotNull { it.soundId }.toSet()
         board.copy(
             buttons = buttons,
             images = images.filter { it.id in usedImageIds },
+            sounds = sounds.filter { it.id in usedSoundIds },
             grid = grid.copy(order = order),
         ).also {
             boardRepository.saveBoard(it)
@@ -497,6 +572,59 @@ class BoardsFacade(
     }
 
     @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun boardSettingsDraft(boardSetId: String, boardId: String, forPage: Boolean): IosBoardSettingsDraft = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (boardId !in graph.boardSet.boardIds) throw NativeFailure(NativeFailureKind.NotFound)
+        val overrides = if (forPage) {
+            graph.boardsById[boardId]?.pageSettingsOverrides() ?: BoardSettingsOverrides()
+        } else {
+            graph.boardSet.screenSettings
+        }
+        overrides.toDraft()
+    }
+
+    /** Writes one inheritance level. `inherit` clears that override. A locked Screen is rejected. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateBoardSettings(
+        boardSetId: String,
+        boardId: String,
+        forPage: Boolean,
+        showLabels: String,
+        showSymbols: String,
+        labelAtTop: String,
+        showMessageBar: String,
+        showSpeakButton: String,
+        messageBarEditable: String,
+        activationBehavior: String,
+        returnBehavior: String,
+        cacheSpeech: String,
+    ) = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
+        if (boardId !in graph.boardSet.boardIds) throw NativeFailure(NativeFailureKind.NotFound)
+        val overrides = BoardSettingsOverrides(
+            showLabels = showLabels.toOptionalBoolean(),
+            showSymbols = showSymbols.toOptionalBoolean(),
+            labelAtTop = labelAtTop.toOptionalBoolean(),
+            showMessageBar = showMessageBar.toOptionalBoolean(),
+            showSpeakButton = showSpeakButton.toOptionalBoolean(),
+            messageBarEditable = messageBarEditable.toOptionalBoolean(),
+            activationBehavior = activationBehavior.toActivation(),
+            returnBehavior = returnBehavior.toReturnBehavior(),
+            cacheSpeech = cacheSpeech.toOptionalBoolean(),
+        )
+        val updated = if (forPage) {
+            val board = graph.boardsById[boardId] ?: throw NativeFailure(NativeFailureKind.NotFound)
+            graph.copy(boards = graph.boards.map { current ->
+                if (current.id == board.id) current.withPageSettingsOverrides(overrides) else current
+            })
+        } else {
+            graph.copy(boardSet = graph.boardSet.copy(screenSettings = overrides))
+        }
+        boardSetUseCase.saveBoardSetGraph(updated).getOrElse { throw NativeFailure(NativeFailureKind.Persistence) }
+    }
+
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun printedPages(boardSetId: String, locale: String?): List<PrintedPage> = nativeCall {
         printableScreen(boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound), locale)
     }
@@ -528,3 +656,46 @@ private fun String.toBoardReturnBehavior(): BoardReturnBehavior =
         "StartPage" -> BoardReturnBehavior.StartPage
         else -> BoardReturnBehavior.Stay
     }
+
+private fun ObfSound.playableUrl(): String? =
+    dataUrl ?: data?.let { "data:audio;base64,$it" } ?: url ?: path?.let { stored ->
+        if (stored.contains("://")) stored else "file://$stored"
+    }
+
+private fun BoardSettingsOverrides.toDraft(): IosBoardSettingsDraft = IosBoardSettingsDraft(
+    showLabels = showLabels.choice(),
+    showSymbols = showSymbols.choice(),
+    labelAtTop = labelAtTop.choice(),
+    showMessageBar = showMessageBar.choice(),
+    showSpeakButton = showSpeakButton.choice(),
+    messageBarEditable = messageBarEditable.choice(),
+    activationBehavior = activationBehavior?.name ?: "inherit",
+    returnBehavior = returnBehavior?.name ?: "inherit",
+    cacheSpeech = cacheSpeech.choice(),
+)
+
+private fun Boolean?.choice(): String = when (this) {
+    null -> "inherit"
+    true -> "on"
+    false -> "off"
+}
+
+private fun String.toOptionalBoolean(): Boolean? = when (this) {
+    "on" -> true
+    "off" -> false
+    else -> null
+}
+
+private fun String.toActivation(): BoardActivationBehavior? = when (this) {
+    "SpeakAndAdd" -> BoardActivationBehavior.SpeakAndAdd
+    "AddOnly" -> BoardActivationBehavior.AddOnly
+    "SpeakOnly" -> BoardActivationBehavior.SpeakOnly
+    else -> null
+}
+
+private fun String.toReturnBehavior(): BoardReturnBehavior? = when (this) {
+    "Stay" -> BoardReturnBehavior.Stay
+    "Previous" -> BoardReturnBehavior.Previous
+    "StartPage" -> BoardReturnBehavior.StartPage
+    else -> null
+}

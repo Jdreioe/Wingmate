@@ -77,6 +77,7 @@ internal fun EditingAccessDialog(
         },
         confirmButton = {
             val incorrect = stringResource(R.string.editing_access_incorrect)
+            val wait = stringResource(R.string.editing_access_wait)
             TextButton(
                 enabled = canSubmit,
                 onClick = {
@@ -88,7 +89,12 @@ internal fun EditingAccessDialog(
                             EditingAccessDialogMode.Disable -> controller.disable(code)
                         }
                         working = false
-                        if (success) onSuccess() else error = incorrect
+                        if (success) {
+                            onSuccess()
+                        } else {
+                            val retryAt = controller.state.value.retryNotBeforeMillis
+                            error = if (retryAt > System.currentTimeMillis()) wait else incorrect
+                        }
                     }
                 }
             ) { Text(stringResource(R.string.common_ok)) }
