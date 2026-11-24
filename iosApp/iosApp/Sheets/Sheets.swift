@@ -18,7 +18,20 @@ private enum SymbolPackageFilter: String, CaseIterable, Identifiable {
     case arasaac
 
     var id: String { rawValue }
-    var localizationKey: LocalizedStringKey { LocalizedStringKey("phrase.symbol.package.\(rawValue)") }
+
+    /// Resolved catalog text. The key is built as a String first: interpolating inside
+    /// LocalizedStringKey looks up a format key and shows the raw key.
+    var localizedTitle: String { Self.title(for: rawValue) }
+
+    static func title(for source: String) -> String {
+        switch source {
+        case Self.all.rawValue: return NSLocalizedString("phrase.symbol.package.all", comment: "")
+        case Self.opensymbols.rawValue: return NSLocalizedString("phrase.symbol.package.opensymbols", comment: "")
+        case Self.mulberry.rawValue: return NSLocalizedString("phrase.symbol.package.mulberry", comment: "")
+        case Self.arasaac.rawValue: return NSLocalizedString("phrase.symbol.package.arasaac", comment: "")
+        default: return source
+        }
+    }
 }
 
 private enum PhraseSymbolSource: String, CaseIterable, Identifiable {
@@ -176,7 +189,7 @@ struct AddPhraseSheet: View {
                             if symbolSource == .openSymbols {
                                 Picker("phrase.symbol.package", selection: $symbolPackage) {
                                     ForEach(SymbolPackageFilter.allCases) { option in
-                                        Text(option.localizationKey).tag(option)
+                                        Text(option.localizedTitle).tag(option)
                                     }
                                 }
                                 .pickerStyle(.segmented)
@@ -287,7 +300,7 @@ struct AddPhraseSheet: View {
                                                         .font(.caption2)
                                                         .lineLimit(2)
                                                         .multilineTextAlignment(.center)
-                                                    Text(LocalizedStringKey("phrase.symbol.package.\(symbol.source)"))
+                                                    Text(SymbolPackageFilter.title(for: symbol.source))
                                                         .font(.caption2)
                                                         .foregroundStyle(.secondary)
                                                 }
@@ -650,7 +663,7 @@ struct EditPhraseSheet: View {
                             if symbolSource == .openSymbols {
                                 Picker("phrase.symbol.package", selection: $symbolPackage) {
                                     ForEach(SymbolPackageFilter.allCases) { option in
-                                        Text(option.localizationKey).tag(option)
+                                        Text(option.localizedTitle).tag(option)
                                     }
                                 }
                                 .pickerStyle(.segmented)
@@ -763,7 +776,7 @@ struct EditPhraseSheet: View {
                                                         .font(.caption2)
                                                         .lineLimit(2)
                                                         .multilineTextAlignment(.center)
-                                                    Text(LocalizedStringKey("phrase.symbol.package.\(symbol.source)"))
+                                                    Text(SymbolPackageFilter.title(for: symbol.source))
                                                         .font(.caption2)
                                                         .foregroundStyle(.secondary)
                                                 }

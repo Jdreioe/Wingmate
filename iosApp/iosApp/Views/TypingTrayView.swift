@@ -132,7 +132,7 @@ struct TypingTrayView: View {
                     .accessibilityFocused($focusedPage, equals: .category(category.id))
                     .contextMenu { categoryActions(category) }
                     .accessibilityAddTraits(selected ? .isSelected : [])
-                    .accessibilityHint(Text(selected ? "accessibility.category.menu_hint" : ""))
+                    .accessibilityHint(Text(LocalizedStringKey(selected ? "accessibility.category.menu_hint" : "")))
                 }
                 if historyAvailable {
                     CategoryChip(
@@ -375,7 +375,7 @@ private struct TypingActionButton: View {
         .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
-        .accessibilityValue(Text(unsupported ? "typing.action.unsupported" : enabled ? "" : "typing.action.unavailable"))
+        .accessibilityValue(Text(LocalizedStringKey(unsupported ? "typing.action.unsupported" : enabled ? "" : "typing.action.unavailable")))
         .onAppear { model.registerAccessTarget(targetId, action: perform) }
         .onDisappear { model.unregisterAccessTarget(targetId) }
         .onHover { hovering in

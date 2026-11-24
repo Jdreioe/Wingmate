@@ -36,8 +36,8 @@ struct SpeechControls: View {
                     .background(Circle().fill(Color.accentColor))
             }
             .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
-            .accessibilityLabel(Text(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play"))
-            .accessibilityHint(Text(paused || playing ? "" : "accessibility.playback.play_hint"))
+            .accessibilityLabel(Text(LocalizedStringKey(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play")))
+            .accessibilityHint(Text(LocalizedStringKey(paused || playing ? "" : "accessibility.playback.play_hint")))
         }
         .animation(.easeInOut(duration: 0.2), value: paused || playing)
     }
@@ -69,7 +69,7 @@ struct TypingMessageBar: View {
                     .background(Circle().fill(Color(.secondarySystemFill)))
             }
             .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
-            .accessibilityLabel(Text(messageFocused ? "typing.show_screen" : "typing.show_keyboard"))
+            .accessibilityLabel(Text(LocalizedStringKey(messageFocused ? "typing.show_screen" : "typing.show_keyboard")))
             .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
 
             MultiLineInput(

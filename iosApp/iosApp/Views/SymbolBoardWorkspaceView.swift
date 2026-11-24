@@ -19,7 +19,20 @@ private enum CellSymbolPackageFilter: String, CaseIterable, Identifiable {
     case arasaac
 
     var id: String { rawValue }
-    var localizationKey: LocalizedStringKey { LocalizedStringKey("phrase.symbol.package.\(rawValue)") }
+
+    /// Resolved catalog text. The key is built as a String first: interpolating inside
+    /// LocalizedStringKey looks up a format key and shows the raw key.
+    var localizedTitle: String { Self.title(for: rawValue) }
+
+    static func title(for source: String) -> String {
+        switch source {
+        case Self.all.rawValue: return NSLocalizedString("phrase.symbol.package.all", comment: "")
+        case Self.opensymbols.rawValue: return NSLocalizedString("phrase.symbol.package.opensymbols", comment: "")
+        case Self.mulberry.rawValue: return NSLocalizedString("phrase.symbol.package.mulberry", comment: "")
+        case Self.arasaac.rawValue: return NSLocalizedString("phrase.symbol.package.arasaac", comment: "")
+        default: return source
+        }
+    }
 }
 
 private enum CellSymbolSource: String, CaseIterable, Identifiable {
@@ -690,7 +703,7 @@ struct SymbolBoardWorkspaceView: View {
                             .foregroundColor(.blue)
                     }
                     .accessibilityLabel(
-                        Text(showHiddenButtons ? "board_workspace.hide_hidden" : "board_workspace.show_hidden")
+                        Text(LocalizedStringKey(showHiddenButtons ? "board_workspace.hide_hidden" : "board_workspace.show_hidden"))
                     )
                     Button(action: {
                         if model.canEditSelectedBoardSet {
@@ -1597,7 +1610,7 @@ struct SymbolBoardWorkspaceView: View {
                     if editingSymbolSource == .openSymbols {
                         Picker("phrase.symbol.package", selection: $editingSymbolPackage) {
                             ForEach(CellSymbolPackageFilter.allCases) { option in
-                                Text(option.localizationKey).tag(option)
+                                Text(option.localizedTitle).tag(option)
                             }
                         }
                         .pickerStyle(.segmented)
@@ -1645,7 +1658,7 @@ struct SymbolBoardWorkspaceView: View {
                                                     .frame(width: 56, height: 56)
                                                 }
                                                 Text(symbol.name).font(.caption2).lineLimit(1)
-                                                Text(LocalizedStringKey("phrase.symbol.package.\(symbol.source)"))
+                                                Text(CellSymbolPackageFilter.title(for: symbol.source))
                                                     .font(.caption2)
                                                     .foregroundStyle(.secondary)
                                             }
@@ -1793,9 +1806,12 @@ struct SymbolBoardWorkspaceView: View {
                 Section("boardset.cell.word_type") {
                     Picker("boardset.cell.word_type", selection: $editingWordType) {
                         Text("boardset.cell.word_type.automatic").tag("")
-                        ForEach(["pronoun", "verb", "descriptor", "noun", "social", "other"], id: \.self) { type in
-                            Text(LocalizedStringKey("boardset.cell.word_type.\(type)")).tag(type)
-                        }
+                        Text("boardset.cell.word_type.pronoun").tag("pronoun")
+                        Text("boardset.cell.word_type.verb").tag("verb")
+                        Text("boardset.cell.word_type.descriptor").tag("descriptor")
+                        Text("boardset.cell.word_type.noun").tag("noun")
+                        Text("boardset.cell.word_type.social").tag("social")
+                        Text("boardset.cell.word_type.other").tag("other")
                     }
                 }
             }

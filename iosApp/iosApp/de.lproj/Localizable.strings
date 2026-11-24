@@ -308,6 +308,9 @@
 "welcome_mode.tour.boardsets.step3" = "Bearbeite den Bildschirm später, um Symbole und Layout anzupassen.";
 "welcome_mode.tour.phrase_preview_title" = "Phrasen-Bildschirm";
 "welcome_mode.tour.phrase_preview_message" = "Ich hätte gerne etwas Wasser, bitte.";
+"welcome_mode.tour.sample.hello" = "Hallo";
+"welcome_mode.tour.sample.yes" = "Ja";
+"welcome_mode.tour.sample.help" = "Hilfe";
 "welcome_mode.tour.back" = "Zurück zur Auswahl";
 
 /* Analytics Consent */
