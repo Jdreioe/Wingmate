@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.ui.platform.LocalContext
@@ -66,6 +67,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -101,6 +103,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.GridsetExportResult
+import io.github.jdreioe.wingmate.application.GridsetExporter
 import io.github.jdreioe.wingmate.application.ObzExportResult
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.KeyboardPreset
@@ -753,6 +757,7 @@ private fun BoardSetWorkspaceRoot(
     val showHiddenButtons = hiddenButtonsSession.revealed
     val showEditingAccessDialog = workspace.showEditingAccessDialog
     var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
+    var showExportDialog by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(R.string.board_workspace_unlock_to_edit)
     val loadErrorMessage = stringResource(R.string.board_workspace_load_error)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
@@ -1013,6 +1018,48 @@ private fun BoardSetWorkspaceRoot(
         }
     }
 
+    fun exportGridset() {
+        scope.launch {
+            workspaceViewModel.onAction(BoardWorkspaceAction.ExportStarted)
+            var resultMessage = exportCancelledMessage
+            try {
+                val graph = activeGraph
+                if (graph == null) {
+                    resultMessage = exportErrorMessage
+                } else {
+                    when (
+                        val export = useCase.exportBoardSetAsGridsetResult(
+                            boardSetId = graph.boardSet.id,
+                            appSettings = settings,
+                            loadUrl = mediaUrlLoader?.let { loader -> { url -> loader.load(url) } },
+                        )
+                    ) {
+                        is GridsetExportResult.Success -> {
+                            val fileName = GridsetExporter.sanitizeExportFileName(graph.boardSet.name, "gridset")
+                            if (shareService != null) {
+                                val shared = shareService.shareFile(fileName, export.bytes)
+                                resultMessage = if (shared) {
+                                    exportedTemplate.replace("%NAME%", fileName)
+                                } else {
+                                    exportCancelledMessage
+                                }
+                            } else {
+                                resultMessage = exportErrorMessage
+                            }
+                        }
+                        is GridsetExportResult.Failure -> resultMessage = exportErrorMessage
+                    }
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (_: Exception) {
+                resultMessage = exportErrorMessage
+            } finally {
+                workspaceViewModel.onAction(BoardWorkspaceAction.ExportFinished(resultMessage))
+            }
+        }
+    }
+
     /** Shares the whole Screen as a printable PDF, the fallback for when no device works (#227). */
     fun printBoardSet() {
         scope.launch {
@@ -1041,6 +1088,47 @@ private fun BoardSetWorkspaceRoot(
                 workspaceViewModel.onAction(BoardWorkspaceAction.ExportFinished(resultMessage))
             }
         }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text(stringResource(R.string.board_workspace_export)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            exportBoardSet()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isExporting,
+                    ) {
+                        Icon(Icons.Default.ImportExport, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.board_workspace_export_obz))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            exportGridset()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isExporting,
+                    ) {
+                        Icon(Icons.Default.GridView, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.board_workspace_export_gridset))
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
     }
 
     nativeKeyboardDraft?.let { currentDraft ->
@@ -1342,7 +1430,7 @@ private fun BoardSetWorkspaceRoot(
                                         enabled = !isExporting,
                                         onClick = {
                                             appBarMenuExpanded = false
-                                            exportBoardSet()
+                                            showExportDialog = true
                                         }
                                     )
                                     DropdownMenuItem(
@@ -1461,7 +1549,7 @@ private fun BoardSetWorkspaceRoot(
                             )
                         }
                         IconButton(
-                            onClick = ::exportBoardSet,
+                            onClick = { showExportDialog = true },
                             enabled = !isExporting
                         ) {
                             Icon(

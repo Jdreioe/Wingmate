@@ -14,6 +14,7 @@ import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.TypingScreenUseCase
+import io.github.jdreioe.wingmate.application.GridsetExporter
 import io.github.jdreioe.wingmate.application.ObzExporter
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -58,8 +59,19 @@ val appModule = module {
     singleOf(::InMemoryBoardRepository) { bind<BoardRepository>() }
     singleOf(::InMemoryBoardSetRepository) { bind<BoardSetRepository>() }
     singleOf(::ObzExporter)
+    single { GridsetExporter() }
     singleOf(::BoardSetSpeechCacheUseCase) { bind<BoardSpeechCache>() }
-    singleOf(::BoardSetUseCase)
+    single {
+        BoardSetUseCase(
+            boardSetRepository = get(),
+            boardRepository = get(),
+            featureUsageReporter = get(),
+            obzExporter = get(),
+            fileStorage = getOrNull(),
+            speechCache = getOrNull(),
+            gridsetExporter = get(),
+        )
+    }
     singleOf(::TypingScreenUseCase)
     // Platforms override with a real player; default is a no-op.
     single<SoundPlayer> { NoopSoundPlayer() }
