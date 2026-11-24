@@ -108,7 +108,7 @@ struct PartnerDisplayView: View {
                         .multilineTextAlignment(.center)
                         .lineLimit(nil)
                         .minimumScaleFactor(0.35)
-                        .foregroundStyle(Color.primary)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity)
                         .padding(.horizontal, isCompact ? 20 : 40)
                 }
@@ -127,12 +127,12 @@ struct PartnerDisplayView: View {
                                     Text(item.title)
                                         .font(.footnote.weight(.medium))
                                         .lineLimit(1)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Color.white.opacity(0.8))
                                 }
                                 .padding(8)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color(.secondarySystemBackground))
+                                        .fill(Color.white.opacity(0.12))
                                 )
                             }
                         }
@@ -152,13 +152,14 @@ struct PartnerDisplayView: View {
                     .foregroundStyle(Color.accentColor)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.accentColor.opacity(0.14)))
+                    .background(Capsule().fill(Color.accentColor.opacity(0.22)))
                     .padding(.bottom, 16)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground))
+            .background(Color.black.ignoresSafeArea())
         }
+        .preferredColorScheme(.dark)
     }
 }
 
