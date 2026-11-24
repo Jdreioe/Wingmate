@@ -177,6 +177,15 @@ class CommunicationSessionFacade(
         session.accept(CommunicationAction.SpeakPart(MessagePart(text), voice))
     }
 
+    /**
+     * Says one part of the active Message again, e.g. a word the listener missed,
+     * with its own spoken text, language and recording. The Message and History stay unchanged.
+     */
+    fun speakMessagePart(index: Int, voice: Voice?) {
+        val part = session.state.value.activeMessage.parts.getOrNull(index) ?: return
+        session.accept(CommunicationAction.SpeakPart(part, voice))
+    }
+
     /** Speaks a Phrase on its own, playing its recording when it has one. */
     fun speakPhrase(phrase: Phrase, voice: Voice?) {
         session.accept(

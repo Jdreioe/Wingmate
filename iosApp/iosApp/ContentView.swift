@@ -34,7 +34,11 @@ struct ContentView: View {
     @ViewBuilder
     private var mainContent: some View {
         if model.boardModeEnabled {
-            SymbolBoardWorkspaceView(model: model)
+            SymbolBoardWorkspaceView(model: model) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
+                    showSettingsPanel = true
+                }
+            }
         } else {
             TypingWorkspaceView(
                 model: model,
@@ -106,8 +110,10 @@ struct ContentView: View {
                                     .padding(.horizontal, currentWideLayout ? 16 : 0)
                                 mainContent
                             }
+                            // Pad inside the proxy width so the content never overflows it.
+                            // Screens pad themselves so the board can use the width.
+                            .padding(currentWideLayout || model.boardModeEnabled ? 0 : 16)
                             .frame(width: proxy.size.width)
-                            .padding(currentWideLayout ? 0 : 16)
                         }
                     }
                 }
@@ -139,25 +145,6 @@ struct ContentView: View {
                         }
                     }
                 }
-                #if DEBUG
-                .overlay(alignment: .topLeading) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("debug.content_loaded")
-                        if let v = model.selectedVoice {
-                            let name = (v.displayName ?? v.name) ?? "—"
-                            let lang = (v.selectedLanguage.isEmpty ? v.primaryLanguage : v.selectedLanguage) ?? "-"
-                            Text(String(format: NSLocalizedString("debug.voice_with_lang", comment: ""), name, lang))
-                        } else {
-                            Text("debug.voice.none")
-                        }
-                    }
-                    .font(.caption2)
-                    .padding(6)
-                    .background(Color.yellow.opacity(0.3))
-                    .cornerRadius(6)
-                    .padding(8)
-                }
-                #endif
             }
             // Editing access relocks whenever Wingmate leaves the foreground, in either workspace.
             .onChange(of: scenePhase) { _, phase in

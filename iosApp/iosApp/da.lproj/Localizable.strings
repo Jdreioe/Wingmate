@@ -71,7 +71,6 @@
 "phrase.delete" = "Slet";
 "phrase.add.tile" = "Tilføj";
 
-"debug.content_loaded" = "DEBUG: ContentView loaded";
 
 "azure.endpoint.placeholder" = "Region";
 "azure.key.placeholder" = "Abonnomentsnøgle";
@@ -142,8 +141,6 @@
 "accessibility.double_tap_select_voice" = "Dobbelttryk for at vælge denne stemme";
 "accessibility.double_tap_select_language" = "Dobbelttryk for at vælge dette sprog";
 
-"debug.voice_with_lang" = "Stemme: %@ [%@]";
-"debug.voice.none" = "Stemme: (ingen)";
 
 "common.cancel" = "Annuller";
 
@@ -207,10 +204,10 @@
 "welcome_flow.choose_primary_language" = "Vælg primært sprog til denne stemme";
 "welcome_flow.select_language" = "Vælg sprog";
 
-"toolbar.switch_symbol_mode" = "Skift til symbolarbejdsområde";
-"toolbar.switch_phrase_mode" = "Skift til frasearbejdsområde";
+"toolbar.switch_symbol_mode" = "Skift til Skærme";
+"toolbar.switch_phrase_mode" = "Skift til Skriv";
 
-"symbol.workspace.title" = "Symbolarbejdsområde";
+"symbol.workspace.title" = "Skærme";
 
 "boardset.create" = "Ny skærm";
 "boardset.creating" = "Opretter skærm…";
@@ -508,6 +505,7 @@
 "boardset.background_custom" = "Brug en brugerdefineret baggrund";
 "boardset.background_footer" = "Slå dette fra for at bruge appens tema.";
 "board_workspace.show_hidden" = "Vis skjulte knapper midlertidigt";
+"board_workspace.menu" = "Menu";
 "board_workspace.hide_hidden" = "Skjul midlertidigt viste knapper";
 "board_workspace.temporarily_revealed" = "Midlertidigt vist skjult knap";
 "editing_access.title" = "Redigeringsadgang";
@@ -593,6 +591,13 @@
 "category.move_right" = "Flyt til højre";
 "accessibility.category.menu_hint" = "Dobbelttryk for at flytte eller slette denne kategori.";
 "screens.message_bar" = "Besked";
+"screens.message_bar.clear_all" = "Slet alt";
+"screens.message_bar.hold" = "Parkér beskeden";
+"screens.message_bar.say_part_hint" = "Siger denne del igen";
+"screens.message_bar.delete_last" = "Slet sidste";
+"screens.message_bar.add_button" = "Tilføj knap til beskedlinjen";
+"screens.message_bar.remove_button" = "Fjern knap";
+"screens.message_bar.edit_hint" = "Vælg hvad knappen gør";
 
 // Android feature parity
 "typing.likely_next" = "Sandsynligt næste";
@@ -642,7 +647,6 @@
 "boardset.cell.merge_1x1" = "1 × 1";
 "boardset.cell.merge_footer" = "Udvid en knap, så den fylder flere felter. Kun ledige felter kan flettes.";
 "boardset.cell.add" = "Tilføj knap";
-"boardset.cell.edit" = "Rediger";
 "boardset.cell.move" = "Flyt";
 "boardset.cell.move.footer" = "Flyt knappen ét felt. Den bytter plads med en anden knap, når begge passer.";
 "boardset.cell.move.up" = "Flyt op";
@@ -657,7 +661,6 @@
 "boardset.cell.size.taller" = "Højere";
 "boardset.cell.size.shorter" = "Lavere";
 "boardset.cell.size.blocked" = "Den størrelse passer ikke.";
-"boardset.cell.size.value" = "%d × %d";
 "boardset.cell.merge_size" = "Flettet størrelse";
 "boardset.export_obz" = "Eksportér";
 "common.off" = "Fra";

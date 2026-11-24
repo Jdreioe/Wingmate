@@ -248,6 +248,7 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardLabelAtTop: Bool? = nil
     @Published var resolvedBoardShowMessageBar: Bool? = nil
     @Published var resolvedBoardShowSpeakButton: Bool? = nil
+    @Published var resolvedBoardMessageBarActions: [String]? = nil
     @Published var resolvedBoardSpeechPolicy: String? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
@@ -258,6 +259,10 @@ final class IosViewModel: ObservableObject {
     var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
     var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
     var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? boardShowSpeakButton }
+    /// The Screen's message bar buttons in order (`Speak`, `Hold`, `DeleteLast`, `Clear`).
+    var boardMessageBarActions: [String] {
+        resolvedBoardMessageBarActions ?? (boardShowSpeakButton ? ["Speak"] : [])
+    }
     var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
     var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
 
@@ -439,6 +444,9 @@ final class IosViewModel: ObservableObject {
         await refreshLanguagePreferences()
         await refreshScanningSettings()
         await refreshParitySettings()
+        // The startup workspace applies at launch only. Settings also refresh
+        // these values, and must not switch the workspace the user is in.
+        boardModeEnabled = startupUsesScreens
 
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
@@ -595,7 +603,6 @@ final class IosViewModel: ObservableObject {
                 self.swipeBetweenPages = settings.swipeBetweenPages
                 self.startupUsesScreens = opensScreens
                 self.startupBoardSetId = settings.startupBoardSetId
-                self.boardModeEnabled = opensScreens
             }
             await loadHistory()
         } catch {
@@ -819,6 +826,12 @@ final class IosViewModel: ObservableObject {
         session.speakText(text: text, voice: selectedVoice)
     }
 
+    /// Says one part of the Message again, e.g. a word the listener missed.
+    func speakMessagePart(at index: Int) {
+        AudioSessionHelper.activatePlayback()
+        session.speakMessagePart(index: Int32(index), voice: selectedVoice)
+    }
+
     /// Speaks a Phrase on its own, playing its recording when it has one.
     func speakPhrase(_ phrase: Shared.Phrase) {
         AudioSessionHelper.activatePlayback()
@@ -870,7 +883,12 @@ final class IosViewModel: ObservableObject {
             let imageUrl = cell.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
             looks["\(pageId)|\(cell.buttonId)"] = (label, imageUrl?.isEmpty == false ? imageUrl : nil)
         }
-        screenButtonLooks = looks
+        // Runs on every Button tap; only publish when a look actually changed.
+        let changed = looks.count != screenButtonLooks.count || looks.contains { key, look in
+            guard let old = screenButtonLooks[key] else { return true }
+            return old.label != look.label || old.imageUrl != look.imageUrl
+        }
+        if changed { screenButtonLooks = looks }
         lookedUpPageIds.insert(pageId)
     }
 
@@ -1335,8 +1353,11 @@ final class IosViewModel: ObservableObject {
         predictionJob?.cancel()
         predictionSubscription?.cancel()
         predictionSubscription = nil
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            predictions = Shared.PredictionResult(words: [], letters: [])
+        // Screens have their own prediction Buttons; Typing's suggestions would only re-render them.
+        if boardModeEnabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !(predictions.words.isEmpty && predictions.letters.isEmpty) {
+                predictions = Shared.PredictionResult(words: [], letters: [])
+            }
             return
         }
         predictionJob = Task { [weak self] in
@@ -1791,6 +1812,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
             resolvedBoardShowSpeakButton = nil
+            resolvedBoardMessageBarActions = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
@@ -1807,6 +1829,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardLabelAtTop = resolved?.labelAtTop
             resolvedBoardShowMessageBar = resolved?.showMessageBar
             resolvedBoardShowSpeakButton = resolved?.showSpeakButton
+            resolvedBoardMessageBarActions = resolved?.messageBarActions
             resolvedBoardActivationBehavior = resolved?.activationBehavior
             resolvedBoardSpeechPolicy = resolved?.speechPolicy
             resolvedBoardReturnBehavior = resolved?.returnBehavior
@@ -1827,6 +1850,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
             resolvedBoardShowSpeakButton = nil
+            resolvedBoardMessageBarActions = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
@@ -2053,7 +2077,8 @@ final class IosViewModel: ObservableObject {
     func stopBoardPredictions() {
         boardPredictionSubscription?.cancel()
         boardPredictionSubscription = nil
-        boardPredictionsByButtonId = [:]
+        // Publishing an unchanged value still re-renders the whole Screen.
+        if !boardPredictionsByButtonId.isEmpty { boardPredictionsByButtonId = [:] }
     }
 
     func boardPrediction(for buttonId: String) -> String? {
@@ -2126,6 +2151,17 @@ final class IosViewModel: ObservableObject {
     func loadBoardSettings(forPage: Bool) async -> Shared.IosBoardSettingsDraft? {
         guard let setId = selectedBoardSetId, let boardId = selectedBoardId else { return nil }
         return try? await boardsFacade.boardSettingsDraft(boardSetId: setId, boardId: boardId, forPage: forPage)
+    }
+
+    /// Saves the selected Screen's message bar buttons, in order.
+    func setMessageBarActions(_ actions: [String]) async {
+        guard let setId = selectedBoardSetId, canEditSelectedBoardSet else { return }
+        do {
+            try await boardsFacade.updateMessageBarActions(boardSetId: setId, actions: actions)
+            await loadSelectedBoard()
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
+        }
     }
 
     func saveBoardSettings(

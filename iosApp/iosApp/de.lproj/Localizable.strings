@@ -71,7 +71,6 @@
 "phrase.delete" = "Löschen";
 "phrase.add.tile" = "Hinzufügen";
 
-"debug.content_loaded" = "DEBUG: ContentView geladen";
 
 "azure.endpoint.placeholder" = "Endpunkt (https://<region>.tts.speech.microsoft.com)";
 "azure.key.placeholder" = "Abonnementschlüssel";
@@ -140,8 +139,6 @@
 "accessibility.double_tap_select_voice" = "Doppeltippen, um diese Stimme auszuwählen";
 "accessibility.double_tap_select_language" = "Doppeltippen, um diese Sprache auszuwählen";
 
-"debug.voice_with_lang" = "Stimme: %@ [%@]";
-"debug.voice.none" = "Stimme: (keine)";
 
 "common.cancel" = "Abbrechen";
 
@@ -205,10 +202,10 @@
 "welcome_flow.choose_primary_language" = "Primäre Sprache für diese Stimme wählen";
 "welcome_flow.select_language" = "Sprache wählen";
 
-"toolbar.switch_symbol_mode" = "Zum Symbol-Arbeitsbereich wechseln";
-"toolbar.switch_phrase_mode" = "Zum Phrasen-Arbeitsbereich wechseln";
+"toolbar.switch_symbol_mode" = "Zu Bildschirme wechseln";
+"toolbar.switch_phrase_mode" = "Zu Schreiben wechseln";
 
-"symbol.workspace.title" = "Symbol-Arbeitsbereich";
+"symbol.workspace.title" = "Bildschirme";
 
 "boardset.create" = "Neuer Bildschirm";
 "boardset.creating" = "Bildschirm wird erstellt…";
@@ -489,6 +486,13 @@
 "category.move_right" = "Nach rechts";
 "accessibility.category.menu_hint" = "Doppeltippen, um diese Kategorie zu verschieben oder zu löschen.";
 "screens.message_bar" = "Nachricht";
+"screens.message_bar.clear_all" = "Alles löschen";
+"screens.message_bar.hold" = "Nachricht parken";
+"screens.message_bar.say_part_hint" = "Sagt diesen Teil erneut";
+"screens.message_bar.delete_last" = "Letztes löschen";
+"screens.message_bar.add_button" = "Taste zur Nachrichtenleiste hinzufügen";
+"screens.message_bar.remove_button" = "Taste entfernen";
+"screens.message_bar.edit_hint" = "Wähle, was diese Taste tut";
 
 // Android feature parity
 "typing.likely_next" = "Wahrscheinlich als Nächstes";
@@ -537,6 +541,7 @@
 "board_cell_opens_board" = "Öffnet Seite: %@";
 "board_workspace.hide_hidden" = "Vorübergehend eingeblendete Schaltflächen ausblenden";
 "board_workspace.show_hidden" = "Ausgeblendete Schaltflächen vorübergehend anzeigen";
+"board_workspace.menu" = "Menü";
 "board_workspace.temporarily_revealed" = "Vorübergehend eingeblendete Schaltfläche";
 "boardset.background_color" = "Seitenhintergrund";
 "boardset.background_custom" = "Benutzerdefinierten Hintergrund verwenden";
@@ -545,7 +550,6 @@
 "boardset.cell.merge_1x1" = "1 × 1";
 "boardset.cell.merge_footer" = "Vergrößere eine Schaltfläche auf mehrere Felder. Nur freie Felder können zusammengeführt werden.";
 "boardset.cell.add" = "Schaltfläche hinzufügen";
-"boardset.cell.edit" = "Bearbeiten";
 "boardset.cell.move" = "Verschieben";
 "boardset.cell.move.footer" = "Verschiebe die Schaltfläche um ein Feld. Sie tauscht den Platz, wenn beide passen.";
 "boardset.cell.move.up" = "Nach oben";
@@ -560,7 +564,6 @@
 "boardset.cell.size.taller" = "Höher";
 "boardset.cell.size.shorter" = "Niedriger";
 "boardset.cell.size.blocked" = "Diese Größe passt nicht.";
-"boardset.cell.size.value" = "%d × %d";
 "boardset.cell.merge_size" = "Zusammengeführte Größe";
 "boardset.cell.word_type" = "Wortart";
 "boardset.cell.word_type.automatic" = "Automatisch";

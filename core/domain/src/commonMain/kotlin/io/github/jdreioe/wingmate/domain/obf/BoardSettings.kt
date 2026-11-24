@@ -34,6 +34,26 @@ enum class BoardReturnBehavior {
     StartPage
 }
 
+/** What one of the up to four buttons beside a Screen's message bar does. */
+@Serializable
+enum class MessageBarAction {
+    /** Speaks the Message; stops speech while it plays. */
+    @SerialName("speak")
+    Speak,
+
+    /** Parks the Message, or swaps it with the parked one. */
+    @SerialName("hold")
+    Hold,
+
+    @SerialName("delete_last")
+    DeleteLast,
+
+    @SerialName("clear")
+    Clear,
+}
+
+const val MAX_MESSAGE_BAR_ACTIONS = 4
+
 /**
  * Nullable settings used at both inheritance levels:
  * Screen values inherit from the app, while Page values inherit from the Screen.
@@ -52,6 +72,11 @@ data class BoardSettingsOverrides(
     val speechPolicy: SpeechPolicy? = null,
     /** Generate cloud speech for every Button ahead of use. Off unless explicitly enabled. */
     val cacheSpeech: Boolean? = null,
+    /**
+     * The buttons beside the message bar, in order. Replaces [showSpeakButton]
+     * once set; until then the speak setting decides between Speak and none.
+     */
+    val messageBarActions: List<MessageBarAction>? = null,
 ) {
     val isEmpty: Boolean
         get() = showLabels == null &&
@@ -63,7 +88,8 @@ data class BoardSettingsOverrides(
             activationBehavior == null &&
             returnBehavior == null &&
             speechPolicy == null &&
-            cacheSpeech == null
+            cacheSpeech == null &&
+            messageBarActions == null
 }
 
 data class ResolvedBoardSettings(
@@ -77,6 +103,7 @@ data class ResolvedBoardSettings(
     val returnBehavior: BoardReturnBehavior,
     val speechPolicy: SpeechPolicy? = null,
     val cacheSpeech: Boolean = false,
+    val messageBarActions: List<MessageBarAction>,
 )
 
 fun resolveBoardSettings(
@@ -98,12 +125,19 @@ fun resolveBoardSettings(
     // Wingmate editor prevents it. Always leave at least one communication cue.
     if (!showLabels && !showSymbols) showLabels = true
 
+    val legacyShowSpeakButton = page.showSpeakButton ?: screen.showSpeakButton ?: appShowSpeakButton
+    val messageBarActions = (page.messageBarActions ?: screen.messageBarActions)
+        ?.distinct()
+        ?.take(MAX_MESSAGE_BAR_ACTIONS)
+        ?: if (legacyShowSpeakButton) listOf(MessageBarAction.Speak) else emptyList()
+
     return ResolvedBoardSettings(
         showLabels = showLabels,
         showSymbols = showSymbols,
         labelAtTop = page.labelAtTop ?: screen.labelAtTop ?: appLabelAtTop,
         showMessageBar = page.showMessageBar ?: screen.showMessageBar ?: appShowMessageBar,
-        showSpeakButton = page.showSpeakButton ?: screen.showSpeakButton ?: appShowSpeakButton,
+        // Clients that only know the speak toggle follow the button list.
+        showSpeakButton = MessageBarAction.Speak in messageBarActions,
         messageBarEditable = page.messageBarEditable ?: screen.messageBarEditable ?: appMessageBarEditable,
         activationBehavior = page.activationBehavior
             ?: screen.activationBehavior
@@ -113,6 +147,7 @@ fun resolveBoardSettings(
             ?: appReturnBehavior,
         speechPolicy = page.speechPolicy ?: screen.speechPolicy,
         cacheSpeech = page.cacheSpeech ?: screen.cacheSpeech ?: false,
+        messageBarActions = messageBarActions,
     )
 }
 
