@@ -1103,11 +1103,18 @@ struct VoiceSelectionSheet: View {
     private let speechFacade = IosDiBridge().speechFacade()
 
     let current: Shared.Voice?
+    let primaryLanguage: String?
     let onClose: () -> Void
     let onSelect: (Shared.Voice) -> Void
 
-    init(selected: Shared.Voice?, onClose: @escaping () -> Void, onSelect: @escaping (Shared.Voice) -> Void) {
+    init(
+        selected: Shared.Voice?,
+        primaryLanguage: String? = nil,
+        onClose: @escaping () -> Void,
+        onSelect: @escaping (Shared.Voice) -> Void
+    ) {
         self.current = selected
+        self.primaryLanguage = primaryLanguage
         self.onClose = onClose
         self.onSelect = onSelect
         self._selected = State(initialValue: selected)
@@ -1116,30 +1123,16 @@ struct VoiceSelectionSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Show system TTS info when enabled
-                if useSystemTts {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Image(systemName: "info.circle.fill")
-                                .foregroundColor(.blue)
-                            Text("voice.system_tts.enabled_info")
-                                .font(.subheadline)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                        .background(Color.blue.opacity(0.1))
-                    }
-                } else {
-                    HStack {
-                        Image(systemName: "magnifyingglass").foregroundColor(.secondary)
-                        TextField(NSLocalizedString("voice.search.placeholder", comment: ""), text: $query)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled(true)
-                    }
-                    .padding(8)
-                    .background(Color(.secondarySystemBackground))
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                    TextField(NSLocalizedString("voice.search.placeholder", comment: ""), text: $query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                }
+                .padding(8)
+                .background(Color(.secondarySystemBackground))
 
+                if !useSystemTts {
                     if ttsEngine == "GOOGLE_CLOUD" {
                         HStack {
                             Text("voice.model.label")
@@ -1159,23 +1152,10 @@ struct VoiceSelectionSheet: View {
 
                 Group {
                     if useSystemTts {
-                        // Show system TTS info
-                        VStack(spacing: 16) {
-                            Spacer()
-                            VStack(spacing: 12) {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(.system(size: 50))
-                                    .foregroundColor(.secondary)
-                                Text("voice.system_tts.using")
-                                    .font(.title2)
-                                    .bold()
-                                Text("voice.system_tts.settings_info")
-                                    .multilineTextAlignment(.center)
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal)
-                            }
-                            Spacer()
-                        }
+                        SystemVoicePickerList(
+                            query: query,
+                            primaryLanguage: primaryLanguage ?? current?.primaryLanguage ?? Locale.current.identifier
+                        )
                     } else if loading { 
                         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) 
                     } else if let err = error { 
@@ -1290,6 +1270,176 @@ struct VoiceSelectionSheet: View {
             return try await speechFacade.refreshVoicesFromGoogle()
         }
         return try await speechFacade.refreshVoicesFromAzure()
+    }
+}
+
+/// Lists every on-device voice iOS exposes to apps (Apple voices, downloaded enhanced/premium
+/// voices, Personal Voice and third-party voice provider apps) and stores the choice per language
+/// in Wingmate, instead of deferring to iOS Accessibility > Spoken Content defaults.
+struct SystemVoicePickerList: View {
+    let query: String
+    let primaryLanguage: String
+
+    @State private var voices: [AVSpeechSynthesisVoice] = []
+    @State private var choices: [String: String] = SystemVoicePreferences.all
+    @State private var personalVoiceStatus: AVSpeechSynthesizer.PersonalVoiceAuthorizationStatus =
+        AVSpeechSynthesizer.personalVoiceAuthorizationStatus
+
+    private struct LanguageGroup: Identifiable {
+        let code: String
+        let title: String
+        let voices: [AVSpeechSynthesisVoice]
+        var id: String { code }
+    }
+
+    var body: some View {
+        List {
+            if personalVoiceStatus == .notDetermined {
+                Section {
+                    Button {
+                        AVSpeechSynthesizer.requestPersonalVoiceAuthorization { status in
+                            DispatchQueue.main.async {
+                                personalVoiceStatus = status
+                                reload()
+                            }
+                        }
+                    } label: {
+                        Label("voice.system.personal_voice.allow", systemImage: "person.wave.2")
+                    }
+                } footer: {
+                    Text("voice.system.personal_voice.footer")
+                }
+            }
+
+            ForEach(groups) { group in
+                Section(header: Text(group.title)) {
+                    row(
+                        title: NSLocalizedString("voice.system.default", comment: ""),
+                        subtitle: nil,
+                        isSelected: choices[group.code] == nil || !group.voices.contains { $0.identifier == choices[group.code] },
+                        preview: nil
+                    ) {
+                        select(nil, languageCode: group.code)
+                    }
+                    ForEach(group.voices, id: \.identifier) { voice in
+                        row(
+                            title: voice.name,
+                            subtitle: detail(for: voice),
+                            isSelected: choices[group.code] == voice.identifier,
+                            preview: voice
+                        ) {
+                            select(voice.identifier, languageCode: group.code)
+                        }
+                    }
+                }
+            }
+
+            Section {
+                EmptyView()
+            } footer: {
+                Text("voice.system_tts.settings_info")
+            }
+        }
+        .onAppear(perform: reload)
+        .onReceive(NotificationCenter.default.publisher(for: AVSpeechSynthesizer.availableVoicesDidChangeNotification)) { _ in
+            reload()
+        }
+    }
+
+    private func row(
+        title: String,
+        subtitle: String?,
+        isSelected: Bool,
+        preview: AVSpeechSynthesisVoice?,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Button(action: action) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                        if let subtitle, !subtitle.isEmpty {
+                            Text(subtitle).font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark").foregroundColor(.accentColor)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+            if let preview {
+                Button {
+                    SystemTtsManager.shared.preview(preview, text: preview.name)
+                } label: {
+                    Image(systemName: "play.circle")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(Text("voice.system.preview"))
+            }
+        }
+    }
+
+    private func detail(for voice: AVSpeechSynthesisVoice) -> String {
+        var parts: [String] = [voice.language]
+        if voice.voiceTraits.contains(.isPersonalVoice) {
+            parts.append(NSLocalizedString("voice.system.personal", comment: ""))
+        }
+        switch voice.quality {
+        case .premium: parts.append(NSLocalizedString("voice.system.quality.premium", comment: ""))
+        case .enhanced: parts.append(NSLocalizedString("voice.system.quality.enhanced", comment: ""))
+        default: break
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func select(_ identifier: String?, languageCode: String) {
+        SystemVoicePreferences.setIdentifier(identifier, forLanguage: languageCode)
+        choices = SystemVoicePreferences.all
+    }
+
+    private func reload() {
+        voices = AVSpeechSynthesisVoice.speechVoices()
+        choices = SystemVoicePreferences.all
+        personalVoiceStatus = AVSpeechSynthesizer.personalVoiceAuthorizationStatus
+    }
+
+    private var groups: [LanguageGroup] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let primaryCode = SystemVoicePreferences.languageCode(of: primaryLanguage)
+
+        func rank(_ v: AVSpeechSynthesisVoice) -> Int {
+            if v.voiceTraits.contains(.isPersonalVoice) { return 0 }
+            if v.voiceTraits.contains(.isNoveltyVoice) { return 9 }
+            switch v.quality {
+            case .premium: return 1
+            case .enhanced: return 2
+            default: return 3
+            }
+        }
+
+        let grouped = Dictionary(grouping: voices) { SystemVoicePreferences.languageCode(of: $0.language) }
+        return grouped.compactMap { code, list -> LanguageGroup? in
+            let title = Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code
+            let filtered = q.isEmpty || title.lowercased().contains(q)
+                ? list
+                : list.filter { $0.name.lowercased().contains(q) || $0.language.lowercased().contains(q) }
+            guard !filtered.isEmpty else { return nil }
+            let sorted = filtered.sorted {
+                let (r0, r1) = (rank($0), rank($1))
+                return r0 != r1 ? r0 < r1 : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+            return LanguageGroup(code: code, title: title, voices: sorted)
+        }
+        .sorted {
+            if $0.code == primaryCode { return true }
+            if $1.code == primaryCode { return false }
+            return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
     }
 }
 
