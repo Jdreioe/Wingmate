@@ -1,0 +1,2 @@
+"NSFaceIDUsageDescription" = "Wingmate uses Face ID to confirm it is you before unlocking editing.";
+"NSMicrophoneUsageDescription" = "This app records audio for saved phrases.";

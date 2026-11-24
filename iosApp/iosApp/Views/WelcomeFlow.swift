@@ -988,9 +988,9 @@ struct TourPhrasePreviewCard: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color(.systemBackground)))
 
             HStack(spacing: 8) {
-                Text("Hello").font(.caption).bold().padding(.vertical, 6).padding(.horizontal, 12).background(Color.blue.opacity(0.15)).cornerRadius(6)
-                Text("Yes").font(.caption).bold().padding(.vertical, 6).padding(.horizontal, 12).background(Color.blue.opacity(0.15)).cornerRadius(6)
-                Text("Help").font(.caption).bold().padding(.vertical, 6).padding(.horizontal, 12).background(Color.blue.opacity(0.15)).cornerRadius(6)
+                Text("welcome_mode.tour.sample.hello").font(.caption).bold().padding(.vertical, 6).padding(.horizontal, 12).background(Color.blue.opacity(0.15)).cornerRadius(6)
+                Text("welcome_mode.tour.sample.yes").font(.caption).bold().padding(.vertical, 6).padding(.horizontal, 12).background(Color.blue.opacity(0.15)).cornerRadius(6)
+                Text("welcome_mode.tour.sample.help").font(.caption).bold().padding(.vertical, 6).padding(.horizontal, 12).background(Color.blue.opacity(0.15)).cornerRadius(6)
             }
         }
         .padding()

@@ -112,7 +112,7 @@ struct ContentView: View {
                     }
                 }
                 .background(Color(.systemBackground))
-                .navigationTitle(Text(model.boardModeEnabled ? "symbol.workspace.title" : "app.title"))
+                .navigationTitle(Text(LocalizedStringKey(model.boardModeEnabled ? "symbol.workspace.title" : "app.title")))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if !shouldShowWelcomeFlow {
@@ -123,7 +123,7 @@ struct ContentView: View {
                                 }
                             }) {
                                 Image(systemName: model.boardModeEnabled ? "text.bubble" : "square.grid.3x3.fill")
-                                    .accessibilityLabel(Text(model.boardModeEnabled ? "toolbar.switch_phrase_mode" : "toolbar.switch_symbol_mode"))
+                                    .accessibilityLabel(Text(LocalizedStringKey(model.boardModeEnabled ? "toolbar.switch_phrase_mode" : "toolbar.switch_symbol_mode")))
                             }
                             .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
 
@@ -187,7 +187,7 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.circle)
                     .padding(16)
-                    .accessibilityLabel(Text(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode"))
+                    .accessibilityLabel(Text(LocalizedStringKey(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode")))
                     .accessibilityAddTraits(.isButton)
                 }
             }

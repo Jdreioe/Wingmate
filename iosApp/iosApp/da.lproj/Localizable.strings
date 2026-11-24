@@ -310,6 +310,9 @@
 "welcome_mode.tour.boardsets.step3" = "Redigér skærmen senere for at tilpasse symboler og layout.";
 "welcome_mode.tour.phrase_preview_title" = "Fraseskærm";
 "welcome_mode.tour.phrase_preview_message" = "Jeg vil gerne have noget vand, tak.";
+"welcome_mode.tour.sample.hello" = "Hej";
+"welcome_mode.tour.sample.yes" = "Ja";
+"welcome_mode.tour.sample.help" = "Hjælp";
 "welcome_mode.tour.back" = "Tilbage til valgmuligheder";
 
 /* Analytics Consent */
