@@ -88,6 +88,8 @@ struct WelcomeFlow: View {
                     }
                 }
                 .padding(.horizontal, 24)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
             .navigationBarHidden(true)
         }

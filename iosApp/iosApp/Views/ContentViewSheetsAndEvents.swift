@@ -24,10 +24,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     let content: () -> Content
 
     var body: some View {
-        // Determine when to show modal sheets: only on narrow/compact or iPhone
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
         content()
-            .sheet(isPresented: Binding(get: { !isPad && showVoiceSheet }, set: { if !$0 { showVoiceSheet = false } })) {
+            .sheet(isPresented: $showVoiceSheet) {
                 VoiceSelectionSheet(selected: model.selectedVoice, onClose: { showVoiceSheet = false }) { v in
                     Task {
                         await model.chooseVoice(v)
@@ -37,7 +35,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: Binding(get: { !isPad && showLanguageSheet }, set: { if !$0 { showLanguageSheet = false } })) {
+            .sheet(isPresented: $showLanguageSheet) {
                 LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages,
                                        selected: model.primaryLanguage,
                                        onClose: { showLanguageSheet = false }) { lang in
@@ -47,7 +45,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDetents([.height(300), .medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: Binding(get: { !isPad && showSecondaryLanguageSheet }, set: { if !$0 { showSecondaryLanguageSheet = false } })) {
+            .sheet(isPresented: $showSecondaryLanguageSheet) {
                 LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.secondaryLanguage] : model.availableLanguages.filter { $0 != model.primaryLanguage },
                                        selected: model.secondaryLanguage,
                                        onClose: { showSecondaryLanguageSheet = false }) { lang in
@@ -75,7 +73,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
             }
-            .sheet(isPresented: Binding(get: { !isPad && showUiSizeSheet }, set: { if !$0 { showUiSizeSheet = false } })) {
+            .sheet(isPresented: $showUiSizeSheet) {
                 UiSizeSheet(onClose: { showUiSizeSheet = false },
                             uiTextFieldHeight: uiTextFieldHeight,
                             uiInputFontSize: uiInputFontSize,
@@ -92,19 +90,17 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showSettingsPanel) {
-                NavigationStack {
-                    SettingsView(
-                        model: model,
-                        uiTextFieldHeight: uiTextFieldHeight,
-                        uiInputFontSize: uiInputFontSize,
-                        uiChipFontSize: uiChipFontSize,
-                        uiPlayIconSize: uiPlayIconSize,
-                        onRestartSetup: {
-                            showSettingsPanel = false
-                            showWelcomeFlow = true
-                        }
-                    )
-                }
+                SettingsView(
+                    model: model,
+                    uiTextFieldHeight: uiTextFieldHeight,
+                    uiInputFontSize: uiInputFontSize,
+                    uiChipFontSize: uiChipFontSize,
+                    uiPlayIconSize: uiPlayIconSize,
+                    onRestartSetup: {
+                        showSettingsPanel = false
+                        showWelcomeFlow = true
+                    }
+                )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }

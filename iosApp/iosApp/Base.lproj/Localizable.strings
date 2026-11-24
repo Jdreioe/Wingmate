@@ -619,6 +619,7 @@
 
 /* Typing composer */
 "typing.show_keyboard" = "Show keyboard";
+"typing.hide_keyboard" = "Hide keyboard";
 "typing.show_screen" = "Show Typing Screen";
 "typing.held_message" = "Held: %@";
 "typing.held_message.swap" = "Swap";
@@ -680,3 +681,14 @@
 "elevenlabs.error" = "Could not complete the request. Check your connection, API key permissions, and available voices, then retry.";
 "elevenlabs.save" = "Save securely and verify";
 "elevenlabs.clear" = "Remove key";
+
+/* Partner display (outward / external display) */
+"settings.partner_display.section" = "Partner Display";
+"settings.partner_display.mode" = "Show on partner display";
+"settings.partner_display.off" = "Off";
+"settings.partner_display.when_speaking" = "Only when speaking";
+"settings.partner_display.while_communicating" = "While composing and speaking";
+"settings.partner_display.footer" = "Shows your Message in large text on a connected external or outward partner display when the device is open. Hidden during setup, settings, PIN entry, and screen editing.";
+"partner_display.speaking" = "Speaking";
+"toolbar.partner_display.pause" = "Hide partner display";
+"toolbar.partner_display.resume" = "Show on partner display";

@@ -85,7 +85,9 @@ struct SettingsView: View {
     let onRestartSetup: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var query = ""
+    @State private var selectedDestination: SettingsDestination? = .speech
 
     private var destinations: [SettingsDestination] {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -93,29 +95,65 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        List {
-            if destinations.isEmpty {
-                ContentUnavailableView.search(text: query)
-                    .listRowBackground(Color.clear)
+        Group {
+            if horizontalSizeClass == .regular {
+                // On unfolded iPhone Duo and iPad, show categories beside the active pane
+                // so settings can be browsed without repeatedly pushing and popping.
+                NavigationSplitView {
+                    List(selection: $selectedDestination) {
+                        if destinations.isEmpty {
+                            ContentUnavailableView.search(text: query)
+                                .listRowBackground(Color.clear)
+                        } else {
+                            Section {
+                                ForEach(destinations) { destination in
+                                    SettingsCategoryLabel(destination: destination)
+                                        .tag(destination)
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.sidebar)
+                    .navigationTitle(Text("settings.title"))
+                    .searchable(text: $query, prompt: Text("settings.search"))
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("common.done") { dismiss() }
+                        }
+                    }
+                } detail: {
+                    NavigationStack {
+                        destinationView(selectedDestination ?? .speech)
+                    }
+                }
             } else {
-                Section {
-                    ForEach(destinations) { destination in
-                        NavigationLink {
-                            destinationView(destination)
-                        } label: {
-                            SettingsCategoryLabel(destination: destination)
+                NavigationStack {
+                    List {
+                        if destinations.isEmpty {
+                            ContentUnavailableView.search(text: query)
+                                .listRowBackground(Color.clear)
+                        } else {
+                            Section {
+                                ForEach(destinations) { destination in
+                                    NavigationLink {
+                                        destinationView(destination)
+                                    } label: {
+                                        SettingsCategoryLabel(destination: destination)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                    .navigationTitle(Text("settings.title"))
+                    .navigationBarTitleDisplayMode(.large)
+                    .searchable(text: $query, prompt: Text("settings.search"))
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("common.done") { dismiss() }
                         }
                     }
                 }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle(Text("settings.title"))
-        .navigationBarTitleDisplayMode(.large)
-        .searchable(text: $query, prompt: Text("settings.search"))
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("common.done") { dismiss() }
             }
         }
         .task {
@@ -457,9 +495,22 @@ private struct DisplaySettingsView: View {
     @Binding var uiInputFontSize: Double
     @Binding var uiChipFontSize: Double
     @Binding var uiPlayIconSize: Double
+    @AppStorage("partner_display_mode") private var partnerDisplayModeRaw: String = PartnerDisplayMode.whileCommunicating.rawValue
 
     var body: some View {
         Form {
+            Section {
+                Picker("settings.partner_display.mode", selection: $partnerDisplayModeRaw) {
+                    ForEach(PartnerDisplayMode.allCases) { mode in
+                        Text(mode.titleKey).tag(mode.rawValue)
+                    }
+                }
+            } header: {
+                Text("settings.partner_display.section")
+            } footer: {
+                Text("settings.partner_display.footer")
+            }
+
             Section("settings.display.grid") {
                 Toggle("settings.display.show_labels", isOn: Binding(
                     get: { model.showButtonLabels }, set: { model.setShowButtonLabels($0) }

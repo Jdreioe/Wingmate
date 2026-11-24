@@ -2,17 +2,19 @@ import SwiftUI
 import UIKit
 import Shared
 
-/// The Typing workspace as a composer (#311, matching Android #299): the Message
-/// bar stays anchored at the bottom, and below it the Typing Screen tray and the
-/// keyboard take turns. The tray is the resting surface; focusing the Message
-/// means typing. While the keyboard is up, a row of Phrases and the Action strip
-/// sit above the bar instead.
+/// The Typing workspace:
+/// - On compact windows (standard iPhones, closed iPhone Duo outer display, narrow splits),
+///   the Message bar stays anchored at the bottom, and the Typing Screen tray and keyboard take turns.
+/// - On wide windows (unfolded iPhone Duo inner display in portrait or landscape, iPads),
+///   the Message and Typing Screen stay visible together beside a dedicated speech-and-actions panel.
+/// - When iPhone Duo is half-open (iOS 27.1+), `ArrangementView` splits the panes across the crease.
 struct TypingWorkspaceView: View {
     @ObservedObject var model: IosViewModel
     let recorder: AudioRecorder
     @Binding var editingPhrase: Shared.Phrase?
     @Binding var showAddCategory: Bool
     @Binding var showAddPhrase: Bool
+    @Binding var isMessageFullscreen: Bool
     let uiInputFontSize: Double
     let uiTextFieldHeight: Double
     let uiChipFontSize: Double
@@ -23,8 +25,8 @@ struct TypingWorkspaceView: View {
     @State private var messageFocused = false
     @State private var onScreenKeyboard = false
     @State private var page: TypingPage = .all
-    @State private var isMessageFullscreen = false
     @State private var restingHeight: CGFloat = 0
+    @State private var isWideWindow = false
     @State private var dragStartHeight: CGFloat? = nil
     @State private var pendingMutation: (() -> Void)? = nil
     /// The keyboard's last height, so the tray opens where the keyboard was.
@@ -36,12 +38,12 @@ struct TypingWorkspaceView: View {
     /// Landscape with the keyboard up leaves room for one row above the Message bar.
     private var oneRowWhileTyping: Bool { onScreenKeyboard && verticalSizeClass == .compact }
 
-    private var minTrayHeight: CGFloat { min(200, maxTrayHeight) }
+    private var minTrayHeight: CGFloat { min(180, maxTrayHeight) }
     private var maxTrayHeight: CGFloat { max(0, restingHeight * 0.6) }
 
-    private var trayHeight: CGFloat {
+    private func trayHeight(bottomSafeInset: CGFloat) -> CGFloat {
         let fromKeyboard = keyboardHeight > 0
-            ? CGFloat(keyboardHeight) - Self.windowBottomInset - 8
+            ? CGFloat(keyboardHeight) - bottomSafeInset - 8
             : restingHeight * 0.4
         let preferred = draggedTrayHeight > 0 ? CGFloat(draggedTrayHeight) : fromKeyboard
         return min(max(preferred, minTrayHeight), maxTrayHeight)
@@ -60,48 +62,46 @@ struct TypingWorkspaceView: View {
         }
     }
 
+    private var inputBinding: Binding<String> {
+        Binding(get: { model.input }, set: { model.onInputChanged($0) })
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            VStack(spacing: 8) {
-                statusRows
-                // Free space above the Message bar; the bar and its input surface stay at the bottom.
-                Spacer(minLength: 0)
-                if onScreenKeyboard && model.likelyNextAvailable {
-                    likelyNextRow
-                }
-                rowsAboveBar
-                #if DEBUG
-                // Only for a hardware keyboard; the on-screen one brings its own suggestions.
-                if messageFocused && !onScreenKeyboard {
-                    PredictionBar(
-                        result: model.predictions,
-                        onWordSelected: { model.applyWordPrediction($0) },
-                        onLetterSelected: { model.applyLetterPrediction($0) },
-                        fontSizeScale: 1.0
-                    )
-                }
-                #endif
-                TypingMessageBar(
-                    model: model,
-                    messageFocused: $messageFocused,
-                    fontSize: CGFloat(uiInputFontSize),
-                    minHeight: CGFloat(uiTextFieldHeight),
-                    iconSize: CGFloat(uiPlayIconSize)
-                )
-                if trayOpen {
-                    tray
-                        .frame(height: trayHeight)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+            // Decide wide vs compact from the full window height (ignoring the keyboard inset)
+            // so raising the on-screen keyboard on unfolded Duo landscape never flips layouts.
+            let wide = WindowLayoutClass.usesWideTyping(
+                size: proxy.size,
+                restingHeight: restingHeight,
+                keyboardVisible: onScreenKeyboard || restingHeight > proxy.size.height
+            )
+            let foldDivision = proxy.activeFoldDivision
+            let bottomInset = proxy.safeAreaInsets.bottom
+
+            Group {
+                if wide {
+                    wideTypingLayout(size: proxy.size, division: foldDivision)
+                } else {
+                    compactTypingLayout(bottomSafeInset: bottomInset)
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: trayOpen)
-            .onAppear { if !onScreenKeyboard { restingHeight = proxy.size.height } }
-            .onChange(of: proxy.size.height) { _, height in
-                if !onScreenKeyboard { restingHeight = height }
+            .onChange(of: wide) { _, newWide in
+                isWideWindow = newWide
+            }
+            .onAppear {
+                isWideWindow = wide
             }
         }
-        // The app bar gives way to the Message while the keyboard is up.
-        .toolbar(onScreenKeyboard ? .hidden : .visible, for: .navigationBar)
+        .background {
+            GeometryReader { windowProxy in
+                Color.clear
+                    .onAppear { restingHeight = windowProxy.size.height }
+                    .onChange(of: windowProxy.size.height) { _, h in restingHeight = h }
+            }
+            .ignoresSafeArea(.keyboard)
+        }
+        // On compact windows the app bar gives way to the Message while the keyboard is up.
+        .toolbar((!isWideWindow && onScreenKeyboard) ? .hidden : .visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 fullscreenButton
@@ -138,6 +138,346 @@ struct TypingWorkspaceView: View {
             )
         }
         .fullScreenCover(isPresented: $isMessageFullscreen) { fullscreenMessage }
+    }
+
+    // MARK: - Compact Layout (Outer Display / Standard iPhone / Narrow Split)
+
+    private func compactTypingLayout(bottomSafeInset: CGFloat) -> some View {
+        let currentTrayHeight = trayHeight(bottomSafeInset: bottomSafeInset)
+        return VStack(spacing: 8) {
+            statusRows
+            // Free space above the Message bar; the bar and its input surface stay at the bottom.
+            Spacer(minLength: 0)
+            if onScreenKeyboard && model.likelyNextAvailable {
+                likelyNextRow
+            }
+            rowsAboveBar
+            #if DEBUG
+            // Only for a hardware keyboard; the on-screen one brings its own suggestions.
+            if messageFocused && !onScreenKeyboard {
+                PredictionBar(
+                    result: model.predictions,
+                    onWordSelected: { model.applyWordPrediction($0) },
+                    onLetterSelected: { model.applyLetterPrediction($0) },
+                    fontSizeScale: 1.0
+                )
+            }
+            #endif
+            TypingMessageBar(
+                model: model,
+                messageFocused: $messageFocused,
+                fontSize: CGFloat(uiInputFontSize),
+                minHeight: CGFloat(uiTextFieldHeight),
+                iconSize: CGFloat(uiPlayIconSize)
+            )
+            if trayOpen {
+                tray(height: currentTrayHeight, bottomSafeInset: bottomSafeInset)
+                    .frame(height: currentTrayHeight)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: trayOpen)
+    }
+
+    // MARK: - Wide & Foldable Layout (Unfolded iPhone Duo & iPad)
+
+    @ViewBuilder
+    private func wideTypingLayout(size: CGSize, division: FoldDivision?) -> some View {
+        let panelWidth = WindowLayoutClass.typingSidePanelWidth(for: size.width)
+        let messageHeight: CGFloat = onScreenKeyboard
+            ? max(64, CGFloat(uiTextFieldHeight) * 0.9)
+            : max(88, CGFloat(uiTextFieldHeight) * 1.25)
+
+        if let division, division.axis == .horizontal {
+            // Tabletop / laptop posture on iPhone Duo: keep the Message and primary speech
+            // controls above the horizontal crease, and the Typing Screen below it.
+            AdaptiveFoldSplitView(splitAxis: .vertical, primaryRatio: 0.42, spacing: 12) {
+                VStack(spacing: 8) {
+                    statusRows
+                    HStack(alignment: .top, spacing: 12) {
+                        wideMessageInput(height: messageHeight)
+                        wideTopSpeechControls
+                            .frame(width: min(220, size.width * 0.3))
+                    }
+                    if let held = model.heldMessageText {
+                        HeldMessageRow(model: model, heldText: held)
+                    }
+                    #if DEBUG
+                    if messageFocused && !onScreenKeyboard {
+                        PredictionBar(
+                            result: model.predictions,
+                            onWordSelected: { model.applyWordPrediction($0) },
+                            onLetterSelected: { model.applyLetterPrediction($0) },
+                            fontSizeScale: 1.0
+                        )
+                    }
+                    #endif
+                    Spacer(minLength: 0)
+                }
+            } secondary: {
+                VStack(spacing: 8) {
+                    wideTypingScreenSurface(showActionStrip: true)
+                }
+            }
+        } else if let division, division.axis == .vertical {
+            // Book posture on iPhone Duo: ArrangementView aligns primary and secondary
+            // cleanly on opposite sides of the vertical fold crease.
+            AdaptiveFoldSplitView(splitAxis: .horizontal, primaryRatio: 0.62, spacing: 16) {
+                widePrimaryColumn(messageHeight: messageHeight)
+            } secondary: {
+                wideControlPanel(availableHeight: size.height)
+            }
+        } else {
+            // Flat unfolded inner display (portrait 669×951 or landscape 951×669) and iPad:
+            // Message + Typing Screen on the leading side, dedicated control panel on the trailing side.
+            HStack(alignment: .top, spacing: 14) {
+                widePrimaryColumn(messageHeight: messageHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                wideControlPanel(availableHeight: size.height)
+                    .frame(width: panelWidth)
+                    .frame(maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func widePrimaryColumn(messageHeight: CGFloat) -> some View {
+        VStack(spacing: 10) {
+            statusRows
+            wideMessageInput(height: messageHeight)
+            if onScreenKeyboard && model.likelyNextAvailable {
+                likelyNextRow
+            }
+            #if DEBUG
+            if messageFocused && !onScreenKeyboard {
+                PredictionBar(
+                    result: model.predictions,
+                    onWordSelected: { model.applyWordPrediction($0) },
+                    onLetterSelected: { model.applyLetterPrediction($0) },
+                    fontSizeScale: 1.0
+                )
+            }
+            #endif
+            wideTypingScreenSurface(showActionStrip: false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func wideMessageInput(height: CGFloat) -> some View {
+        MultiLineInput(
+            text: inputBinding,
+            selectedRange: Binding(get: { model.inputSelectionRange }, set: { model.inputSelectionRange = $0 }),
+            isFocused: $messageFocused,
+            placeholder: NSLocalizedString("tts.placeholder", comment: ""),
+            fontSize: CGFloat(uiInputFontSize),
+            minHeight: height,
+            maxHeight: max(height, CGFloat(uiTextFieldHeight) * 2.2),
+            scanEnabled: model.scanningEnabled,
+            includeInScanArea: model.scanInputFieldEnabled,
+            secondaryLanguage: model.secondaryLanguage,
+            secondaryLanguageRanges: model.secondaryLanguageRanges,
+            allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
+            onMarkSelectionAsSecondaryLanguage: { model.markSelectionAsSecondaryLanguage(range: $0) }
+        )
+        .animation(.easeInOut(duration: 0.2), value: onScreenKeyboard)
+    }
+
+    @ViewBuilder
+    private func wideTypingScreenSurface(showActionStrip: Bool) -> some View {
+        Group {
+            if let typingTray = model.typingTray {
+                TypingTrayView(
+                    model: model,
+                    tray: typingTray,
+                    page: $page,
+                    recorder: recorder,
+                    chipFontSize: CGFloat(uiChipFontSize),
+                    requestMutation: requestMutation,
+                    onAddPhrase: { showAddPhrase = true },
+                    onAddCategory: { showAddCategory = true },
+                    onEditPhrase: { editingPhrase = $0 },
+                    requestMic: requestMicAndStart,
+                    onShowKeyboard: { messageFocused = true },
+                    showActionStrip: showActionStrip
+                )
+            } else if model.typingTrayFailed {
+                VStack(spacing: 12) {
+                    Text("typing.tray.unavailable").multilineTextAlignment(.center)
+                    Button("common.retry") { Task { await model.loadTypingTray() } }
+                        .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemBackground)))
+    }
+
+    private var wideTopSpeechControls: some View {
+        let paused = model.playback.name == "Paused"
+        let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
+        let speechActive = paused || playing
+        return VStack(spacing: 8) {
+            wideSpeakButton(paused: paused, playing: playing, height: 60)
+            HStack(spacing: 8) {
+                wideStopButton(enabled: speechActive, height: 48)
+                wideKeyboardButton(height: 48)
+            }
+        }
+    }
+
+    private func wideControlPanel(availableHeight: CGFloat) -> some View {
+        let paused = model.playback.name == "Paused"
+        let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
+        let speechActive = paused || playing
+        let roomy = !onScreenKeyboard && availableHeight >= 520
+        let speakHeight: CGFloat = roomy ? min(max(CGFloat(uiPlayIconSize) * 2.0, 68), 92) : 56
+        let secondaryHeight: CGFloat = roomy ? 60 : 48
+        let panelActions = actionStripActions.filter { action in
+            // Speak/Pause/Resume/Stop/Keyboard already have dedicated primary buttons in the panel.
+            let single = action.effects.count == 1 ? action.effects.first?.kind.name : nil
+            return single != "Keyboard" && single != "Speak" && single != "Pause" && single != "Resume" && single != "Stop"
+        }
+
+        return VStack(spacing: 8) {
+            wideSpeakButton(paused: paused, playing: playing, height: speakHeight)
+            HStack(spacing: 8) {
+                wideStopButton(enabled: speechActive, height: secondaryHeight)
+                wideKeyboardButton(height: secondaryHeight)
+            }
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 8) {
+                    if let held = model.heldMessageText {
+                        wideHeldMessageCard(heldText: held)
+                    }
+                    if !panelActions.isEmpty {
+                        TypingActionGrid(
+                            model: model,
+                            actions: panelActions,
+                            onShowKeyboard: { messageFocused = true }
+                        )
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+            .scrollDisabled(model.selectOnTouchDown)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemBackground)))
+    }
+
+    private func wideSpeakButton(paused: Bool, playing: Bool, height: CGFloat) -> some View {
+        let targetId = "typing:speak"
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let action: () -> Void = {
+            if paused { model.resumeSpeech() }
+            else if playing { model.pauseSpeech() }
+            else { model.speakMessage() }
+        }
+        return Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: playing ? "pause.fill" : "play.fill")
+                    .font(.system(size: min(height * 0.4, 30), weight: .semibold))
+                Text(LocalizedStringKey(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play"))
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(shape.fill(Color.accentColor))
+            .contentShape(shape)
+        }
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .accessibilityLabel(Text(LocalizedStringKey(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play")))
+        .accessibilityHint(Text(LocalizedStringKey(paused || playing ? "" : "accessibility.playback.play_hint")))
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .onAppear { model.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessTargetFocus(model: model, targetId: targetId)
+    }
+
+    private func wideStopButton(enabled: Bool, height: CGFloat) -> some View {
+        let targetId = "typing:stop"
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return Button(action: model.stopSpeech) {
+            VStack(spacing: 4) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                Text("playback.stop")
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(shape.fill(Color(.tertiarySystemFill)))
+            .contentShape(shape)
+        }
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .accessibilityLabel(Text("playback.stop"))
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .onAppear { model.registerAccessTarget(targetId, action: model.stopSpeech) }
+        .onDisappear { model.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessTargetFocus(model: model, targetId: targetId)
+    }
+
+    private func wideKeyboardButton(height: CGFloat) -> some View {
+        let targetId = "typing:keyboard"
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let showing = onScreenKeyboard || messageFocused
+        let action: () -> Void = { messageFocused.toggle() }
+        return Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: showing ? "keyboard.chevron.compact.down" : "keyboard")
+                    .font(.system(size: 18, weight: .semibold))
+                Text(LocalizedStringKey(showing ? "typing.hide_keyboard" : "typing.show_keyboard"))
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(shape.fill(Color(.tertiarySystemFill)))
+            .contentShape(shape)
+        }
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .accessibilityLabel(Text(LocalizedStringKey(showing ? "typing.hide_keyboard" : "typing.show_keyboard")))
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .onAppear { model.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessTargetFocus(model: model, targetId: targetId)
+    }
+
+    private func wideHeldMessageCard(heldText: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "bookmark.fill")
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+                Text(String(format: NSLocalizedString("typing.held_message", comment: ""), heldText))
+                    .font(.subheadline)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Button(action: model.toggleHoldThatThought) {
+                Label("typing.held_message.swap", systemImage: "arrow.left.arrow.right")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemFill)))
+            }
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .accessibilityHint(Text("accessibility.playback.restore_thought_hint"))
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.tertiarySystemBackground)))
+        .accessibilityElement(children: .contain)
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
     }
 
     // MARK: - Rows
@@ -245,9 +585,9 @@ struct TypingWorkspaceView: View {
     // MARK: - Tray
 
     @ViewBuilder
-    private var tray: some View {
+    private func tray(height: CGFloat, bottomSafeInset: CGFloat) -> some View {
         VStack(spacing: 0) {
-            trayHandle
+            trayHandle(currentHeight: height)
             if let typingTray = model.typingTray {
                 TypingTrayView(
                     model: model,
@@ -277,7 +617,7 @@ struct TypingWorkspaceView: View {
     }
 
     /// Drag to resize the tray; the height is kept for next time.
-    private var trayHandle: some View {
+    private func trayHandle(currentHeight: CGFloat) -> some View {
         Capsule()
             .fill(Color.secondary.opacity(0.5))
             .frame(width: 40, height: 5)
@@ -286,7 +626,7 @@ struct TypingWorkspaceView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        let start = dragStartHeight ?? trayHeight
+                        let start = dragStartHeight ?? currentHeight
                         dragStartHeight = start
                         draggedTrayHeight = Double(min(max(start - value.translation.height, minTrayHeight), maxTrayHeight))
                     }
@@ -294,10 +634,10 @@ struct TypingWorkspaceView: View {
             )
             .accessibilityElement()
             .accessibilityLabel(Text("typing.tray.resize"))
-            .accessibilityValue(Text("\(Int(trayHeight))"))
+            .accessibilityValue(Text("\(Int(currentHeight))"))
             .accessibilityAdjustableAction { direction in
                 let step: CGFloat = direction == .increment ? 40 : -40
-                draggedTrayHeight = Double(min(max(trayHeight + step, minTrayHeight), maxTrayHeight))
+                draggedTrayHeight = Double(min(max(currentHeight + step, minTrayHeight), maxTrayHeight))
             }
     }
 
@@ -312,22 +652,50 @@ struct TypingWorkspaceView: View {
     }
 
     private var fullscreenMessage: some View {
-        VStack(spacing: 24) {
-            HStack {
-                Spacer()
-                Button("common.done") { isMessageFullscreen = false }
-                    .font(.headline)
-            }
-            ScrollView {
+        GeometryReader { proxy in
+            let messageBody = ScrollView {
                 Text(model.input.isEmpty ? NSLocalizedString("tts.placeholder", comment: "") : model.input)
                     .font(.system(size: max(36, CGFloat(uiInputFontSize) * 2.4)))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
-            SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.speakMessage() }
+            let controlsFooter = VStack(spacing: 16) {
+                SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.speakMessage() }
+                Button("common.done") { isMessageFullscreen = false }
+                    .font(.headline)
+                    .buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity)
+
+            if let division = proxy.activeFoldDivision, division.axis == .horizontal {
+                // Tabletop posture on iPhone Duo: display the large Message on the angled
+                // upper half and keep playback controls on the lower half.
+                AdaptiveFoldSplitView(splitAxis: .vertical, primaryRatio: 0.6, spacing: 20) {
+                    messageBody
+                        .padding(24)
+                } secondary: {
+                    VStack {
+                        Spacer(minLength: 0)
+                        controlsFooter
+                        Spacer(minLength: 0)
+                    }
+                    .padding(24)
+                }
+                .background(Color(.systemBackground))
+            } else {
+                VStack(spacing: 24) {
+                    HStack {
+                        Spacer()
+                        Button("common.done") { isMessageFullscreen = false }
+                            .font(.headline)
+                    }
+                    messageBody
+                    SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.speakMessage() }
+                }
+                .padding(24)
+                .background(Color(.systemBackground))
+            }
         }
-        .padding(24)
-        .background(Color(.systemBackground))
     }
 
     // MARK: - Editing access
@@ -341,11 +709,5 @@ struct TypingWorkspaceView: View {
                 pendingMutation = mutation
             }
         }
-    }
-
-    private static var windowBottomInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first?.safeAreaInsets.bottom ?? 0
     }
 }

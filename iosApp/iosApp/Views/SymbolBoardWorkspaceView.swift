@@ -72,9 +72,9 @@ private enum FieldResizeEdge {
 }
 
 private struct BoardGridMetrics {
-    var cellWidth: CGFloat = 1
-    var cellHeight: CGFloat = 1
-    var gap: CGFloat = 8
+    var layout: BoardFoldLayout = BoardFoldLayout.compute(
+        rows: 1, columns: 1, contentWidth: 1, contentHeight: 1, gap: 8, gridInset: 8, division: nil
+    )
     var rows: Int = 1
     var columns: Int = 1
 }
@@ -179,9 +179,20 @@ private struct FieldEditActions: ViewModifier {
 
 struct SymbolBoardWorkspaceView: View {
     @ObservedObject var model: IosViewModel
+    @Binding var isEditingScreen: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Opens the app settings panel, which ContentView owns.
     var onShowSettings: () -> Void = {}
+
+    init(
+        model: IosViewModel,
+        isEditingScreen: Binding<Bool> = .constant(false),
+        onShowSettings: @escaping () -> Void = {}
+    ) {
+        self.model = model
+        self._isEditingScreen = isEditingScreen
+        self.onShowSettings = onShowSettings
+    }
     @Namespace private var sentenceAnimationNamespace
 
     @State private var backgroundPhoto: PhotosPickerItem?
@@ -343,6 +354,16 @@ struct SymbolBoardWorkspaceView: View {
                 } catch { model.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
             }
         }
+        .onChange(of: route) { _, newRoute in
+            if case .workspace(_, .edit) = newRoute {
+                isEditingScreen = true
+            } else {
+                isEditingScreen = false
+            }
+        }
+        .onDisappear {
+            isEditingScreen = false
+        }
         .task {
             await model.loadBoardSets()
             if !hasAppliedStartupDestination {
@@ -493,31 +514,58 @@ struct SymbolBoardWorkspaceView: View {
     private var libraryView: some View {
         ZStack {
             VStack(spacing: 16) {
-            // Header bar
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(NSLocalizedString("board_sets.library.title", comment: ""))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    Text(NSLocalizedString("board_sets.library.subtitle", comment: ""))
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+            // Header bar: stack buttons below the title on narrow widths (such as iPhone Duo's outer display)
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("board_sets.library.title", comment: ""))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Text(NSLocalizedString("board_sets.library.subtitle", comment: ""))
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button(action: { showSpeechImport = true }) {
+                        Label("speech_import.title", systemImage: "text.badge.plus")
+                            .font(.headline)
+                            .frame(minHeight: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    Button(action: { showCreateBoardsetSheet = true }) {
+                        Label("boardset.create", systemImage: "plus")
+                            .font(.headline)
+                            .frame(minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
 
-                Spacer()
-
-                Button(action: { showSpeechImport = true }) {
-                    Label("speech_import.title", systemImage: "text.badge.plus")
-                        .font(.headline)
-                        .frame(minHeight: 48)
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(NSLocalizedString("board_sets.library.title", comment: ""))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Text(NSLocalizedString("board_sets.library.subtitle", comment: ""))
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack(spacing: 8) {
+                        Button(action: { showSpeechImport = true }) {
+                            Label("speech_import.title", systemImage: "text.badge.plus")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        Button(action: { showCreateBoardsetSheet = true }) {
+                            Label("boardset.create", systemImage: "plus")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
-                .buttonStyle(.bordered)
-                Button(action: { showCreateBoardsetSheet = true }) {
-                    Label("boardset.create", systemImage: "plus")
-                        .font(.headline)
-                        .frame(minHeight: 48)
-                }
-                .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal)
             .padding(.top, 12)
@@ -580,160 +628,180 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private var emptyLibraryState: some View {
-        VStack(spacing: 16) {
-            Spacer(minLength: 40)
-            Image(systemName: "square.grid.3x3")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
+        ScrollView {
+            VStack(spacing: 16) {
+                Spacer(minLength: 16)
+                Image(systemName: "square.grid.3x3")
+                    .font(.system(size: 56))
+                    .foregroundColor(.secondary)
 
-            Text(NSLocalizedString("board_sets.library.empty_title", comment: ""))
-                .font(.title2)
-                .fontWeight(.bold)
+                Text(NSLocalizedString("board_sets.library.empty_title", comment: ""))
+                    .font(.title2)
+                    .fontWeight(.bold)
 
-            Text(NSLocalizedString("board_sets.library.empty_body", comment: ""))
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.primary)
-                .padding(.horizontal)
+                Text(NSLocalizedString("board_sets.library.empty_body", comment: ""))
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal)
 
-            Text("board_sets.library.empty_guidance")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+                Text("board_sets.library.empty_guidance")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal)
 
-            Button(action: { showCreateBoardsetSheet = true }) {
-                Text(NSLocalizedString("boardset.create_first", comment: ""))
+                Button(action: { showCreateBoardsetSheet = true }) {
+                    Text(NSLocalizedString("boardset.create_first", comment: ""))
+                        .font(.headline)
+                        .frame(minHeight: 48)
+                        .padding(.horizontal, 24)
+                }
+                .buttonStyle(.borderedProminent)
+                Button("speech_import.title") { showSpeechImport = true }
                     .font(.headline)
                     .frame(minHeight: 48)
-                    .padding(.horizontal, 24)
+                    .buttonStyle(.bordered)
+                Spacer(minLength: 16)
             }
-            .buttonStyle(.borderedProminent)
-            Button("speech_import.title") { showSpeechImport = true }
-                .font(.headline)
-                .frame(minHeight: 48)
-                .buttonStyle(.bordered)
-            Spacer(minLength: 40)
+            .frame(maxWidth: 520)
+            .frame(maxWidth: .infinity)
         }
     }
 
     // MARK: - Workspace View (Run & Edit Modes)
     @ViewBuilder
     private func workspaceView(boardSetId: String, mode: BoardWorkspaceMode) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Neither mode shows the app's navigation bar. Edit mode has one row:
-            // back, "Editing <Screen>" (its menu), the Pages (the current one has a menu), Add Page and Done. Use
-            // mode has only the slim menu row above the message bar.
-            if mode == .edit {
-            VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Button(action: {
-                    route = .library
-                }) {
-                    // Phones keep only the chevron so the header stays on one line.
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        if horizontalSizeClass == .regular {
-                            Text(NSLocalizedString("board_workspace.exit_library", comment: ""))
-                        }
-                    }
-                    .font(.headline)
-                    .foregroundColor(.blue)
-                    .frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel(Text("board_workspace.exit_library"))
-
-                // The Screen's own actions sit on its title.
-                Menu {
-                    Button {
-                        managementName = model.selectedBoardSet?.name ?? ""
-                        managementSheet = .renameSet
-                    } label: {
-                        Label("boardset.rename_set", systemImage: "pencil")
-                    }
-                    Button {
-                        settingsTarget = .screen
-                    } label: { Label("board_settings.screen_title", systemImage: "gearshape") }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.selectedBoardSet?.name ?? ""))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
-                    }
-                    .font(.headline)
-                    .foregroundStyle(Color.primary)
-                    .frame(minHeight: 44)
-                }
-                .layoutPriority(1)
-                .accessibilityAddTraits(.isHeader)
-
-                pageStrip(boardSetId: boardSetId)
-
-                Button(action: {
-                    route = .workspace(boardSetId: boardSetId, mode: .run)
-                }) {
-                    Text(NSLocalizedString("board_workspace.finish", comment: ""))
-                        .font(.headline)
-                        .foregroundColor(.blue)
-                        .frame(minHeight: 44)
-                }
-                .fixedSize()
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            }
-            }
-            if model.selectedBoardSet != nil {
-                // Use mode's top, Grid 3 style: a slim menu row where the clock was,
-                // then the message bar with the Screen's own buttons. Edit mode shows
-                // the same bar so those buttons can be chosen in place.
-                if mode == .run {
-                    HStack {
-                        workspaceMenu(boardSetId: boardSetId)
-                        Spacer(minLength: 0)
-                        if (model.selectedBoardSet?.boardIds.count ?? 0) > 1 {
-                            pageNavigation
-                        }
-                    }
-                    // Clear of the rounded corner when it sits beside the Dynamic Island.
-                    .padding(.horizontal, horizontalSizeClass == .regular ? 16 : 28)
-                    if model.boardMessageBarVisible {
-                    HStack(alignment: .center, spacing: 8) {
-                    ScreensMessageBar(
-                        model: model,
-                        tokens: boardSentenceTokens,
-                        showSpeakControl: false,
-                        onDelete: { index in
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                model.removeMessagePart(at: index)
+        GeometryReader { workspaceProxy in
+            let compactEditHeader = workspaceProxy.size.width < 580
+            let occlusionTop = mode == .edit ? max(0, workspaceProxy.topOcclusionClearance - workspaceProxy.safeAreaInsets.top) : 0
+            VStack(alignment: .leading, spacing: 12) {
+                // Neither mode shows the app's navigation bar. Wide screens put edit controls
+                // on one row; compact widths give the Pages strip its own row so it stays usable.
+                if mode == .edit {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Button(action: {
+                                route = .library
+                            }) {
+                                // Phones keep only the chevron so the header stays on one line.
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.left")
+                                    if horizontalSizeClass == .regular {
+                                        Text(NSLocalizedString("board_workspace.exit_library", comment: ""))
+                                    }
+                                }
+                                .font(.headline)
+                                .foregroundColor(.blue)
+                                .frame(minWidth: 44, minHeight: 44)
                             }
-                            activeSentenceAnimation = nil
-                        },
-                        onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
-                        animationNamespace: sentenceAnimationNamespace,
-                        animatedTokenId: activeSentenceAnimation?.tokenId,
-                        onSpeakPart: { model.speakMessagePart(at: $0) }
-                    )
-                    messageControls(boardSetId: boardSetId, editing: false)
+                            .accessibilityLabel(Text("board_workspace.exit_library"))
+
+                            // The Screen's own actions sit on its title.
+                            Menu {
+                                Button {
+                                    managementName = model.selectedBoardSet?.name ?? ""
+                                    managementSheet = .renameSet
+                                } label: {
+                                    Label("boardset.rename_set", systemImage: "pencil")
+                                }
+                                Button {
+                                    settingsTarget = .screen
+                                } label: { Label("board_settings.screen_title", systemImage: "gearshape") }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.selectedBoardSet?.name ?? ""))
+                                        .lineLimit(1)
+                                    Image(systemName: "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                                }
+                                .font(.headline)
+                                .foregroundStyle(Color.primary)
+                                .frame(minHeight: 44)
+                            }
+                            .layoutPriority(1)
+                            .accessibilityAddTraits(.isHeader)
+
+                            if !compactEditHeader {
+                                pageStrip(boardSetId: boardSetId)
+                            } else {
+                                Spacer(minLength: 0)
+                            }
+
+                            Button(action: {
+                                route = .workspace(boardSetId: boardSetId, mode: .run)
+                            }) {
+                                Text(NSLocalizedString("board_workspace.finish", comment: ""))
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                                    .frame(minHeight: 44)
+                            }
+                            .fixedSize()
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        if compactEditHeader {
+                            pageStrip(boardSetId: boardSetId)
+                                .padding(.horizontal, 8)
+                        }
                     }
-                    .padding(.horizontal)
-                    }
-                } else if model.boardMessageBarVisible {
-                    HStack(alignment: .center, spacing: 8) {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(.secondarySystemFill))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: horizontalSizeClass == .regular ? 120 : 104)
-                            .accessibilityHidden(true)
-                        messageControls(boardSetId: boardSetId, editing: true)
-                    }
-                    .padding(.horizontal)
                 }
+                if model.selectedBoardSet != nil {
+                    // Use mode's top, Grid 3 style: a slim menu row where the clock was,
+                    // then the message bar with the Screen's own buttons. Edit mode shows
+                    // the same bar so those buttons can be chosen in place.
+                    if mode == .run {
+                        HStack {
+                            workspaceMenu(boardSetId: boardSetId)
+                            Spacer(minLength: 0)
+                            if (model.selectedBoardSet?.boardIds.count ?? 0) > 1 {
+                                pageNavigation
+                            }
+                        }
+                        // Clear of the rounded corner when it sits beside the Dynamic Island.
+                        .padding(.horizontal, horizontalSizeClass == .regular ? 16 : 28)
+                        if model.boardMessageBarVisible {
+                            HStack(alignment: .center, spacing: 8) {
+                                ScreensMessageBar(
+                                    model: model,
+                                    tokens: boardSentenceTokens,
+                                    showSpeakControl: false,
+                                    onDelete: { index in
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            model.removeMessagePart(at: index)
+                                        }
+                                        activeSentenceAnimation = nil
+                                    },
+                                    onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
+                                    animationNamespace: sentenceAnimationNamespace,
+                                    animatedTokenId: activeSentenceAnimation?.tokenId,
+                                    onSpeakPart: { model.speakMessagePart(at: $0) }
+                                )
+                                messageControls(boardSetId: boardSetId, editing: false)
+                            }
+                            .padding(.horizontal)
+                        }
+                    } else if model.boardMessageBarVisible {
+                        HStack(alignment: .center, spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(.secondarySystemFill))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: horizontalSizeClass == .regular ? 120 : 104)
+                                .accessibilityHidden(true)
+                            messageControls(boardSetId: boardSetId, editing: true)
+                        }
+                        .padding(.horizontal)
+                    }
 
-                boardPreview(isEditMode: mode == .edit)
-                    .padding(.horizontal)
+                    boardPreview(isEditMode: mode == .edit)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
             }
-
+            .padding(.top, occlusionTop)
+            .frame(width: workspaceProxy.size.width, height: workspaceProxy.size.height, alignment: .top)
         }
         .animation(.easeInOut(duration: 0.2), value: model.selectedBoardId)
         .task(id: boardPredictionTaskId) {
@@ -1167,50 +1235,58 @@ struct SymbolBoardWorkspaceView: View {
                 let fraction = min(max(gridHeightFraction, 0.15), 1)
 
                 let contentHeight = max(0, availableHeight * fraction)
-                let cellHeight = max(0, (contentHeight - (gridGap * CGFloat(rows - 1))) / CGFloat(rows))
-                let cellWidth = max(0, (availableWidth - (gridGap * CGFloat(cols - 1))) / CGFloat(cols))
                 let contentWidth = max(0, availableWidth)
+                let foldLayout = BoardFoldLayout.compute(
+                    rows: rows,
+                    columns: cols,
+                    contentWidth: contentWidth,
+                    contentHeight: contentHeight,
+                    gap: gridGap,
+                    gridInset: gridInset,
+                    division: geometry.activeFoldDivision
+                )
+                let gridMetrics = BoardGridMetrics(
+                    layout: foldLayout,
+                    rows: rows,
+                    columns: cols
+                )
 
                 ScrollView(.vertical, showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
                         ForEach(model.boardFieldItems) { field in
                             let occupied = model.cellAt(row: field.row, col: field.column) != nil
-                            let x = CGFloat(field.column) * (cellWidth + gridGap)
-                            let y = CGFloat(field.row) * (cellHeight + gridGap)
-                            let spanWidth = (cellWidth * CGFloat(field.columnSpan)) + (gridGap * CGFloat(field.columnSpan - 1))
-                            let spanHeight = (cellHeight * CGFloat(field.rowSpan)) + (gridGap * CGFloat(field.rowSpan - 1))
+                            let rect = foldLayout.frame(
+                                row: field.row,
+                                column: field.column,
+                                rowSpan: field.rowSpan,
+                                columnSpan: field.columnSpan
+                            )
                             // Use mode leaves empty cells blank. They are not buttons.
                             if occupied || isEditMode {
                                 boardCellButton(
                                     row: field.row,
                                     col: field.column,
                                     isEditMode: isEditMode,
-                                    width: max(0, spanWidth),
-                                    height: max(0, spanHeight),
+                                    width: rect.width,
+                                    height: rect.height,
                                     rowSpan: field.rowSpan,
                                     columnSpan: field.columnSpan,
-                                    metrics: BoardGridMetrics(
-                                        cellWidth: cellWidth,
-                                        cellHeight: cellHeight,
-                                        gap: gridGap,
-                                        rows: rows,
-                                        columns: cols
-                                    )
+                                    metrics: gridMetrics
                                 )
-                                .offset(fieldDragOffset(for: field.buttonId, fallback: CGSize(width: x, height: y)))
+                                .offset(fieldDragOffset(for: field.buttonId, fallback: CGSize(width: rect.minX, height: rect.minY)))
                             } else {
                                 Color.clear
-                                    .frame(width: max(0, spanWidth), height: max(0, spanHeight))
-                                    .offset(x: x, y: y)
+                                    .frame(width: rect.width, height: rect.height)
+                                    .offset(x: rect.minX, y: rect.minY)
                                     .accessibilityHidden(true)
                                     .allowsHitTesting(false)
                             }
                         }
                         if isEditMode {
                             fieldEditChrome(
-                                cellWidth: cellWidth,
-                                cellHeight: cellHeight,
-                                gap: gridGap,
+                                layout: foldLayout,
+                                contentWidth: contentWidth,
+                                contentHeight: contentHeight,
                                 rows: rows,
                                 columns: cols
                             )
@@ -2466,16 +2542,10 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func cellAddress(at location: CGPoint, metrics: BoardGridMetrics) -> (row: Int, column: Int)? {
-        let strideX = metrics.cellWidth + metrics.gap
-        let strideY = metrics.cellHeight + metrics.gap
-        guard strideX > 0, strideY > 0 else { return nil }
-        let column = Int(location.x / strideX)
-        let row = Int(location.y / strideY)
-        guard row >= 0, column >= 0, row < metrics.rows, column < metrics.columns else { return nil }
-        let xInCell = location.x - CGFloat(column) * strideX
-        let yInCell = location.y - CGFloat(row) * strideY
-        guard xInCell <= metrics.cellWidth + 0.5, yInCell <= metrics.cellHeight + 0.5 else { return nil }
-        return (row, column)
+        guard let resolved = metrics.layout.cellAddress(at: location),
+              resolved.row < metrics.rows,
+              resolved.column < metrics.columns else { return nil }
+        return resolved
     }
 
     private func editMoveGesture(anchor: BoardCellAnchor, cell: BoardCellInfo?, isEditMode: Bool, metrics: BoardGridMetrics) -> some Gesture {
@@ -2521,9 +2591,7 @@ struct SymbolBoardWorkspaceView: View {
             }
     }
 
-    private func fieldEditChrome(cellWidth: CGFloat, cellHeight: CGFloat, gap: CGFloat, rows: Int, columns: Int) -> some View {
-        let contentWidth = cellWidth * CGFloat(columns) + gap * CGFloat(max(0, columns - 1))
-        let contentHeight = cellHeight * CGFloat(rows) + gap * CGFloat(max(0, rows - 1))
+    private func fieldEditChrome(layout: BoardFoldLayout, contentWidth: CGFloat, contentHeight: CGFloat, rows: Int, columns: Int) -> some View {
         return ZStack(alignment: .topLeading) {
         if let drag = fieldDrag {
             let target = model.boardFieldItems.first { item in
@@ -2531,15 +2599,16 @@ struct SymbolBoardWorkspaceView: View {
                     drag.targetColumn >= item.column && drag.targetColumn < item.column + item.columnSpan
             }
             if let target, target.buttonId != drag.buttonId {
-                let width = cellWidth * CGFloat(target.columnSpan) + gap * CGFloat(target.columnSpan - 1)
-                let height = cellHeight * CGFloat(target.rowSpan) + gap * CGFloat(target.rowSpan - 1)
+                let rect = layout.frame(
+                    row: target.row,
+                    column: target.column,
+                    rowSpan: target.rowSpan,
+                    columnSpan: target.columnSpan
+                )
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(Color.accentColor, lineWidth: 3)
-                    .frame(width: max(0, width), height: max(0, height))
-                    .offset(
-                        x: CGFloat(target.column) * (cellWidth + gap),
-                        y: CGFloat(target.row) * (cellHeight + gap)
-                    )
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -2547,21 +2616,25 @@ struct SymbolBoardWorkspaceView: View {
         if let anchor = selectedFieldAnchor,
            let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) {
             let span = resizePreview ?? GridFieldSpanInfo(rows: field.rowSpan, columns: field.columnSpan)
-            let width = cellWidth * CGFloat(span.columns) + gap * CGFloat(max(0, span.columns - 1))
-            let height = cellHeight * CGFloat(span.rows) + gap * CGFloat(max(0, span.rows - 1))
+            let rect = layout.frame(
+                row: field.row,
+                column: field.column,
+                rowSpan: span.rows,
+                columnSpan: span.columns
+            )
             RoundedRectangle(cornerRadius: 12)
                 .stroke(resizePreview == nil || resizePreviewValid ? Color.accentColor : Color.red, lineWidth: 3)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill((resizePreviewValid ? Color.accentColor : Color.red).opacity(resizePreview == nil ? 0 : 0.18))
                 )
-                .frame(width: max(0, width), height: max(0, height))
-                .offset(x: CGFloat(field.column) * (cellWidth + gap), y: CGFloat(field.row) * (cellHeight + gap))
+                .frame(width: rect.width, height: rect.height)
+                .offset(x: rect.minX, y: rect.minY)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-            resizeHandle(.end, field: field, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap, rows: rows, columns: columns, span: span)
-            resizeHandle(.bottom, field: field, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap, rows: rows, columns: columns, span: span)
-            resizeHandle(.corner, field: field, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap, rows: rows, columns: columns, span: span)
+            resizeHandle(.end, field: field, layout: layout, rows: rows, columns: columns, span: span)
+            resizeHandle(.bottom, field: field, layout: layout, rows: rows, columns: columns, span: span)
+            resizeHandle(.corner, field: field, layout: layout, rows: rows, columns: columns, span: span)
         }
         }
         .frame(width: max(0, contentWidth), height: max(0, contentHeight), alignment: .topLeading)
@@ -2570,29 +2643,27 @@ struct SymbolBoardWorkspaceView: View {
     private func resizeHandle(
         _ edge: FieldResizeEdge,
         field: BoardFieldItem,
-        cellWidth: CGFloat,
-        cellHeight: CGFloat,
-        gap: CGFloat,
+        layout: BoardFoldLayout,
         rows: Int,
         columns: Int,
         span: GridFieldSpanInfo
     ) -> some View {
-        let width = cellWidth * CGFloat(span.columns) + gap * CGFloat(max(0, span.columns - 1))
-        let height = cellHeight * CGFloat(span.rows) + gap * CGFloat(max(0, span.rows - 1))
-        let originX = CGFloat(field.column) * (cellWidth + gap)
-        let originY = CGFloat(field.row) * (cellHeight + gap)
+        let rect = layout.frame(
+            row: field.row,
+            column: field.column,
+            rowSpan: span.rows,
+            columnSpan: span.columns
+        )
         let centerX: CGFloat = switch edge {
-        case .bottom: originX + width / 2
-        case .end, .corner: originX + width
+        case .bottom: rect.midX
+        case .end, .corner: rect.maxX
         }
         let centerY: CGFloat = switch edge {
-        case .end: originY + height / 2
-        case .bottom, .corner: originY + height
+        case .end: rect.midY
+        case .bottom, .corner: rect.maxY
         }
         let metrics = BoardGridMetrics(
-            cellWidth: cellWidth,
-            cellHeight: cellHeight,
-            gap: gap,
+            layout: layout,
             rows: rows,
             columns: columns
         )

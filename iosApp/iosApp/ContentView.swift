@@ -18,6 +18,11 @@ struct ContentView: View {
     @State private var showSettingsPanel = false
     @State private var editingPhrase: Shared.Phrase? = nil
     @State private var restBannerVisible = false
+    @State private var isEditingScreen = false
+    @State private var isMessageFullscreen = false
+    @State private var partnerDisplayAvailable = false
+    @State private var partnerDisplayMuted = false
+    @State private var hingePosture: DuoHingePosture = .unavailable
 
     @State private var recorder = AudioRecorder()
     @State private var recordingForPhraseId: String? = nil
@@ -26,15 +31,46 @@ struct ContentView: View {
     @AppStorage("ui_inputFontSize") private var uiInputFontSize: Double = 20
     @AppStorage("ui_chipFontSize") private var uiChipFontSize: Double = 18
     @AppStorage("ui_playIconSize") private var uiPlayIconSize: Double = 36
+    @AppStorage("partner_display_mode") private var partnerDisplayModeRaw: String = PartnerDisplayMode.whileCommunicating.rawValue
 
     private var shouldShowWelcomeFlow: Bool {
         showWelcomeFlow || !hasCompletedWelcome
     }
 
+    private var partnerDisplayMode: PartnerDisplayMode {
+        PartnerDisplayMode(rawValue: partnerDisplayModeRaw) ?? .whileCommunicating
+    }
+
+    private var isConfiguringOrUnlocking: Bool {
+        showSettingsPanel || showVoiceSheet || showLanguageSheet || showSecondaryLanguageSheet
+            || showAddCategory || showAddPhrase || showUiSizeSheet || showPronunciationSheet
+            || editingPhrase != nil
+    }
+
+    private var shouldShowPartnerDisplay: Bool {
+        guard !partnerDisplayMuted else { return false }
+        let isSpeakingOrActive = model.playback.name != "Idle"
+        return PartnerDisplayPolicy.shouldShow(
+            mode: partnerDisplayMode,
+            inWelcomeFlow: shouldShowWelcomeFlow,
+            isConfiguringOrUnlocking: isConfiguringOrUnlocking,
+            isEditingScreen: isEditingScreen,
+            inputIsPaused: model.inputIsPaused,
+            hingePosture: hingePosture,
+            messageText: model.input,
+            hasMessageParts: !model.messageParts.isEmpty,
+            isSpeakingOrActive: isSpeakingOrActive,
+            isFullscreenMessage: isMessageFullscreen
+        )
+    }
+
     @ViewBuilder
     private var mainContent: some View {
         if model.boardModeEnabled {
-            SymbolBoardWorkspaceView(model: model) {
+            SymbolBoardWorkspaceView(
+                model: model,
+                isEditingScreen: $isEditingScreen
+            ) {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
                     showSettingsPanel = true
                 }
@@ -46,6 +82,7 @@ struct ContentView: View {
                 editingPhrase: $editingPhrase,
                 showAddCategory: $showAddCategory,
                 showAddPhrase: $showAddPhrase,
+                isMessageFullscreen: $isMessageFullscreen,
                 uiInputFontSize: uiInputFontSize,
                 uiTextFieldHeight: uiTextFieldHeight,
                 uiChipFontSize: uiChipFontSize,
@@ -102,18 +139,17 @@ struct ContentView: View {
                         )
                     } else {
                         GeometryReader { proxy in
-                            let isPad = UIDevice.current.userInterfaceIdiom == .pad
-                            let currentWideLayout = proxy.size.width > (isPad ? 700 : 900)
+                            let widePadding = WindowLayoutClass.of(width: proxy.size.width).isLarge
 
-                            VStack(spacing: 8) {
+                            VStack(spacing: model.boardModeEnabled ? 0 : 8) {
                                 CommunicationNoticeBanner(model: model)
-                                    .padding(.horizontal, currentWideLayout ? 16 : 0)
+                                    .padding(.horizontal, (model.boardModeEnabled || widePadding) ? 16 : 0)
+                                    .padding(.top, model.boardModeEnabled ? 8 : 0)
                                 mainContent
                             }
-                            // Pad inside the proxy width so the content never overflows it.
-                            // Screens pad themselves so the board can use the width.
-                            .padding(currentWideLayout || model.boardModeEnabled ? 0 : 16)
-                            .frame(width: proxy.size.width)
+                            // Screens owns its full-screen edge-to-edge padding; Typing adapts to window size.
+                            .padding(model.boardModeEnabled ? 0 : (widePadding ? 12 : 16))
+                            .frame(width: proxy.size.width, height: proxy.size.height)
                         }
                     }
                 }
@@ -122,7 +158,19 @@ struct ContentView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if !shouldShowWelcomeFlow {
-                        ToolbarItemGroup(placement: .topBarTrailing) {
+                        if partnerDisplayAvailable && partnerDisplayMode != .off {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(action: { partnerDisplayMuted.toggle() }) {
+                                    Image(systemName: partnerDisplayMuted ? "rectangle.on.rectangle.slash" : "rectangle.on.rectangle")
+                                        .accessibilityLabel(Text(LocalizedStringKey(
+                                            partnerDisplayMuted ? "toolbar.partner_display.resume" : "toolbar.partner_display.pause"
+                                        )))
+                                }
+                                .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                            }
+                        }
+
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button(action: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     model.boardModeEnabled.toggle()
@@ -132,7 +180,9 @@ struct ContentView: View {
                                     .accessibilityLabel(Text(LocalizedStringKey(model.boardModeEnabled ? "toolbar.switch_phrase_mode" : "toolbar.switch_symbol_mode")))
                             }
                             .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                        }
 
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button(action: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85, blendDuration: 0.1)) {
                                     showSettingsPanel = true
@@ -146,6 +196,13 @@ struct ContentView: View {
                     }
                 }
             }
+            .preferHorizontalToolbarOnDuo()
+            .partnerDisplayAccessory(
+                model: model,
+                isEnabled: shouldShowPartnerDisplay,
+                isAvailable: $partnerDisplayAvailable,
+                hingePosture: $hingePosture
+            )
             // Editing access relocks whenever Wingmate leaves the foreground, in either workspace.
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { model.lockEditingAccess() }

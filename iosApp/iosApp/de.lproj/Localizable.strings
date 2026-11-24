@@ -474,6 +474,7 @@
 
 /* Typing composer */
 "typing.show_keyboard" = "Tastatur zeigen";
+"typing.hide_keyboard" = "Tastatur ausblenden";
 "typing.show_screen" = "Schreibbildschirm zeigen";
 "typing.held_message" = "Geparkt: %@";
 "typing.held_message.swap" = "Tauschen";
@@ -679,3 +680,14 @@
 "settings.pointer_emphasis.style" = "Zeigerstil";
 "settings.pointer_emphasis.system" = "System";
 "settings.pointer_emphasis.title" = "Zeigerhervorhebung";
+
+/* Partner display (outward / external display) */
+"settings.partner_display.section" = "Partneranzeige";
+"settings.partner_display.mode" = "Auf Partneranzeige zeigen";
+"settings.partner_display.off" = "Aus";
+"settings.partner_display.when_speaking" = "Nur beim Sprechen";
+"settings.partner_display.while_communicating" = "Beim Schreiben und Sprechen";
+"settings.partner_display.footer" = "Zeigt deine Nachricht in großer Schrift auf einem angeschlossenen externen oder nach außen gerichteten Partnerbildschirm an, wenn das Gerät geöffnet ist. Wird bei Einrichtung, Einstellungen, PIN-Eingabe und Bildschirmbearbeitung ausgeblendet.";
+"partner_display.speaking" = "Spricht";
+"toolbar.partner_display.pause" = "Partneranzeige ausblenden";
+"toolbar.partner_display.resume" = "Auf Partneranzeige zeigen";
