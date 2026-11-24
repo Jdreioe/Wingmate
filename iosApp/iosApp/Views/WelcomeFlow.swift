@@ -34,6 +34,7 @@ enum WelcomeTtsProvider: String, CaseIterable, Identifiable {
         }
     }
 
+    @MainActor
     func isConfigured(in model: IosViewModel) -> Bool {
         switch self {
         case .system:
