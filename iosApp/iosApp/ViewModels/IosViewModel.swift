@@ -248,6 +248,7 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardLabelAtTop: Bool? = nil
     @Published var resolvedBoardShowMessageBar: Bool? = nil
     @Published var resolvedBoardShowSpeakButton: Bool? = nil
+    @Published var resolvedBoardMessageBarActions: [String]? = nil
     @Published var resolvedBoardSpeechPolicy: String? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
@@ -258,6 +259,10 @@ final class IosViewModel: ObservableObject {
     var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
     var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
     var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? boardShowSpeakButton }
+    /// The Screen's message bar buttons in order (`Speak`, `Hold`, `DeleteLast`, `Clear`).
+    var boardMessageBarActions: [String] {
+        resolvedBoardMessageBarActions ?? (boardShowSpeakButton ? ["Speak"] : [])
+    }
     var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
     var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
 
@@ -819,6 +824,12 @@ final class IosViewModel: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
         session.speakText(text: text, voice: selectedVoice)
+    }
+
+    /// Says one part of the Message again, e.g. a word the listener missed.
+    func speakMessagePart(at index: Int) {
+        AudioSessionHelper.activatePlayback()
+        session.speakMessagePart(index: Int32(index), voice: selectedVoice)
     }
 
     /// Speaks a Phrase on its own, playing its recording when it has one.
@@ -1801,6 +1812,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
             resolvedBoardShowSpeakButton = nil
+            resolvedBoardMessageBarActions = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
@@ -1817,6 +1829,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardLabelAtTop = resolved?.labelAtTop
             resolvedBoardShowMessageBar = resolved?.showMessageBar
             resolvedBoardShowSpeakButton = resolved?.showSpeakButton
+            resolvedBoardMessageBarActions = resolved?.messageBarActions
             resolvedBoardActivationBehavior = resolved?.activationBehavior
             resolvedBoardSpeechPolicy = resolved?.speechPolicy
             resolvedBoardReturnBehavior = resolved?.returnBehavior
@@ -1837,6 +1850,7 @@ final class IosViewModel: ObservableObject {
             resolvedBoardLabelAtTop = nil
             resolvedBoardShowMessageBar = nil
             resolvedBoardShowSpeakButton = nil
+            resolvedBoardMessageBarActions = nil
             resolvedBoardActivationBehavior = nil
             resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
@@ -2137,6 +2151,17 @@ final class IosViewModel: ObservableObject {
     func loadBoardSettings(forPage: Bool) async -> Shared.IosBoardSettingsDraft? {
         guard let setId = selectedBoardSetId, let boardId = selectedBoardId else { return nil }
         return try? await boardsFacade.boardSettingsDraft(boardSetId: setId, boardId: boardId, forPage: forPage)
+    }
+
+    /// Saves the selected Screen's message bar buttons, in order.
+    func setMessageBarActions(_ actions: [String]) async {
+        guard let setId = selectedBoardSetId, canEditSelectedBoardSet else { return }
+        do {
+            try await boardsFacade.updateMessageBarActions(boardSetId: setId, actions: actions)
+            await loadSelectedBoard()
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
+        }
     }
 
     func saveBoardSettings(

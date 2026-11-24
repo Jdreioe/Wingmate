@@ -57,9 +57,6 @@
 "phrase.delete" = "Delete";
 "phrase.add.tile" = "Add";
 
-"debug.content_loaded" = "DEBUG: ContentView loaded";
-"debug.voice_with_lang" = "Voice: %@ [%@]";
-"debug.voice.none" = "Voice: (none)";
 
 "azure.endpoint.placeholder" = "Endpoint (https://<region>.tts.speech.microsoft.com)";
 "azure.key.placeholder" = "Subscription Key";
@@ -356,10 +353,10 @@
 "welcome_flow.choose_primary_language" = "Choose primary language for this voice";
 "welcome_flow.select_language" = "Select Language";
 
-"toolbar.switch_symbol_mode" = "Switch to Symbol Workspace";
-"toolbar.switch_phrase_mode" = "Switch to Phrase Workspace";
+"toolbar.switch_symbol_mode" = "Switch to Screens";
+"toolbar.switch_phrase_mode" = "Switch to Typing";
 
-"symbol.workspace.title" = "Symbol Workspace";
+"symbol.workspace.title" = "Screens";
 
 "boardset.create" = "New Screen";
 "boardset.creating" = "Creating screen…";
@@ -511,6 +508,7 @@
 "boardset.background_custom" = "Use a custom background";
 "boardset.background_footer" = "Turn this off to inherit the app theme.";
 "board_workspace.show_hidden" = "Show hidden buttons temporarily";
+"board_workspace.menu" = "Menu";
 "board_workspace.hide_hidden" = "Hide temporarily revealed buttons";
 "board_workspace.temporarily_revealed" = "Temporarily revealed hidden button";
 "board_cell_opens_board" = "Opens page: %@";
@@ -631,6 +629,13 @@
 "category.move_right" = "Move right";
 "accessibility.category.menu_hint" = "Double tap to move or delete this category.";
 "screens.message_bar" = "Message";
+"screens.message_bar.clear_all" = "Delete all";
+"screens.message_bar.hold" = "Hold message";
+"screens.message_bar.say_part_hint" = "Says this part again";
+"screens.message_bar.delete_last" = "Delete last";
+"screens.message_bar.add_button" = "Add message bar button";
+"screens.message_bar.remove_button" = "Remove button";
+"screens.message_bar.edit_hint" = "Choose what this button does";
 
 // Android feature parity
 "typing.likely_next" = "Likely next";

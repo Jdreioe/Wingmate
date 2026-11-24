@@ -143,12 +143,18 @@ struct ScreensMessageBar: View {
     var atStartPage: Bool = true
     var onBack: () -> Void = {}
     var onStartPage: () -> Void = {}
+    /// Says one token again when it is tapped; its ✕ still removes it.
+    var onSpeakPart: ((Int) -> Void)? = nil
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var buttonSize: CGFloat { min(max(iconSize * 1.55, 48), 72) }
     private var speakSize: CGFloat { min(max(iconSize * 1.75, 56), 88) }
     private var showNavigationLabels: Bool { horizontalSizeClass != .compact }
+    /// On iPad the bar is a large, readable strip above the board; phones keep it compact.
+    private var isLarge: Bool { horizontalSizeClass == .regular }
+    private var barHeight: CGFloat { isLarge ? 120 : speakSize }
+    private var chipImageSize: CGFloat { isLarge ? 64 : 32 }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -171,7 +177,7 @@ struct ScreensMessageBar: View {
                     if let last = tokens.last { withAnimation { reader.scrollTo(last.id, anchor: .trailing) } }
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: speakSize, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: barHeight, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemFill)))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text("screens.message_bar"))
@@ -218,18 +224,29 @@ struct ScreensMessageBar: View {
 
     @ViewBuilder
     private func tokenChip(_ token: SentencePhraseToken, index: Int) -> some View {
-        let chip = HStack(spacing: 6) {
+        let content = HStack(spacing: 6) {
             if let imageUrl = token.imageUrl, let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFit()
                 } placeholder: {
                     Color.clear
                 }
-                .frame(width: 32, height: 32)
+                .frame(width: chipImageSize, height: chipImageSize)
                 .accessibilityHidden(true)
             }
             Text(token.title.isEmpty ? " " : token.title)
+                .font(isLarge ? .title2.weight(.semibold) : .body)
                 .lineLimit(1)
+        }
+        let chip = HStack(spacing: 6) {
+            if let onSpeakPart {
+                Button { onSpeakPart(index) } label: { content.contentShape(Rectangle()) }
+                    .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+                    .accessibilityLabel(Text(token.title))
+                    .accessibilityHint(Text("screens.message_bar.say_part_hint"))
+            } else {
+                content
+            }
             Button { onDelete(index) } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.secondary)
@@ -241,13 +258,17 @@ struct ScreensMessageBar: View {
         }
         .padding(.leading, 10)
         .padding(.trailing, 2)
-        .frame(minHeight: 44)
+        .frame(minHeight: isLarge ? 96 : 44)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.tertiarySystemBackground)))
 
-        if let animationNamespace, animatedTokenId == token.id {
+        // One view whether or not it is flying in from a Button, so it is not
+        // rebuilt when the fly-in ends. Only the flying token shares an id with a cell.
+        if let animationNamespace {
+            let flying = animatedTokenId == token.id
             chip
-                .matchedGeometryEffect(id: token.id, in: animationNamespace, isSource: false)
-                .zIndex(2)
+                .matchedGeometryEffect(id: flying ? token.id : "chip-\(token.id)", in: animationNamespace, isSource: false)
+                .zIndex(flying ? 2 : 0)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
         } else {
             chip.transition(.move(edge: .trailing).combined(with: .opacity))
         }
