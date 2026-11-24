@@ -135,7 +135,16 @@ internal fun createCoreDataModule(): Module = module {
         single { BackupFacade(get(), getOrNull(), get()) }
         singleOf(::SpeechFacade)
         singleOf(::SettingsFacade)
-        singleOf(::BoardsFacade)
+        single {
+            BoardsFacade(
+                boardSetUseCase = get(),
+                boardRepository = get(),
+                settingsUseCase = get(),
+                boardSetSpeechCache = get(),
+                shareService = get(),
+                mediaUrlLoader = getOrNull(),
+            )
+        }
         singleOf(::CommunicationFacade)
         singleOf(::CommunicationSessionFacade)
         singleOf(::TypingScreenFacade)

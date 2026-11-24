@@ -663,6 +663,8 @@
 "boardset.cell.size.blocked" = "Den størrelse passer ikke.";
 "boardset.cell.merge_size" = "Flettet størrelse";
 "boardset.export_obz" = "Eksportér";
+"boardset.export_format_obz" = "Open Board (.obz)";
+"boardset.export_gridset" = "Eksportér til Grid";
 "common.off" = "Fra";
 "interaction.paused_status" = "Hviletilstand: valg ved at holde markøren stille og valgtasten er sat på pause";
 "interaction.rest_mode" = "Hviletilstand";

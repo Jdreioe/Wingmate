@@ -633,6 +633,8 @@
 "boardset.cell.word_type.social" = "Soziales Wort";
 "boardset.cell.word_type.verb" = "Verb";
 "boardset.export_obz" = "Exportieren";
+"boardset.export_format_obz" = "Open Board (.obz)";
+"boardset.export_gridset" = "Nach Grid exportieren";
 "common.off" = "Aus";
 "editing_access.change" = "Bearbeitungscode ändern";
 "editing_access.confirm_code" = "Bearbeitungscode bestätigen";

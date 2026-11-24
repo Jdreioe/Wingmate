@@ -3,6 +3,7 @@ package io.github.jdreioe.wingmate.application
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -25,6 +26,7 @@ class BoardSetUseCase(
     private val obzExporter: ObzExporter = ObzExporter(),
     private val fileStorage: FileStorage? = null,
     private val speechCache: BoardSetSpeechCacheUseCase? = null,
+    private val gridsetExporter: GridsetExporter = GridsetExporter(),
 ) {
     /** User-created Screens only. System Screens have dedicated entry points. */
     suspend fun listBoardSets(): List<ObfBoardSet> =
@@ -399,6 +401,42 @@ class BoardSetUseCase(
                 } else {
                     mapOf(OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(boardSet.screenSettings))
                 }
+            )
+        }
+    }
+
+    suspend fun exportBoardSetAsGridsetResult(
+        boardSetId: String,
+        appSettings: Settings? = null,
+        loadUrl: (suspend (String) -> ByteArray?)? = null,
+    ): GridsetExportResult {
+        val boardSet = boardSetRepository.getBoardSet(boardSetId)
+            ?: return GridsetExportResult.Failure(
+                GridsetExportErrorCode.ROOT_NOT_FOUND,
+                "Board set '$boardSetId' was not found",
+            )
+        if (boardSet.kind != ScreenKind.User) {
+            return GridsetExportResult.Failure(
+                GridsetExportErrorCode.ROOT_NOT_FOUND,
+                "System Screens cannot be exported as Grid Sets",
+            )
+        }
+        val boardsById = boardRepository.listBoards().associateBy { it.id }
+        val boards = boardSet.boardIds.mapNotNull(boardsById::get)
+        if (boards.isEmpty()) {
+            return GridsetExportResult.Failure(
+                GridsetExportErrorCode.ROOT_NOT_FOUND,
+                "Board set '$boardSetId' has no boards",
+            )
+        }
+        return withContext(Dispatchers.Default) {
+            gridsetExporter.exportResult(
+                boards = boards,
+                rootBoardId = boardSet.rootBoardId,
+                screenSettings = boardSet.screenSettings,
+                appSettings = appSettings,
+                loadMedia = { path -> fileStorage?.loadBytes(path) },
+                loadUrl = loadUrl,
             )
         }
     }

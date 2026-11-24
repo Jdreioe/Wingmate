@@ -211,6 +211,7 @@ struct SymbolBoardWorkspaceView: View {
     @State private var addBoardKeyboardLayout: String = "qwerty"
 
     @State private var deleteTargetSet: BoardSetInfo? = nil
+    @State private var exportTargetSetId: String? = nil
     @State private var showEditCellSheet: Bool = false
     @State private var managementSheet: BoardManagementSheet? = nil
     @State private var managementName: String = ""
@@ -455,6 +456,28 @@ struct SymbolBoardWorkspaceView: View {
         } message: {
             Text(String(format: NSLocalizedString("board_sets.library.delete_message", comment: ""), deleteTargetSet?.name ?? ""))
         }
+        .confirmationDialog(
+            "boardset.export_obz",
+            isPresented: Binding(
+                get: { exportTargetSetId != nil },
+                set: { if !$0 { exportTargetSetId = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let id = exportTargetSetId {
+                Button("boardset.export_format_obz") {
+                    exportTargetSetId = nil
+                    Task { await exportBoardSet(id: id) }
+                }
+                Button("boardset.export_gridset") {
+                    exportTargetSetId = nil
+                    Task { await exportBoardSetAsGridset(id: id) }
+                }
+            }
+            Button("common.cancel", role: .cancel) {
+                exportTargetSetId = nil
+            }
+        }
         .alert("boardset.delete_board", isPresented: $showDeleteBoardConfirmation) {
             Button("common.cancel", role: .cancel) {}
             Button("common.delete", role: .destructive) {
@@ -530,7 +553,7 @@ struct SymbolBoardWorkspaceView: View {
                                     Task { await beginScreenLockToggle(set) }
                                 },
                                 onExport: {
-                                    Task { await exportBoardSet(id: set.id) }
+                                    exportTargetSetId = set.id
                                 },
                                 onPrint: { printScreen(id: set.id) },
                                 onDelete: {
@@ -1087,6 +1110,9 @@ struct SymbolBoardWorkspaceView: View {
                     LocalizedStringKey(showHiddenButtons ? "board_workspace.hide_hidden" : "board_workspace.show_hidden"),
                     systemImage: showHiddenButtons ? "eye.slash" : "eye"
                 )
+            }
+            Button { exportTargetSetId = boardSetId } label: {
+                Label("boardset.export_obz", systemImage: "square.and.arrow.up")
             }
             Button { printScreen(id: boardSetId) } label: {
                 Label("boardset.print_pdf", systemImage: "printer")
@@ -2962,6 +2988,15 @@ struct SymbolBoardWorkspaceView: View {
 
     private func exportBoardSet(id: String) async {
         let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsObz(id: id)
+        await finishExport(result)
+    }
+
+    private func exportBoardSetAsGridset(id: String) async {
+        let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsGridset(id: id)
+        await finishExport(result)
+    }
+
+    private func finishExport(_ result: BoardSetExportResult?) async {
         let message: String
         if let result, result.isSuccess, let fileName = result.fileName {
             message = String(format: NSLocalizedString("boardset.export_obz_done", comment: ""), fileName)

@@ -21,6 +21,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.WordType
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
@@ -148,6 +149,7 @@ class BoardsFacade(
     private val settingsUseCase: SettingsUseCase,
     private val boardSetSpeechCache: BoardSetSpeechCacheUseCase,
     private val shareService: ShareService,
+    private val mediaUrlLoader: ObfMediaUrlLoader? = null,
 ) {
     // --- BoardSet helpers ---
     @Throws(NativeFailure::class, CancellationException::class)
@@ -284,6 +286,41 @@ class BoardsFacade(
             }
             is ObzExportResult.Failure -> {
                 OperationalLogger.warn("boards.export_obz", "failed", count = export.resources.size)
+                BoardSetExportResult(BoardSetExportStatus.ExportFailure)
+            }
+        }
+    }
+
+    /** Exports a Screen directly as a Smartbox Grid 3 `.gridset` archive and opens the share sheet. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun shareBoardSetAsGridset(id: String): BoardSetExportResult = nativeCall {
+        val boardSet = boardSetUseCase.getBoardSet(id)
+            ?: return@nativeCall BoardSetExportResult(BoardSetExportStatus.NotFound)
+        val settings = settingsUseCase.get()
+        val urlLoader = mediaUrlLoader
+        when (
+            val export = boardSetUseCase.exportBoardSetAsGridsetResult(
+                boardSetId = id,
+                appSettings = settings,
+                loadUrl = urlLoader?.let { loader -> { url -> loader.load(url) } },
+            )
+        ) {
+            is GridsetExportResult.Success -> {
+                val fileName = GridsetExporter.sanitizeExportFileName(boardSet.name, "gridset")
+                val shared = try {
+                    shareService.shareFile(fileName, export.bytes)
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: Exception) {
+                    false
+                }
+                BoardSetExportResult(
+                    if (shared) BoardSetExportStatus.Success else BoardSetExportStatus.ShareFailure,
+                    fileName,
+                )
+            }
+            is GridsetExportResult.Failure -> {
+                OperationalLogger.warn("boards.export_gridset", "failed")
                 BoardSetExportResult(BoardSetExportStatus.ExportFailure)
             }
         }

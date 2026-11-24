@@ -127,6 +127,9 @@
     <string name="board_workspace_save_error">Unable to save changes</string>
     <string name="board_workspace_export_cancelled">Export cancelled</string>
     <string name="board_workspace_exported">Exported %1$s</string>
+    <string name="board_workspace_export">Export</string>
+    <string name="board_workspace_export_obz">Open Board (.obz)</string>
+    <string name="board_workspace_export_gridset">Export to Grid</string>
     <string name="board_workspace_print">Print (PDF)</string>
     <string name="board_workspace_print_opens">→ %1$s (p. %2$d)</string>
     <string name="board_workspace_export_error">The screen could not be exported. Your current screen was not changed; try again.</string>

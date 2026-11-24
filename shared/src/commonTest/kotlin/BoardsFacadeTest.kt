@@ -351,6 +351,26 @@ class BoardsFacadeTest {
     }
 
     @Test
+    fun shareBoardSetAsGridsetReportsNotFoundShareFailureAndSuccess() = runBlocking {
+        val share = RecordingShareService()
+        val facade = facade(share = share)
+        val boardSet = facade.createBoardSet("My/Set", rows = 1, columns = 1)
+
+        val notFound = facade.shareBoardSetAsGridset("missing")
+        assertEquals(BoardSetExportStatus.NotFound, notFound.status)
+        assertNull(notFound.fileName)
+
+        val unshared = facade.shareBoardSetAsGridset(boardSet.id)
+        assertEquals(BoardSetExportStatus.ShareFailure, unshared.status)
+        assertTrue(unshared.isRetryable)
+
+        share.shared = true
+        val exported = facade.shareBoardSetAsGridset(boardSet.id)
+        assertEquals(BoardSetExportStatus.Success, exported.status)
+        assertEquals("My_Set.gridset", exported.fileName)
+    }
+
+    @Test
     fun editsSeparateMissingTargetsFromRefusedChanges() = runBlocking {
         val facade = facade()
         val boardSet = facade.createBoardSet("Test", rows = 1, columns = 1)

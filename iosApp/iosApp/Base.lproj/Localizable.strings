@@ -373,6 +373,8 @@
 "boardset.lock" = "Lock Screen";
 "boardset.unlock" = "Unlock Screen";
 "boardset.export_obz" = "Export";
+"boardset.export_format_obz" = "Open Board (.obz)";
+"boardset.export_gridset" = "Export to Grid";
 "boardset.export_obz_failed" = "Export failed";
 "boardset.export_obz_done" = "Exported %@";
 "boardset.untitled_board" = "Untitled Page";
