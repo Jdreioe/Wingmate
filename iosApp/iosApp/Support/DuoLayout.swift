@@ -19,11 +19,12 @@ enum WindowLayoutClass: Equatable {
         return .compact
     }
 
-    /// Wide two-pane Typing needs at least `.medium` width and enough height for the Message,
+    /// Wide two-pane Typing needs at least `.medium` width and enough resting height for the Message,
     /// Phrase rows, and speech controls together. Phone landscape (including Duo outer landscape
-    /// at 678×466 pt) stays on the compact phone composer.
-    static func usesWideTyping(size: CGSize) -> Bool {
-        of(width: size.width).isLarge && size.height >= 480
+    /// at 678×466 pt) stays on the compact phone composer; raising the keyboard never changes it.
+    static func usesWideTyping(size: CGSize, restingHeight: CGFloat? = nil, keyboardVisible: Bool = false) -> Bool {
+        let effectiveHeight = keyboardVisible ? max(size.height, restingHeight ?? size.height) : size.height
+        return of(width: size.width).isLarge && effectiveHeight >= 480
     }
 
     /// Side control panel width in the wide Typing layout.

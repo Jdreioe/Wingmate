@@ -68,7 +68,13 @@ struct TypingWorkspaceView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let wide = WindowLayoutClass.usesWideTyping(size: proxy.size)
+            // Use the resting (pre-keyboard) height so raising the on-screen keyboard on
+            // unfolded iPhone Duo landscape never flips the workspace back to compact mode.
+            let wide = WindowLayoutClass.usesWideTyping(
+                size: proxy.size,
+                restingHeight: restingHeight,
+                keyboardVisible: onScreenKeyboard
+            )
             let foldDivision = proxy.activeFoldDivision
             let bottomInset = proxy.safeAreaInsets.bottom
 
@@ -80,12 +86,15 @@ struct TypingWorkspaceView: View {
                 }
             }
             .onAppear {
-                isWideWindow = wide
                 if !onScreenKeyboard { restingHeight = proxy.size.height }
+                isWideWindow = WindowLayoutClass.usesWideTyping(
+                    size: CGSize(width: proxy.size.width, height: max(proxy.size.height, restingHeight))
+                )
             }
             .onChange(of: proxy.size) { _, newSize in
-                isWideWindow = WindowLayoutClass.usesWideTyping(size: newSize)
                 if !onScreenKeyboard { restingHeight = newSize.height }
+                let h = onScreenKeyboard ? max(newSize.height, restingHeight) : newSize.height
+                isWideWindow = WindowLayoutClass.usesWideTyping(size: CGSize(width: newSize.width, height: h))
             }
         }
         // On compact windows the app bar gives way to the Message while the keyboard is up.

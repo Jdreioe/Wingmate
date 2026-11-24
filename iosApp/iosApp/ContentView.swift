@@ -139,16 +139,16 @@ struct ContentView: View {
                         )
                     } else {
                         GeometryReader { proxy in
-                            let wideLayout = WindowLayoutClass.usesWideTyping(size: proxy.size)
+                            let widePadding = WindowLayoutClass.of(width: proxy.size.width).isLarge
 
                             VStack(spacing: model.boardModeEnabled ? 0 : 8) {
                                 CommunicationNoticeBanner(model: model)
-                                    .padding(.horizontal, (model.boardModeEnabled || wideLayout) ? 16 : 0)
+                                    .padding(.horizontal, (model.boardModeEnabled || widePadding) ? 16 : 0)
                                     .padding(.top, model.boardModeEnabled ? 8 : 0)
                                 mainContent
                             }
                             // Screens owns its full-screen edge-to-edge padding; Typing adapts to window size.
-                            .padding(model.boardModeEnabled ? 0 : (wideLayout ? 12 : 16))
+                            .padding(model.boardModeEnabled ? 0 : (widePadding ? 12 : 16))
                             .frame(width: proxy.size.width, height: proxy.size.height)
                         }
                     }

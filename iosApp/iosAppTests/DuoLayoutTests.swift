@@ -19,6 +19,12 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertEqual(WindowLayoutClass.of(width: 951), .expanded)
         XCTAssertTrue(WindowLayoutClass.usesWideTyping(size: CGSize(width: 951, height: 669)))
         XCTAssertEqual(WindowLayoutClass.typingSidePanelWidth(for: 951), 288)
+        // Raising the on-screen keyboard shrinks visible height, but wide Typing stays active
+        XCTAssertTrue(WindowLayoutClass.usesWideTyping(
+            size: CGSize(width: 951, height: 340),
+            restingHeight: 669,
+            keyboardVisible: true
+        ))
     }
 
     func testWindowLayoutClassForStandardIphoneAndIpad() {
