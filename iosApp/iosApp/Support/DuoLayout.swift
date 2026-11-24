@@ -204,23 +204,27 @@ struct BoardFoldLayout: Equatable {
 extension GeometryProxy {
     /// Active hardware fold division in this geometry proxy's coordinate space (iOS 27.1+ on iPhone Duo).
     var activeFoldDivision: FoldDivision? {
+        #if compiler(>=6.4.1)
         if #available(iOS 27.1, *) {
             let activeRects = reservedRegions(kind: .division)
                 .filter(\.isActive)
                 .map(\.frame)
             return FoldDivision.from(rects: activeRects, in: size)
         }
+        #endif
         return nil
     }
 
     /// Extra top inset needed to stay clear of any active hardware occlusion (such as an inner
     /// display camera cutout) when the system status bar is hidden.
     var topOcclusionClearance: CGFloat {
+        #if compiler(>=6.4.1)
         if #available(iOS 27.1, *) {
             let topOcclusions = reservedRegions(kind: .occlusion)
                 .filter { $0.isActive && $0.frame.minY < size.height * 0.25 }
             return topOcclusions.map(\.frame.maxY).max() ?? 0
         }
+        #endif
         return 0
     }
 }
@@ -249,6 +253,7 @@ struct AdaptiveFoldSplitView<Primary: View, Secondary: View>: View {
     }
 
     var body: some View {
+        #if compiler(>=6.4.1)
         if #available(iOS 27.1, *) {
             ArrangementView {
                 primary()
@@ -258,16 +263,24 @@ struct AdaptiveFoldSplitView<Primary: View, Secondary: View>: View {
             }
             .arrangementViewStyle(.split)
         } else {
-            if splitAxis == .horizontal {
-                HStack(spacing: spacing) {
-                    primary()
-                    secondary()
-                }
-            } else {
-                VStack(spacing: spacing) {
-                    primary()
-                    secondary()
-                }
+            fallbackLayout
+        }
+        #else
+        fallbackLayout
+        #endif
+    }
+
+    @ViewBuilder
+    private var fallbackLayout: some View {
+        if splitAxis == .horizontal {
+            HStack(spacing: spacing) {
+                primary()
+                secondary()
+            }
+        } else {
+            VStack(spacing: spacing) {
+                primary()
+                secondary()
             }
         }
     }

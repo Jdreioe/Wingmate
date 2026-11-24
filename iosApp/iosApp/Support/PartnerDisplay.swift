@@ -173,6 +173,7 @@ struct PartnerDisplayAccessoryModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         let withHinge = applyHingeObserver(to: content)
+        #if compiler(>=6.4)
         if #available(iOS 27.0, *) {
             withHinge.sceneAccessory {
                 ExternalNonInteractiveAccessory(
@@ -187,10 +188,14 @@ struct PartnerDisplayAccessoryModifier: ViewModifier {
         } else {
             withHinge
         }
+        #else
+        withHinge
+        #endif
     }
 
     @ViewBuilder
     private func applyHingeObserver(to content: Content) -> some View {
+        #if compiler(>=6.4.1)
         if #available(iOS 27.1, *) {
             content.onHingeChange { _, newContext in
                 guard let hinge = newContext.hinge else {
@@ -207,6 +212,9 @@ struct PartnerDisplayAccessoryModifier: ViewModifier {
         } else {
             content
         }
+        #else
+        content
+        #endif
     }
 }
 
@@ -232,10 +240,14 @@ extension View {
     /// preserving full horizontal width for AAC button grids and the typing composer.
     @ViewBuilder
     func preferHorizontalToolbarOnDuo() -> some View {
+        #if compiler(>=6.4.1)
         if #available(iOS 27.1, *) {
             self.toolbarVerticalBehavior(.disabled)
         } else {
             self
         }
+        #else
+        self
+        #endif
     }
 }
