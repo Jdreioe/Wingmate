@@ -1,0 +1,4 @@
+• iPhone og iPad: biblioteket viser et billede af hver skærm. Tryk for at åbne den, eller tryk Rediger.
+• Tomme felter er blanke, mens du kommunikerer. Under redigering kan du trække en knap, eller flytte og ændre størrelse med pile.
+• En hjælper låser redigering med en PIN-kode. Wingmate bruger ikke Face ID. Efter flere forkerte koder venter den.
+• Gendannelse af en sikkerhedskopi anvender nu de gemte indstillinger.

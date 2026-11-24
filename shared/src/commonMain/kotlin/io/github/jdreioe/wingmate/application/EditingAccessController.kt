@@ -81,11 +81,20 @@ class DefaultEditingAccessStore(
 /** An Editing access code is 4 to 8 digits. */
 internal fun isValidEditingAccessCode(code: String): Boolean = code.length in 4..8 && code.all(Char::isDigit)
 
+/** After five wrong codes, wait 5s, then 10s, 20s, 40s, and at most a minute. */
+internal fun editingAccessRetryDelayMillis(failedAttempts: Int): Long {
+    if (failedAttempts < 5) return 0
+    val step = (failedAttempts - 5).coerceAtMost(4)
+    return minOf(60_000L, 5_000L shl step)
+}
+
 data class EditingAccessState(
     val enabled: Boolean = false,
     val unlocked: Boolean = true,
     val supported: Boolean = true,
-    val failedAttempts: Int = 0
+    val failedAttempts: Int = 0,
+    /** Epoch millis. Attempts before this time are ignored so guessing has to slow down. */
+    val retryNotBeforeMillis: Long = 0
 )
 
 class EditingAccessController(
@@ -100,19 +109,38 @@ class EditingAccessController(
     suspend fun refresh(): EditingAccessState {
         val enabled = store.isEnabled()
         val unlocked = !enabled || sessionIsValid()
-        return EditingAccessState(enabled, unlocked, store.isSupported, mutableState.value.failedAttempts)
-            .also { mutableState.value = it }
+        return EditingAccessState(
+            enabled,
+            unlocked,
+            store.isSupported,
+            mutableState.value.failedAttempts,
+            mutableState.value.retryNotBeforeMillis
+        ).also { mutableState.value = it }
     }
 
     suspend fun requiresUnlock(): Boolean = refresh().let { it.enabled && !it.unlocked }
 
     suspend fun unlock(code: String): Boolean {
+        val now = nowMillis()
+        val waitingUntil = mutableState.value.retryNotBeforeMillis
+        if (waitingUntil > now) {
+            mutableState.value = refresh().copy(
+                failedAttempts = mutableState.value.failedAttempts,
+                retryNotBeforeMillis = waitingUntil
+            )
+            return false
+        }
         val success = store.verify(code)
         if (success) {
-            unlockedAt = nowMillis()
-            mutableState.value = refresh().copy(failedAttempts = 0)
+            unlockedAt = now
+            mutableState.value = refresh().copy(failedAttempts = 0, retryNotBeforeMillis = 0)
         } else {
-            mutableState.value = refresh().copy(failedAttempts = mutableState.value.failedAttempts + 1)
+            val attempts = mutableState.value.failedAttempts + 1
+            val delay = editingAccessRetryDelayMillis(attempts)
+            mutableState.value = refresh().copy(
+                failedAttempts = attempts,
+                retryNotBeforeMillis = if (delay == 0L) 0 else now + delay
+            )
         }
         return success
     }

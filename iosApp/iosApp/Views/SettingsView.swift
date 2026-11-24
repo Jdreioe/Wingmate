@@ -1,6 +1,5 @@
 import SwiftUI
 import Shared
-import LocalAuthentication
 import UniformTypeIdentifiers
 
 private enum SettingsDestination: String, CaseIterable, Identifiable {
@@ -658,10 +657,7 @@ private struct GeneralSettingsView: View {
 
 private struct EditingAccessSettingsView: View {
     @ObservedObject var model: IosViewModel
-    @State private var currentCode = ""
-    @State private var newCode = ""
-    @State private var confirmation = ""
-    @State private var error = false
+    @State private var pinMode: EditingAccessPinMode?
 
     var body: some View {
         Group {
@@ -669,41 +665,25 @@ private struct EditingAccessSettingsView: View {
                 Text("editing_access.unavailable").foregroundStyle(.red)
             } else {
                 if model.editingAccessEnabled {
-                    SecureField("editing_access.current_code", text: $currentCode)
-                        .keyboardType(.numberPad)
+                    Button("editing_access.change") { pinMode = .change }
+                        .frame(minHeight: 44)
+                } else {
+                    Button("editing_access.enable") { pinMode = .create }
+                        .frame(minHeight: 44)
                 }
-                SecureField("editing_access.new_code", text: $newCode)
-                    .keyboardType(.numberPad)
-                SecureField("editing_access.confirm_code", text: $confirmation)
-                    .keyboardType(.numberPad)
-                if error { Text("editing_access.incorrect").foregroundStyle(.red) }
-
-                Button(LocalizedStringKey(model.editingAccessEnabled ? "editing_access.change" : "editing_access.enable")) {
-                    Task {
-                        let valid = newCode.count >= 4 && newCode.count <= 8 && newCode == confirmation
-                        let unlocked = !model.editingAccessEnabled ? true : await model.unlockEditingAccess(currentCode)
-                        guard valid, unlocked else { error = true; return }
-                        error = !(await model.configureEditingAccess(newCode))
-                        if !error { currentCode = ""; newCode = ""; confirmation = "" }
-                    }
-                }
-                .disabled(newCode != confirmation || newCode.count < 4 || newCode.count > 8)
-
                 if model.editingAccessEnabled {
                     Button("editing_access.disable", role: .destructive) {
-                        Task { error = !(await model.disableEditingAccess(currentCode)) }
+                        pinMode = .disable
                     }
-                    Button("editing_access.recover") { recoverWithDeviceAuthentication() }
+                    .frame(minHeight: 44)
                 }
             }
         }
         .task { await model.refreshEditingAccess() }
-    }
-
-    private func recoverWithDeviceAuthentication() {
-        let context = LAContext()
-        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: NSLocalizedString("editing_access.recover_reason", comment: "")) { success, _ in
-            if success { Task { await model.recoverEditingAccess() } }
+        .sheet(item: $pinMode) { mode in
+            EditingAccessPinSheet(model: model, mode: mode, onSuccess: {
+                pinMode = nil
+            }, onCancel: { pinMode = nil })
         }
     }
 }

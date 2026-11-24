@@ -13,6 +13,26 @@ struct BoardSetInfo: Codable, Identifiable, Equatable {
     var updatedAt: TimeInterval
 }
 
+struct ScreenPreviewCell: Identifiable, Equatable {
+    var row: Int
+    var column: Int
+    var rowSpan: Int
+    var columnSpan: Int
+    var colorHex: String?
+    var label: String?
+    var imageUrl: String?
+
+    var id: String { "\(row):\(column)" }
+}
+
+/// The home page of a screen, reduced to what a library thumbnail needs.
+struct ScreenPreview: Equatable {
+    var rows: Int
+    var columns: Int
+    var backgroundHex: String?
+    var cells: [ScreenPreviewCell]
+}
+
 struct BoardCellInfo: Identifiable, Equatable {
     var row: Int
     var col: Int
@@ -30,7 +50,10 @@ struct BoardCellInfo: Identifiable, Equatable {
     var actions: [String]
     var soundId: String? = nil
     var soundDataUrl: String? = nil
+    var soundPath: String? = nil
     var shape: String
+    var language: String? = nil
+    var mathMode: Bool = false
 
     var id: String { "\(row):\(col)" }
 }
@@ -206,6 +229,7 @@ final class IosViewModel: ObservableObject {
     @Published var editingAccessEnabled: Bool = false
     @Published var editingAccessUnlocked: Bool = true
     @Published var editingAccessSupported: Bool = true
+    @Published var editingAccessRetryAt: TimeInterval = 0
     @Published var selectionHighlightMillis: Int64 = 0 {
         didSet {
             if selectionHighlightMillis != oldValue {
@@ -255,6 +279,7 @@ final class IosViewModel: ObservableObject {
         editingAccessEnabled = state.enabled
         editingAccessUnlocked = state.unlocked
         editingAccessSupported = state.supported
+        editingAccessRetryAt = TimeInterval(state.retryNotBeforeMillis) / 1_000
     }
 
     func unlockEditingAccess(_ code: String) async -> Bool {
@@ -277,11 +302,6 @@ final class IosViewModel: ObservableObject {
         let success = (try? await settingsFacade.disableEditingAccess(code: code))?.boolValue ?? false
         await refreshEditingAccess()
         return success
-    }
-
-    func recoverEditingAccess() async {
-        try? await settingsFacade.recoverEditingAccess()
-        await refreshEditingAccess()
     }
 
     func lockEditingAccess() {
@@ -353,6 +373,28 @@ final class IosViewModel: ObservableObject {
             await refreshBoardCells()
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.cell_update_failed")
+        }
+    }
+
+    /// Moves the Button at the source cell onto the target cell, swapping when both spans fit.
+    /// False means the shared grid refused the move, so nothing was saved.
+    func moveBoardField(fromRow: Int, fromCol: Int, toRow: Int, toCol: Int) async -> Bool {
+        guard let boardId = selectedBoardId else { return false }
+        do {
+            let moved = try await boardsFacade.moveBoardField(
+                boardId: boardId,
+                fromRow: Int32(fromRow),
+                fromCol: Int32(fromCol),
+                toRow: Int32(toRow),
+                toCol: Int32(toCol)
+            )
+            if moved.boolValue {
+                await refreshBoardCells()
+            }
+            return moved.boolValue
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.cell_update_failed")
+            return false
         }
     }
 
@@ -719,7 +761,7 @@ final class IosViewModel: ObservableObject {
     }
 
     /// Appends a Button of the current Page to the Message.
-    func appendScreenPart(text: String, buttonId: String) {
+    func appendScreenPart(text: String, buttonId: String, languageTag: String? = nil, mathMode: Bool = false) {
         rememberScreenButtonLooks()
         editMessage {
             session.appendScreenPart(
@@ -727,7 +769,9 @@ final class IosViewModel: ObservableObject {
                 screenId: selectedBoardSetId ?? "",
                 pageId: selectedBoardId ?? "",
                 buttonId: buttonId,
-                spellingMode: selectedBoardUsesSpellingMode
+                spellingMode: selectedBoardUsesSpellingMode,
+                languageTag: languageTag,
+                mathMode: mathMode
             )
         }
     }
@@ -801,6 +845,13 @@ final class IosViewModel: ObservableObject {
         guard !dataUrl.isEmpty, let url = playableURL(from: dataUrl), url.isFileURL else { return }
         AudioSessionHelper.activatePlayback()
         session.speakRecording(path: url.path, voice: selectedVoice)
+    }
+
+    /// Plays a Button recording stored as a file path.
+    func playBoardButtonFile(_ path: String) {
+        guard !path.isEmpty else { return }
+        AudioSessionHelper.activatePlayback()
+        session.speakRecording(path: path, voice: selectedVoice)
     }
 
     /// Records how the current Page's Buttons look, for the message bar on other Pages.
@@ -914,7 +965,6 @@ final class IosViewModel: ObservableObject {
         guard swipeBetweenPages, !selectOnTouchDown, holdToSelectMillis <= 0,
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
               let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
-        boardStack = []
         await selectBoard(id: ids[index + offset])
     }
 
@@ -1450,6 +1500,57 @@ final class IosViewModel: ObservableObject {
         boardNamesById = cache
     }
 
+    /// Home-page thumbnail for the library. Hidden buttons are omitted so the
+    /// preview matches the page in use.
+    func loadScreenPreview(rootBoardId: String) async -> ScreenPreview? {
+        do {
+            guard let board = try await boardsFacade.getBoard(id: rootBoardId) else { return nil }
+            let rows = max(1, Int(board.grid?.rows ?? 1))
+            let columns = max(1, Int(board.grid?.columns ?? 1))
+            let fields = try await boardsFacade.listBoardFieldItems(boardId: rootBoardId)
+            let cells = try await boardsFacade.listBoardCells(boardId: rootBoardId)
+            struct AnchorCell {
+                var label: String?
+                var imageUrl: String?
+                var color: String?
+                var hidden: Bool
+            }
+            var byAnchor: [String: AnchorCell] = [:]
+            for cell in cells {
+                byAnchor["\(Int(cell.row)):\(Int(cell.col))"] = AnchorCell(
+                    label: cell.label,
+                    imageUrl: cell.imageUrl,
+                    color: cell.resolvedBackgroundColor ?? cell.backgroundColor,
+                    hidden: cell.hidden
+                )
+            }
+            let visible = fields.compactMap { field -> ScreenPreviewCell? in
+                guard let buttonId = field.buttonId, !buttonId.isEmpty,
+                      let cell = byAnchor["\(Int(field.row)):\(Int(field.column))"],
+                      !cell.hidden else { return nil }
+                let label = cell.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let image = cell.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return ScreenPreviewCell(
+                    row: Int(field.row),
+                    column: Int(field.column),
+                    rowSpan: max(1, Int(field.rowSpan)),
+                    columnSpan: max(1, Int(field.columnSpan)),
+                    colorHex: cell.color,
+                    label: (label?.isEmpty == false) ? label : nil,
+                    imageUrl: (image?.isEmpty == false) ? image : nil
+                )
+            }
+            return ScreenPreview(
+                rows: rows,
+                columns: columns,
+                backgroundHex: board.backgroundColor,
+                cells: visible
+            )
+        } catch {
+            return nil
+        }
+    }
+
     func loadBoardSets() async {
         do {
             let sharedSets = try await boardsFacade.listBoardSets()
@@ -1613,12 +1714,35 @@ final class IosViewModel: ObservableObject {
         }
     }
 
-    func selectBoard(id: String) async {
+    func selectBoard(id: String, resetStack: Bool = false) async {
         if let set = selectedBoardSet, !set.boardIds.contains(id) {
             return
         }
+        if resetStack { boardStack = [] }
         selectedBoardId = id
         await loadSelectedBoard()
+    }
+
+    var canNavigateBoardBack: Bool { !boardStack.isEmpty }
+
+    var isOnStartPage: Bool {
+        guard let root = selectedBoardSet?.rootBoardId else { return true }
+        return selectedBoardId == root
+    }
+
+    /// Pops the Page the Communicator opened this one from.
+    func navigateBoardBack() async {
+        guard let previous = boardStack.last else { return }
+        boardStack.removeLast()
+        await selectBoard(id: previous)
+    }
+
+    /// Returns to the Screen's start Page and forgets the path taken to get here.
+    func navigateBoardHome() async {
+        guard let root = selectedBoardSet?.rootBoardId else { return }
+        boardStack = []
+        guard root != selectedBoardId else { return }
+        await selectBoard(id: root)
     }
 
     func pushBoardNavigationStack(_ boardId: String) {
@@ -1747,7 +1871,10 @@ final class IosViewModel: ObservableObject {
                     actions: cell.actions,
                     soundId: cell.soundId,
                     soundDataUrl: cell.soundDataUrl,
-                    shape: cell.shape
+                    soundPath: cell.soundPath,
+                    shape: cell.shape,
+                    language: cell.language,
+                    mathMode: cell.mathMode
                 )
             }
             boardFieldItems = fields.map { field in
@@ -1777,7 +1904,13 @@ final class IosViewModel: ObservableObject {
         imageUrl: String?,
         clearImage: Bool,
         actions: [String],
-        wordType: String?
+        wordType: String?,
+        hidden: Bool = false,
+        shape: String? = nil,
+        language: String? = nil,
+        mathMode: Bool = false,
+        recordingPath: String? = nil,
+        clearRecording: Bool = false
     ) async {
         guard let boardId = selectedBoardId else {
             boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
@@ -1808,7 +1941,14 @@ final class IosViewModel: ObservableObject {
                 imageUrl: normalizedImageUrl,
                 clearImage: clearImage,
                 actions: actions,
-                wordType: normalizedOptionalText(wordType)
+                wordType: normalizedOptionalText(wordType),
+                applyAppearance: true,
+                hidden: hidden,
+                shape: shape,
+                language: normalizedOptionalText(language),
+                mathMode: mathMode,
+                recordingPath: normalizedOptionalText(recordingPath),
+                clearRecording: clearRecording
             )
 
             selectedBoard = updatedBoard
@@ -1980,6 +2120,47 @@ final class IosViewModel: ObservableObject {
             selectedBoardId = boardId
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
+        }
+    }
+
+    func loadBoardSettings(forPage: Bool) async -> Shared.IosBoardSettingsDraft? {
+        guard let setId = selectedBoardSetId, let boardId = selectedBoardId else { return nil }
+        return try? await boardsFacade.boardSettingsDraft(boardSetId: setId, boardId: boardId, forPage: forPage)
+    }
+
+    func saveBoardSettings(
+        forPage: Bool,
+        showLabels: String,
+        showSymbols: String,
+        labelAtTop: String,
+        showMessageBar: String,
+        showSpeakButton: String,
+        messageBarEditable: String,
+        activationBehavior: String,
+        returnBehavior: String,
+        cacheSpeech: String
+    ) async -> Bool {
+        guard let setId = selectedBoardSetId, let boardId = selectedBoardId, canEditSelectedBoardSet else { return false }
+        do {
+            try await boardsFacade.updateBoardSettings(
+                boardSetId: setId,
+                boardId: boardId,
+                forPage: forPage,
+                showLabels: showLabels,
+                showSymbols: showSymbols,
+                labelAtTop: labelAtTop,
+                showMessageBar: showMessageBar,
+                showSpeakButton: showSpeakButton,
+                messageBarEditable: messageBarEditable,
+                activationBehavior: activationBehavior,
+                returnBehavior: returnBehavior,
+                cacheSpeech: cacheSpeech
+            )
+            await loadSelectedBoard()
+            return true
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
+            return false
         }
     }
 

@@ -165,6 +165,91 @@ class BoardsFacadeTest {
     }
 
     @Test
+    fun cellUpsertStoresAppearanceAndKeepsItWhenALaterEditOmitsIt() = runBlocking {
+        val facade = facade()
+        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1).rootBoardId
+
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hello", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = listOf(":speak", ":home"), wordType = "noun",
+            applyAppearance = true, hidden = true, shape = "pill", language = "da-DK",
+            mathMode = true, recordingPath = "/recordings/hello.m4a",
+        )
+        val stored = facade.listBoardCells(boardId).single()
+        assertEquals(true, stored.hidden)
+        assertEquals("pill", stored.shape)
+        assertEquals("da-DK", stored.language)
+        assertEquals(true, stored.mathMode)
+        assertEquals("/recordings/hello.m4a", stored.soundPath)
+        assertEquals(listOf(":speak", ":home"), stored.actions)
+        assertEquals("noun", stored.wordType)
+
+        val kept = facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hi", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        assertEquals(true, kept.buttons.single().hidden)
+        assertEquals("da-DK", kept.buttons.single().locale)
+        assertEquals("/recordings/hello.m4a", kept.sounds.single().path)
+
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "Hi", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+            applyAppearance = true, clearRecording = true,
+        )
+        val cleared = facade.getBoard(boardId)!!
+        assertEquals(false, cleared.buttons.single().hidden)
+        assertTrue(cleared.sounds.isEmpty())
+        assertNull(cleared.buttons.single().locale)
+    }
+
+    @Test
+    fun screenAndPageSettingsInheritUntilOverriddenAndRejectALockedScreen() = runBlocking {
+        val facade = facade()
+        val set = facade.createBoardSet("Test", rows = 1, columns = 1)
+        val inherit = facade.boardSettingsDraft(set.id, set.rootBoardId, forPage = false)
+        assertEquals("inherit", inherit.showMessageBar)
+        assertEquals("inherit", inherit.activationBehavior)
+
+        facade.updateBoardSettings(
+            boardSetId = set.id, boardId = set.rootBoardId, forPage = false,
+            showLabels = "inherit", showSymbols = "inherit", labelAtTop = "inherit",
+            showMessageBar = "off", showSpeakButton = "inherit", messageBarEditable = "inherit",
+            activationBehavior = "SpeakOnly", returnBehavior = "Previous", cacheSpeech = "on",
+        )
+        val screen = facade.resolveBoardSettings(set.rootBoardId)
+        assertEquals(false, screen.showMessageBar)
+        assertEquals("SpeakOnly", screen.activationBehavior)
+        assertEquals("Previous", screen.returnBehavior)
+
+        facade.updateBoardSettings(
+            boardSetId = set.id, boardId = set.rootBoardId, forPage = true,
+            showLabels = "inherit", showSymbols = "off", labelAtTop = "on",
+            showMessageBar = "on", showSpeakButton = "inherit", messageBarEditable = "off",
+            activationBehavior = "inherit", returnBehavior = "inherit", cacheSpeech = "inherit",
+        )
+        val page = facade.resolveBoardSettings(set.rootBoardId)
+        assertEquals(false, page.showSymbols)
+        assertEquals(true, page.labelAtTop)
+        assertEquals(true, page.showMessageBar)
+        assertEquals("SpeakOnly", page.activationBehavior)
+
+        facade.toggleBoardSetLocked(set.id)
+        val locked = assertFailsWith<NativeFailure> {
+            facade.updateBoardSettings(
+                boardSetId = set.id, boardId = set.rootBoardId, forPage = false,
+                showLabels = "on", showSymbols = "on", labelAtTop = "off",
+                showMessageBar = "on", showSpeakButton = "on", messageBarEditable = "on",
+                activationBehavior = "inherit", returnBehavior = "Stay", cacheSpeech = "off",
+            )
+        }
+        assertEquals(NativeFailureKind.Validation, locked.kind)
+    }
+
+    @Test
     fun listBoardCellsRendersUpsertedButton() = runBlocking {
         val facade = facade()
         val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2)
@@ -181,6 +266,34 @@ class BoardsFacadeTest {
         assertEquals("Hi", cells.single().label)
         assertEquals(1, cells.single().row)
         assertEquals(1, cells.single().col)
+    }
+
+    @Test
+    fun moveBoardFieldSwapsButtonsAndRefusesASpanThatDoesNotFit() = runBlocking {
+        val facade = facade()
+        val boardId = facade.createBoardSet("Test", rows = 2, columns = 2).rootBoardId
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 0, label = "A", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 1, label = "B", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+
+        assertTrue(facade.moveBoardField(boardId, fromRow = 0, fromCol = 0, toRow = 0, toCol = 1))
+        val swapped = facade.listBoardCells(boardId).associate { (it.row to it.col) to it.label }
+        assertEquals("B", swapped[0 to 0])
+        assertEquals("A", swapped[0 to 1])
+
+        facade.resizeBoardField(boardId, row = 0, col = 0, rowSpan = 2, columnSpan = 1)
+        assertEquals(false, facade.moveBoardField(boardId, fromRow = 0, fromCol = 0, toRow = 1, toCol = 1))
+        val unchanged = facade.listBoardCells(boardId).associate { (it.row to it.col) to it.label }
+        assertEquals("B", unchanged[0 to 0])
+        assertEquals("B", unchanged[1 to 0])
+        assertEquals("A", unchanged[0 to 1])
     }
 
     @Test
