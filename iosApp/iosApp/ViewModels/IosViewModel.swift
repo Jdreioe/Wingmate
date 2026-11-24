@@ -872,7 +872,12 @@ final class IosViewModel: ObservableObject {
             let imageUrl = cell.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
             looks["\(pageId)|\(cell.buttonId)"] = (label, imageUrl?.isEmpty == false ? imageUrl : nil)
         }
-        screenButtonLooks = looks
+        // Runs on every Button tap; only publish when a look actually changed.
+        let changed = looks.count != screenButtonLooks.count || looks.contains { key, look in
+            guard let old = screenButtonLooks[key] else { return true }
+            return old.label != look.label || old.imageUrl != look.imageUrl
+        }
+        if changed { screenButtonLooks = looks }
         lookedUpPageIds.insert(pageId)
     }
 
@@ -1337,8 +1342,11 @@ final class IosViewModel: ObservableObject {
         predictionJob?.cancel()
         predictionSubscription?.cancel()
         predictionSubscription = nil
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            predictions = Shared.PredictionResult(words: [], letters: [])
+        // Screens have their own prediction Buttons; Typing's suggestions would only re-render them.
+        if boardModeEnabled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !(predictions.words.isEmpty && predictions.letters.isEmpty) {
+                predictions = Shared.PredictionResult(words: [], letters: [])
+            }
             return
         }
         predictionJob = Task { [weak self] in
@@ -2055,7 +2063,8 @@ final class IosViewModel: ObservableObject {
     func stopBoardPredictions() {
         boardPredictionSubscription?.cancel()
         boardPredictionSubscription = nil
-        boardPredictionsByButtonId = [:]
+        // Publishing an unchanged value still re-renders the whole Screen.
+        if !boardPredictionsByButtonId.isEmpty { boardPredictionsByButtonId = [:] }
     }
 
     func boardPrediction(for buttonId: String) -> String? {
