@@ -106,8 +106,9 @@ struct ContentView: View {
                                     .padding(.horizontal, currentWideLayout ? 16 : 0)
                                 mainContent
                             }
-                            .frame(width: proxy.size.width)
+                            // Pad inside the proxy width so the content never overflows it.
                             .padding(currentWideLayout ? 0 : 16)
+                            .frame(width: proxy.size.width)
                         }
                     }
                 }

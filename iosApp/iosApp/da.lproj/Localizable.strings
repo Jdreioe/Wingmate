@@ -642,7 +642,6 @@
 "boardset.cell.merge_1x1" = "1 × 1";
 "boardset.cell.merge_footer" = "Udvid en knap, så den fylder flere felter. Kun ledige felter kan flettes.";
 "boardset.cell.add" = "Tilføj knap";
-"boardset.cell.edit" = "Rediger";
 "boardset.cell.move" = "Flyt";
 "boardset.cell.move.footer" = "Flyt knappen ét felt. Den bytter plads med en anden knap, når begge passer.";
 "boardset.cell.move.up" = "Flyt op";
@@ -657,7 +656,6 @@
 "boardset.cell.size.taller" = "Højere";
 "boardset.cell.size.shorter" = "Lavere";
 "boardset.cell.size.blocked" = "Den størrelse passer ikke.";
-"boardset.cell.size.value" = "%d × %d";
 "boardset.cell.merge_size" = "Flettet størrelse";
 "boardset.export_obz" = "Eksportér";
 "common.off" = "Fra";

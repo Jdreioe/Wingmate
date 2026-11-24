@@ -614,11 +614,6 @@ struct SymbolBoardWorkspaceView: View {
 
                 Spacer()
 
-                Button { printScreen(id: boardSetId) } label: {
-                    Image(systemName: "printer").frame(minWidth: 44, minHeight: 44)
-                }
-                .disabled(exportingPdf)
-                .accessibilityLabel(Text("boardset.print_pdf"))
                 if mode == .edit {
                     HStack(spacing: 12) {
                         Menu {
@@ -691,6 +686,11 @@ struct SymbolBoardWorkspaceView: View {
                         }
                     }
                 } else {
+                    Button { printScreen(id: boardSetId) } label: {
+                        Image(systemName: "printer").font(.title3)
+                    }
+                    .disabled(exportingPdf)
+                    .accessibilityLabel(Text("boardset.print_pdf"))
                     Button(action: { isFullscreen = true }) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.title3)
@@ -738,9 +738,6 @@ struct SymbolBoardWorkspaceView: View {
             }
             .padding(.horizontal)
             .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if mode == .edit, let anchor = selectedFieldAnchor, model.cellAt(row: anchor.row, col: anchor.column) != nil {
-                selectedFieldControls(anchor)
             }
             // Sub-board Strip (in Edit Mode for quick switching)
             if mode == .edit, let selectedSet = model.selectedBoardSet, selectedSet.boardIds.count > 1 {
@@ -1075,17 +1072,20 @@ struct SymbolBoardWorkspaceView: View {
             ))
             .simultaneousGesture(editMoveGesture(anchor: anchor, cell: cell, isEditMode: isEditMode, metrics: metrics))
 
-            if isEditMode, model.canEditSelectedBoardSet, cell != nil {
+            if isSelected, model.canEditSelectedBoardSet {
                 Button(role: .destructive) {
+                    selectedFieldAnchor = nil
                     Task { await model.clearSelectedBoardCell(row: row, col: col) }
                 } label: {
                     Image(systemName: "trash.circle.fill")
                         .font(.title3)
                         .foregroundStyle(.red)
                         .background(Color(.systemBackground), in: Circle())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(4)
+                .accessibilityLabel(Text("boardset.cell.clear"))
             }
             if cell?.hidden == true && !isEditMode && showHiddenButtons {
                 Image(systemName: "eye.fill")
@@ -1110,7 +1110,10 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     private func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
-        let labelScale = model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
+        // Labels follow the height of one grid cell, so they grow with the grid
+        // instead of staying at a fixed point size; merged fields scale up further.
+        let unitHeight = height / CGFloat(max(1, rowSpan))
+        let labelSize = min(max(unitHeight * 0.2, 15), 40) * model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
         if cell == nil && isEditMode {
             return AnyView(
                 ZStack {
@@ -1130,9 +1133,9 @@ struct SymbolBoardWorkspaceView: View {
         }
         let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
         return AnyView(
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .center, spacing: 4) {
             if model.boardLabelAtTop && model.boardShowLabels {
-                boardCellLabel(cell, fontScale: labelScale)
+                boardCellLabel(cell, size: labelSize)
             }
 
             if model.boardShowSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
@@ -1156,7 +1159,7 @@ struct SymbolBoardWorkspaceView: View {
             }
 
             if !model.boardLabelAtTop && model.boardShowLabels {
-                boardCellLabel(cell, fontScale: labelScale)
+                boardCellLabel(cell, size: labelSize)
             }
 
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
@@ -1164,17 +1167,17 @@ struct SymbolBoardWorkspaceView: View {
                     .font(.caption2)
                     .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity)
             } else if let vocalization = trimmed(cell?.vocalization), vocalization != trimmed(cell?.label) {
                 Text(vocalization)
                     .font(.caption2)
                     .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(8)
-        .frame(width: width, height: height, alignment: .topLeading)
+        .frame(width: width, height: height)
         .background(
             RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
                 .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
@@ -1202,16 +1205,16 @@ struct SymbolBoardWorkspaceView: View {
     }
 
     @ViewBuilder
-    private func boardCellLabel(_ cell: BoardCellInfo?, fontScale: CGFloat = 1) -> some View {
+    private func boardCellLabel(_ cell: BoardCellInfo?, size: CGFloat) -> some View {
         let text = boardCellDisplayLabel(cell)
         if !text.isEmpty {
             Text(text)
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                .font(.system(size: size, weight: .semibold))
+                .multilineTextAlignment(.center)
                 .lineLimit(2)
+                .minimumScaleFactor(0.5)
                 .foregroundStyle(model.highContrastMode ? Color.primary : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .scaleEffect(fontScale, anchor: .leading)
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -2151,63 +2154,6 @@ struct SymbolBoardWorkspaceView: View {
             .disabled(!canIncrease)
             .accessibilityLabel(Text(increaseKey))
         }
-    }
-
-    @ViewBuilder
-    private func selectedFieldControls(_ anchor: BoardCellAnchor) -> some View {
-        let span = model.boardFieldItems.first { $0.row == anchor.row && $0.column == anchor.column }
-        ScrollView(.horizontal, showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Button {
-                    openCellEditor(row: anchor.row, col: anchor.column, existing: model.cellAt(row: anchor.row, col: anchor.column))
-                } label: {
-                    Label("boardset.cell.edit", systemImage: "pencil")
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                fieldNudgeButton("boardset.cell.move.up", systemImage: "arrow.up") {
-                    Task { await moveField(from: anchor, directionRow: -1, directionColumn: 0) }
-                }
-                fieldNudgeButton("boardset.cell.move.down", systemImage: "arrow.down") {
-                    Task { await moveField(from: anchor, directionRow: 1, directionColumn: 0) }
-                }
-                fieldNudgeButton("boardset.cell.move.left", systemImage: "arrow.left") {
-                    Task { await moveField(from: anchor, directionRow: 0, directionColumn: -1) }
-                }
-                fieldNudgeButton("boardset.cell.move.right", systemImage: "arrow.right") {
-                    Task { await moveField(from: anchor, directionRow: 0, directionColumn: 1) }
-                }
-            }
-            HStack(spacing: 8) {
-                fieldNudgeButton("boardset.cell.size.narrower", systemImage: "arrow.left.and.right") {
-                    Task { await resizeField(anchor, deltaRows: 0, deltaColumns: -1) }
-                }
-                fieldNudgeButton("boardset.cell.size.wider", systemImage: "arrow.left.and.right") {
-                    Task { await resizeField(anchor, deltaRows: 0, deltaColumns: 1) }
-                }
-                fieldNudgeButton("boardset.cell.size.shorter", systemImage: "arrow.up.and.down") {
-                    Task { await resizeField(anchor, deltaRows: -1, deltaColumns: 0) }
-                }
-                fieldNudgeButton("boardset.cell.size.taller", systemImage: "arrow.up.and.down") {
-                    Task { await resizeField(anchor, deltaRows: 1, deltaColumns: 0) }
-                }
-                Text(String(format: NSLocalizedString("boardset.cell.size.value", comment: ""), span?.columnSpan ?? 1, span?.rowSpan ?? 1))
-                    .font(.body)
-                Spacer(minLength: 0)
-                Button(role: .destructive) {
-                    selectedFieldAnchor = nil
-                    Task { await model.clearSelectedBoardCell(row: anchor.row, col: anchor.column) }
-                } label: {
-                    Label("boardset.cell.clear", systemImage: "trash")
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        }
-        .padding(.horizontal)
-        .accessibilityElement(children: .contain)
     }
 
     private func selectField(_ anchor: BoardCellAnchor) {

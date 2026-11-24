@@ -519,7 +519,6 @@
 "boardset.cell.merge_1x1" = "1 × 1";
 "boardset.cell.merge_footer" = "Grow a button to span multiple cells. Only free cells can be merged.";
 "boardset.cell.add" = "Add button";
-"boardset.cell.edit" = "Edit";
 "boardset.cell.move" = "Move";
 "boardset.cell.move.footer" = "Move this button by one cell. It swaps with another button when both fit.";
 "boardset.cell.move.up" = "Move up";
@@ -534,7 +533,6 @@
 "boardset.cell.size.taller" = "Taller";
 "boardset.cell.size.shorter" = "Shorter";
 "boardset.cell.size.blocked" = "That size does not fit.";
-"boardset.cell.size.value" = "%d × %d";
 "settings.display.message_bar" = "Show message bar";
 "settings.display.speak_button" = "Show speak button in the message bar";
 "editing_access.title" = "Editing access";

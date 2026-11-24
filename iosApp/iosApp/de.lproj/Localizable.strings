@@ -545,7 +545,6 @@
 "boardset.cell.merge_1x1" = "1 × 1";
 "boardset.cell.merge_footer" = "Vergrößere eine Schaltfläche auf mehrere Felder. Nur freie Felder können zusammengeführt werden.";
 "boardset.cell.add" = "Schaltfläche hinzufügen";
-"boardset.cell.edit" = "Bearbeiten";
 "boardset.cell.move" = "Verschieben";
 "boardset.cell.move.footer" = "Verschiebe die Schaltfläche um ein Feld. Sie tauscht den Platz, wenn beide passen.";
 "boardset.cell.move.up" = "Nach oben";
@@ -560,7 +559,6 @@
 "boardset.cell.size.taller" = "Höher";
 "boardset.cell.size.shorter" = "Niedriger";
 "boardset.cell.size.blocked" = "Diese Größe passt nicht.";
-"boardset.cell.size.value" = "%d × %d";
 "boardset.cell.merge_size" = "Zusammengeführte Größe";
 "boardset.cell.word_type" = "Wortart";
 "boardset.cell.word_type.automatic" = "Automatisch";
