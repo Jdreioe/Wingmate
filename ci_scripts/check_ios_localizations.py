@@ -74,6 +74,29 @@ def referenced_keys(source: str) -> set:
     return keys
 
 
+def interpolated_key_errors(source: str, path: Path) -> list:
+    """LocalizedStringKey interpolation looks up a format key, so a composed key is shown raw.
+
+    NSLocalizedString takes a String, so interpolation finishes before lookup and is allowed.
+    """
+    errors = []
+    for match in STRING_LITERAL.finditer(source):
+        literal = match.group(1)
+        # Catalog keys are dotted (`phrase.symbol.package.\(source)`). Filenames are not.
+        if not re.match(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+\.\\\(", literal):
+            continue
+        window = source[max(0, match.start() - 160):match.start()]
+        if re.search(r"NSLocalizedString\s*\(\s*$", window):
+            continue
+        line = source[:match.start()].count("\n") + 1
+        errors.append(
+            f"{path.relative_to(ROOT)}:{line}: interpolated key \"{literal}\" is composed inside a "
+            "LocalizedStringKey-style literal, so SwiftUI looks up a format key and shows the raw key. "
+            "Build the String first and pass that to NSLocalizedString, or use a static key."
+        )
+    return errors
+
+
 def unwrapped_conditionals(source: str, path: Path) -> list:
     errors = []
     for match in LOCALIZING_CALL.finditer(source):
@@ -152,6 +175,7 @@ def check():
         source = COMMENT.sub("", path.read_text())
         used |= referenced_keys(source)
         errors.extend(unwrapped_conditionals(source, path))
+        errors.extend(interpolated_key_errors(source, path))
 
     for key in sorted(used):
         for locale, entries in catalogs.items():
