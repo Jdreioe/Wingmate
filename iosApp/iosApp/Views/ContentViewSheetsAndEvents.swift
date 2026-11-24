@@ -26,7 +26,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     var body: some View {
         content()
             .sheet(isPresented: $showVoiceSheet) {
-                VoiceSelectionSheet(selected: model.selectedVoice, onClose: { showVoiceSheet = false }) { v in
+                VoiceSelectionSheet(selected: model.selectedVoice, primaryLanguage: model.primaryLanguage, onClose: { showVoiceSheet = false }) { v in
                     Task {
                         await model.chooseVoice(v)
                         await MainActor.run { showVoiceSheet = false }

@@ -3,14 +3,19 @@ package io.github.jdreioe.wingmate.ui
 import android.graphics.Insets
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.ViewTreeObserver
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -65,16 +70,25 @@ class TypingKeyboardVisibilityTest {
             }
         }
         val input = composeRule.onNode(hasSetTextAction())
-        input.performClick()
+        // insetsController.show() fails immediately, and is not retried, when the
+        // Compose view is not the served editor yet. The hosted emulator often
+        // hits that race (SurfaceFlinger sync timeout, then
+        // PHASE_CLIENT_REQUEST_IME_SHOW). Keep focusing the field and ask
+        // InputMethodManager directly until the keyboard is actually visible.
+        val deadline = SystemClock.uptimeMillis() + 15_000
+        while (SystemClock.uptimeMillis() < deadline && !imeVisible()) {
+            val focused = input.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused) == true
+            if (!focused) input.performClick()
+            composeRule.runOnUiThread { requestShowIme() }
+            composeRule.waitForIdle()
+            if (imeVisible()) break
+            SystemClock.sleep(250)
+        }
+        var windowFocused = false
         composeRule.runOnUiThread {
-            val window = composeRule.activity.window
-            window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-            window.insetsController!!.show(WindowInsets.Type.ime())
+            windowFocused = composeRule.activity.window.decorView.hasWindowFocus()
         }
-        composeRule.waitUntil(5_000) {
-            composeRule.activity.window.decorView.rootWindowInsets
-                .isVisible(WindowInsets.Type.ime())
-        }
+        assertTrue("System keyboard did not become visible (windowFocused=$windowFocused)", imeVisible())
         // Wait for the native keyboard animation and remembered height to settle.
         waitForNativeAnimation()
         composeRule.waitForIdle()
@@ -179,5 +193,34 @@ class TypingKeyboardVisibilityTest {
         val deadline = SystemClock.uptimeMillis() + 800
         // Keep Compose's test clock advancing while the native keyboard uses real time.
         composeRule.waitUntil(2_000) { SystemClock.uptimeMillis() >= deadline }
+    }
+
+    private fun imeVisible(): Boolean {
+        val insets = composeRule.activity.window.decorView.rootWindowInsets ?: return false
+        return insets.isVisible(WindowInsets.Type.ime())
+    }
+
+    private fun requestShowIme() {
+        val activity = composeRule.activity
+        val window = activity.window
+        window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+        val decor = window.decorView
+        if (!decor.hasWindowFocus()) decor.requestFocus()
+        val target = window.currentFocus ?: decor.findAndroidComposeView()
+        if (target != null) {
+            activity.getSystemService(InputMethodManager::class.java)
+                ?.showSoftInput(target, 0)
+        }
+        window.insetsController?.show(WindowInsets.Type.ime())
+    }
+
+    private fun View.findAndroidComposeView(): View? {
+        if (javaClass.name == "androidx.compose.ui.platform.AndroidComposeView") return this
+        if (this is ViewGroup) {
+            for (index in 0 until childCount) {
+                getChildAt(index).findAndroidComposeView()?.let { return it }
+            }
+        }
+        return null
     }
 }
