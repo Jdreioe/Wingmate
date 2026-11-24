@@ -30,6 +30,14 @@
 "welcome_flow.google_tts.con1" = "Kræver internet";
 "welcome_flow.google_tts.con2" = "Kræver opsætning og fakturering i Google Cloud";
 "welcome_flow.google_tts.con3" = "Brug kan koste penge";
+"welcome_flow.elevenlabs_tts.title" = "ElevenLabs";
+"welcome_flow.elevenlabs_tts.subtitle" = "Udtryksfulde cloud- og personlige stemmer med din egen API-nøgle";
+"welcome_flow.elevenlabs_tts.pro1" = "Meget udtryksfulde, naturlige stemmer";
+"welcome_flow.elevenlabs_tts.pro2" = "Understøtter personlige stemmekloner";
+"welcome_flow.elevenlabs_tts.pro3" = "Bred flersproget understøttelse";
+"welcome_flow.elevenlabs_tts.con1" = "Kræver internet";
+"welcome_flow.elevenlabs_tts.con2" = "Kræver ElevenLabs-konto og API-nøgle";
+"welcome_flow.elevenlabs_tts.con3" = "Forbrug tæller med i din kontos kvote";
 "welcome_flow.voice_setup.title" = "Vælg din stemme";
 "welcome_flow.get_started" = "Kom i gang";
 "welcome_flow.skip" = "Spring over foreløbig";
@@ -46,6 +54,7 @@
 "welcome_flow.test_voice" = "Test din stemme";
 "welcome_flow.azure_voices_subtitle" = "Vælg mellem høj-kvalitets Azure stemmer";
 "welcome_flow.google_voices_subtitle" = "Vælg mellem Google Cloud-stemmer";
+"welcome_flow.elevenlabs_voices_subtitle" = "Vælg mellem dine ElevenLabs-stemmer";
 "welcome_flow.choose_voice" = "Vælg stemme";
 "welcome_flow.change_voice" = "Skift stemme";
 "welcome_flow.test_text" = "Hej, sådan lyder jeg!";

@@ -2,17 +2,187 @@ import SwiftUI
 import Shared
 import UniformTypeIdentifiers
 
+enum WelcomeTtsProvider: String, CaseIterable, Identifiable {
+    case system = "SYSTEM"
+    case azure = "AZURE_USER_RESOURCE"
+    case google = "GOOGLE_CLOUD"
+    case elevenLabs = "ELEVENLABS"
+
+    var id: String { rawValue }
+    var engineId: String { rawValue }
+    var requiresSetup: Bool { self != .system }
+
+    static func from(engineId: String?) -> WelcomeTtsProvider {
+        switch engineId {
+        case "AZURE_USER_RESOURCE", "AZURE_MANAGED":
+            return .azure
+        case "GOOGLE_CLOUD":
+            return .google
+        case "ELEVENLABS":
+            return .elevenLabs
+        default:
+            return .system
+        }
+    }
+
+    func matches(engineId: String?) -> Bool {
+        switch self {
+        case .azure:
+            return engineId == "AZURE_USER_RESOURCE" || engineId == "AZURE_MANAGED"
+        default:
+            return engineId == rawValue
+        }
+    }
+
+    @MainActor
+    func isConfigured(in model: IosViewModel) -> Bool {
+        switch self {
+        case .system:
+            return true
+        case .azure:
+            return model.azureConfigured
+        case .google:
+            return model.googleConfigured
+        case .elevenLabs:
+            return model.elevenLabsConfigured
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .system:
+            return "speaker.wave.2.fill"
+        case .azure:
+            return "cloud.fill"
+        case .google:
+            return "cloud.sun.fill"
+        case .elevenLabs:
+            return "waveform.circle.fill"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .system:
+            return NSLocalizedString("welcome_flow.system_tts.title", comment: "")
+        case .azure:
+            return NSLocalizedString("welcome_flow.azure_tts.title", comment: "")
+        case .google:
+            return NSLocalizedString("welcome_flow.google_tts.title", comment: "")
+        case .elevenLabs:
+            return NSLocalizedString("welcome_flow.elevenlabs_tts.title", comment: "")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .system:
+            return NSLocalizedString("welcome_flow.system_tts.subtitle", comment: "")
+        case .azure:
+            return NSLocalizedString("welcome_flow.azure_tts.subtitle", comment: "")
+        case .google:
+            return NSLocalizedString("welcome_flow.google_tts.subtitle", comment: "")
+        case .elevenLabs:
+            return NSLocalizedString("welcome_flow.elevenlabs_tts.subtitle", comment: "")
+        }
+    }
+
+    var pros: [String] {
+        switch self {
+        case .system:
+            return [
+                NSLocalizedString("welcome_flow.system_tts.pro1", comment: ""),
+                NSLocalizedString("welcome_flow.system_tts.pro2", comment: ""),
+                NSLocalizedString("welcome_flow.system_tts.pro3", comment: "")
+            ]
+        case .azure:
+            return [
+                NSLocalizedString("welcome_flow.azure_tts.pro1", comment: ""),
+                NSLocalizedString("welcome_flow.azure_tts.pro2", comment: ""),
+                NSLocalizedString("welcome_flow.azure_tts.pro3", comment: "")
+            ]
+        case .google:
+            return [
+                NSLocalizedString("welcome_flow.google_tts.pro1", comment: ""),
+                NSLocalizedString("welcome_flow.google_tts.pro2", comment: ""),
+                NSLocalizedString("welcome_flow.google_tts.pro3", comment: "")
+            ]
+        case .elevenLabs:
+            return [
+                NSLocalizedString("welcome_flow.elevenlabs_tts.pro1", comment: ""),
+                NSLocalizedString("welcome_flow.elevenlabs_tts.pro2", comment: ""),
+                NSLocalizedString("welcome_flow.elevenlabs_tts.pro3", comment: "")
+            ]
+        }
+    }
+
+    var cons: [String] {
+        switch self {
+        case .system:
+            return [
+                NSLocalizedString("welcome_flow.system_tts.con1", comment: ""),
+                NSLocalizedString("welcome_flow.system_tts.con2", comment: "")
+            ]
+        case .azure:
+            return [
+                NSLocalizedString("welcome_flow.azure_tts.con1", comment: ""),
+                NSLocalizedString("welcome_flow.azure_tts.con2", comment: ""),
+                NSLocalizedString("welcome_flow.azure_tts.con3", comment: "")
+            ]
+        case .google:
+            return [
+                NSLocalizedString("welcome_flow.google_tts.con1", comment: ""),
+                NSLocalizedString("welcome_flow.google_tts.con2", comment: ""),
+                NSLocalizedString("welcome_flow.google_tts.con3", comment: "")
+            ]
+        case .elevenLabs:
+            return [
+                NSLocalizedString("welcome_flow.elevenlabs_tts.con1", comment: ""),
+                NSLocalizedString("welcome_flow.elevenlabs_tts.con2", comment: ""),
+                NSLocalizedString("welcome_flow.elevenlabs_tts.con3", comment: "")
+            ]
+        }
+    }
+
+    var voicesSubtitle: String {
+        switch self {
+        case .system:
+            return NSLocalizedString("welcome_flow.system_tts_info", comment: "")
+        case .azure:
+            return NSLocalizedString("welcome_flow.azure_voices_subtitle", comment: "")
+        case .google:
+            return NSLocalizedString("welcome_flow.google_voices_subtitle", comment: "")
+        case .elevenLabs:
+            return NSLocalizedString("welcome_flow.elevenlabs_voices_subtitle", comment: "")
+        }
+    }
+
+    var configureTitle: String? {
+        switch self {
+        case .system:
+            return nil
+        case .azure:
+            return NSLocalizedString("settings.speech.azure.configure", comment: "")
+        case .google:
+            return NSLocalizedString("settings.speech.google.configure", comment: "")
+        case .elevenLabs:
+            return NSLocalizedString("elevenlabs.setup", comment: "")
+        }
+    }
+}
+
 struct WelcomeFlow: View {
     @ObservedObject var model: IosViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var currentStep = 0
     @State private var modeTour: String? = nil // "keyboard" or "screens"
     @State private var showVoicePicker = false
     @State private var showLanguagePicker = false
+    @State private var showAzureSetup = false
     @State private var showGoogleSetup = false
     @State private var showElevenLabsSetup = false
     @State private var selectedVoice: Shared.Voice? = nil
     @State private var selectedTtsEngine: String? = nil
-    @State private var voiceSelectorFollowsAzureSetup = false
     @State private var pendingLanguageSelection = false
     @State private var languageOptions: [String] = []
     @State private var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
@@ -25,7 +195,13 @@ struct WelcomeFlow: View {
     let onSkip: () -> Void
     let onRestoreComplete: () -> Void
 
-    private let totalSteps = 8
+    private let totalSteps = 7
+
+    private var isTabletLayout: Bool { horizontalSizeClass == .regular }
+
+    private var stepMaxWidth: CGFloat {
+        (isTabletLayout && currentStep == 2) ? 900 : 560
+    }
 
     var body: some View {
         NavigationStack {
@@ -61,14 +237,12 @@ struct WelcomeFlow: View {
                         case 2:
                             ttsSetupStep
                         case 3:
-                            f0SetupStep
-                        case 4:
                             voiceSelectionStep
-                        case 5:
+                        case 4:
                             languageSelectionStep
-                        case 6:
+                        case 5:
                             testVoiceStep
-                        case 7:
+                        case 6:
                             analyticsConsentStep
                         default:
                             completionStep
@@ -81,14 +255,11 @@ struct WelcomeFlow: View {
 
                     Spacer()
 
-                    // Navigation buttons (hide in F0 view as it handles its own internal navigation)
-                    if currentStep != 3 {
-                        navigationButtons
-                            .padding(.bottom, 24)
-                    }
+                    navigationButtons
+                        .padding(.bottom, 24)
                 }
                 .padding(.horizontal, 24)
-                .frame(maxWidth: 560)
+                .frame(maxWidth: stepMaxWidth)
                 .frame(maxWidth: .infinity)
             }
             .navigationBarHidden(true)
@@ -125,33 +296,47 @@ struct WelcomeFlow: View {
                 }
             )
         }
-        .sheet(isPresented: $showElevenLabsSetup) {
-            ElevenLabsSetupView(model: model, onClose: {
-                showElevenLabsSetup = false
-                if model.elevenLabsConfigured {
-                    selectedTtsEngine = "ELEVENLABS"
-                    voiceSelectorFollowsAzureSetup = false
-                    currentStep = 4
-                }
-            })
+        .sheet(isPresented: $showAzureSetup) {
+            F0SetupView(
+                onDone: {
+                    showAzureSetup = false
+                    Task {
+                        await model.refreshAzureConfiguration()
+                        await MainActor.run {
+                            completeProviderSetup(.azure)
+                        }
+                    }
+                },
+                onBack: { showAzureSetup = false }
+            )
+            .padding(.horizontal, 24)
         }
         .sheet(isPresented: $showGoogleSetup) {
             GoogleTtsSetupView(
                 model: model,
                 onClose: { showGoogleSetup = false },
                 onSaved: {
-                    voiceSelectorFollowsAzureSetup = false
-                    selectedTtsEngine = "GOOGLE_CLOUD"
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        currentStep = 4
-                    }
+                    showGoogleSetup = false
+                    completeProviderSetup(.google)
+                }
+            )
+        }
+        .sheet(isPresented: $showElevenLabsSetup) {
+            ElevenLabsSetupView(
+                model: model,
+                onClose: { showElevenLabsSetup = false },
+                onSaved: {
+                    showElevenLabsSetup = false
+                    completeProviderSetup(.elevenLabs)
                 }
             )
         }
         .onAppear {
             checkTtsConfiguration()
             selectedVoice = model.selectedVoice
-            selectedTtsEngine = model.ttsEngine
+        }
+        .task {
+            await refreshAllProviderConfigurations()
         }
         .fileImporter(isPresented: $importingBackup, allowedContentTypes: [.zip, .data]) { result in
             if case .success(let url) = result { confirmRestoreURL = url }
@@ -180,7 +365,7 @@ struct WelcomeFlow: View {
                             return
                         }
                         await model.refreshParitySettings()
-                        await model.refreshAzureConfiguration()
+                        await refreshAllProviderConfigurations()
                         model.refreshVoiceAndLanguages()
                         await model.loadBoardSets()
                         isRestoring = false
@@ -305,134 +490,67 @@ struct WelcomeFlow: View {
     @ViewBuilder
     private var ttsSetupStep: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                Image(systemName: "gear")
-                    .font(.system(size: 50))
-                    .foregroundColor(.blue)
+            VStack(spacing: isTabletLayout ? 14 : 16) {
+                VStack(spacing: isTabletLayout ? 6 : 10) {
+                    Image(systemName: "gear")
+                        .font(.system(size: isTabletLayout ? 34 : 44))
+                        .foregroundColor(.blue)
 
-            Text(NSLocalizedString("welcome_flow.tts_setup.title", comment: ""))
-                .font(.title2)
-                .fontWeight(.bold)
+                    Text(NSLocalizedString("welcome_flow.tts_setup.title", comment: ""))
+                        .font(.title2)
+                        .fontWeight(.bold)
 
-            Text(NSLocalizedString("welcome_flow.tts_setup.subtitle", comment: ""))
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-
-            VStack(spacing: 14) {
-                TtsOptionCard(
-                    title: NSLocalizedString("welcome_flow.system_tts.title", comment: ""),
-                    subtitle: NSLocalizedString("welcome_flow.system_tts.subtitle", comment: ""),
-                    icon: "speaker.wave.2.fill",
-                    pros: [
-                        NSLocalizedString("welcome_flow.system_tts.pro1", comment: ""),
-                        NSLocalizedString("welcome_flow.system_tts.pro2", comment: ""),
-                        NSLocalizedString("welcome_flow.system_tts.pro3", comment: "")
-                    ],
-                    cons: [
-                        NSLocalizedString("welcome_flow.system_tts.con1", comment: ""),
-                        NSLocalizedString("welcome_flow.system_tts.con2", comment: "")
-                    ],
-                    isSelected: selectedTtsEngine == "SYSTEM",
-                    action: {
-                        model.setTtsEngine("SYSTEM")
-                        selectedTtsEngine = "SYSTEM"
-                        voiceSelectorFollowsAzureSetup = false
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            currentStep = 4 // Move to voice selection
-                        }
-                    }
-                )
-
-                TtsOptionCard(
-                    title: NSLocalizedString("welcome_flow.azure_tts.title", comment: ""),
-                    subtitle: NSLocalizedString("welcome_flow.azure_tts.subtitle", comment: ""),
-                    icon: "cloud.fill",
-                    pros: [
-                        NSLocalizedString("welcome_flow.azure_tts.pro1", comment: ""),
-                        NSLocalizedString("welcome_flow.azure_tts.pro2", comment: ""),
-                        NSLocalizedString("welcome_flow.azure_tts.pro3", comment: "")
-                    ],
-                    cons: [
-                        NSLocalizedString("welcome_flow.azure_tts.con1", comment: ""),
-                        NSLocalizedString("welcome_flow.azure_tts.con2", comment: ""),
-                        NSLocalizedString("welcome_flow.azure_tts.con3", comment: "")
-                    ],
-                    isSelected: selectedTtsEngine == "AZURE_USER_RESOURCE" || selectedTtsEngine == "AZURE_MANAGED",
-                    action: {
-                        model.setTtsEngine("AZURE_USER_RESOURCE")
-                        selectedTtsEngine = "AZURE_USER_RESOURCE"
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            currentStep = 3 // Guided F0 setup
-                        }
-                    }
-                )
-
-                Button("elevenlabs.setup") {
-                    showElevenLabsSetup = true
+                    Text(NSLocalizedString("welcome_flow.tts_setup.subtitle", comment: ""))
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
                 }
-                Text("elevenlabs.description").font(.footnote)
 
-                TtsOptionCard(
-                    title: NSLocalizedString("welcome_flow.google_tts.title", comment: ""),
-                    subtitle: NSLocalizedString("welcome_flow.google_tts.subtitle", comment: ""),
-                    icon: "cloud.sun.fill",
-                    pros: [
-                        NSLocalizedString("welcome_flow.google_tts.pro1", comment: ""),
-                        NSLocalizedString("welcome_flow.google_tts.pro2", comment: ""),
-                        NSLocalizedString("welcome_flow.google_tts.pro3", comment: "")
-                    ],
-                    cons: [
-                        NSLocalizedString("welcome_flow.google_tts.con1", comment: ""),
-                        NSLocalizedString("welcome_flow.google_tts.con2", comment: ""),
-                        NSLocalizedString("welcome_flow.google_tts.con3", comment: "")
-                    ],
-                    isSelected: selectedTtsEngine == "GOOGLE_CLOUD",
-                    action: {
-                        model.setTtsEngine("GOOGLE_CLOUD")
-                        selectedTtsEngine = "GOOGLE_CLOUD"
-                        voiceSelectorFollowsAzureSetup = false
-                        if model.googleConfigured {
-                            withAnimation(.easeInOut(duration: 0.4)) {
-                                currentStep = 4
-                            }
-                        } else {
-                            showGoogleSetup = true
+                if isTabletLayout {
+                    // On iPad / regular-width tablets, show all four speech providers in a
+                    // compact 2×2 grid so every choice is immediately visible with equal weight.
+                    Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 14) {
+                        GridRow {
+                            providerCard(.system)
+                            providerCard(.azure)
+                        }
+                        GridRow {
+                            providerCard(.google)
+                            providerCard(.elevenLabs)
                         }
                     }
-                )
+                    .padding(.vertical, 4)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(WelcomeTtsProvider.allCases) { provider in
+                            providerCard(provider)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
             }
-            .padding(.vertical, 8)
         }
-    }
+        .scrollBounceBehavior(.basedOnSize)
     }
 
-    // MARK: - Step 3: Guided F0 Azure Setup
     @ViewBuilder
-    private var f0SetupStep: some View {
-        F0SetupView(
-            onDone: {
-                voiceSelectorFollowsAzureSetup = true
-                Task {
-                    await model.refreshAzureConfiguration()
-                    await MainActor.run {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            currentStep = 4
-                        }
-                    }
-                }
-            },
-            onBack: {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    currentStep = 2
-                }
-            }
+    private func providerCard(_ provider: WelcomeTtsProvider) -> some View {
+        TtsOptionCard(
+            title: provider.title,
+            subtitle: provider.subtitle,
+            icon: provider.icon,
+            pros: provider.pros,
+            cons: provider.cons,
+            isSelected: provider.matches(engineId: selectedTtsEngine),
+            action: { selectProvider(provider) }
         )
     }
 
-    // MARK: - Step 4: Voice Selection Page
+    // MARK: - Step 3: Voice Selection Page
     @ViewBuilder
     private var voiceSelectionStep: some View {
+        let activeProvider = WelcomeTtsProvider.from(engineId: model.ttsEngine)
+
         VStack(spacing: 20) {
             Image(systemName: "person.wave.2.fill")
                 .font(.system(size: 50))
@@ -472,12 +590,7 @@ struct WelcomeFlow: View {
                 }
             } else {
                 VStack(spacing: 16) {
-                    Text(NSLocalizedString(
-                        model.ttsEngine == "GOOGLE_CLOUD"
-                            ? "welcome_flow.google_voices_subtitle"
-                            : "welcome_flow.azure_voices_subtitle",
-                        comment: ""
-                    ))
+                    Text(activeProvider.voicesSubtitle)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
 
@@ -496,12 +609,19 @@ struct WelcomeFlow: View {
                         .background(Color.blue)
                         .cornerRadius(12)
                     }
+
+                    if let configureTitle = activeProvider.configureTitle {
+                        Button(configureTitle) {
+                            openSetup(for: activeProvider)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
             }
         }
     }
 
-    // MARK: - Step 5: Primary Language Selection
+    // MARK: - Step 4: Primary Language Selection
     @ViewBuilder
     private var languageSelectionStep: some View {
         VStack(spacing: 20) {
@@ -520,7 +640,7 @@ struct WelcomeFlow: View {
                             model.updateLanguage(lang)
                             pendingLanguageSelection = false
                             withAnimation(.easeInOut(duration: 0.4)) {
-                                currentStep = 6
+                                currentStep = 5
                             }
                         }) {
                             HStack {
@@ -558,7 +678,7 @@ struct WelcomeFlow: View {
         }
     }
 
-    // MARK: - Step 6: Test Voice Screen
+    // MARK: - Step 5: Test Voice Screen
     @ViewBuilder
     private var testVoiceStep: some View {
         VStack(spacing: 20) {
@@ -579,7 +699,7 @@ struct WelcomeFlow: View {
         }
     }
 
-    // MARK: - Step 7: Analytics Consent Screen
+    // MARK: - Step 6: Analytics Consent Screen
     @ViewBuilder
     private var analyticsConsentStep: some View {
         VStack(spacing: 20) {
@@ -613,7 +733,7 @@ struct WelcomeFlow: View {
         }
     }
 
-    // MARK: - Step 8: Completion Step
+    // MARK: - Step 7: Completion Step
     @ViewBuilder
     private var completionStep: some View {
         VStack(spacing: 20) {
@@ -667,12 +787,12 @@ struct WelcomeFlow: View {
                         switch currentStep {
                         case 1:
                             if modeTour != nil { modeTour = nil } else { currentStep = 0 }
+                        case 3:
+                            currentStep = 2
                         case 4:
-                            currentStep = voiceSelectorFollowsAzureSetup ? 3 : 2
+                            currentStep = 3
                         case 5:
-                            currentStep = 4
-                        case 6:
-                            currentStep = pendingLanguageSelection ? 5 : 4
+                            currentStep = pendingLanguageSelection ? 4 : 3
                         default:
                             currentStep -= 1
                         }
@@ -696,23 +816,15 @@ struct WelcomeFlow: View {
                 if currentStep >= totalSteps {
                     onComplete()
                 } else if canProceed {
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        switch currentStep {
-                        case 2:
-                            if selectedTtsEngine == "GOOGLE_CLOUD" && !model.googleConfigured {
-                                showGoogleSetup = true
-                            } else if selectedTtsEngine == "SYSTEM" || selectedTtsEngine == "GOOGLE_CLOUD" || selectedTtsEngine == "ELEVENLABS" {
-                                currentStep = 4
-                            } else {
-                                currentStep = 3
-                            }
-                        case 4:
-                            if pendingLanguageSelection {
-                                currentStep = 5
-                            } else {
-                                currentStep = 6
-                            }
-                        default:
+                    switch currentStep {
+                    case 2:
+                        proceedFromEngineStep()
+                    case 3:
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            currentStep = pendingLanguageSelection ? 4 : 5
+                        }
+                    default:
+                        withAnimation(.easeInOut(duration: 0.4)) {
                             currentStep += 1
                         }
                     }
@@ -732,17 +844,80 @@ struct WelcomeFlow: View {
         case 0: return true
         case 1: return true
         case 2: return selectedTtsEngine != nil
-        case 3: return true
-        case 4: return model.useSystemTts || selectedVoice != nil
+        case 3: return model.useSystemTts || selectedVoice != nil
+        case 4: return true
         case 5: return true
         case 6: return true
-        case 7: return true
         default: return true
         }
     }
 
     private func checkTtsConfiguration() {
-        selectedTtsEngine = model.ttsEngine
+        // On a brand-new first run, leave no provider pre-highlighted so all four choices
+        // start with equal visual weight. When re-running setup, highlight the saved choice.
+        if UserDefaults.standard.bool(forKey: "welcome_flow_completed") {
+            selectedTtsEngine = model.ttsEngine
+        }
+    }
+
+    private func refreshAllProviderConfigurations() async {
+        await model.refreshAzureConfiguration()
+        await model.refreshGoogleConfiguration()
+        await model.refreshElevenLabsConfiguration()
+    }
+
+    private func selectProvider(_ provider: WelcomeTtsProvider) {
+        let changedEngine = !provider.matches(engineId: selectedTtsEngine)
+        selectedTtsEngine = provider.engineId
+        if changedEngine {
+            selectedVoice = nil
+            pendingLanguageSelection = false
+            languageOptions = []
+        }
+        proceed(with: provider)
+    }
+
+    private func proceedFromEngineStep() {
+        let provider = WelcomeTtsProvider.from(engineId: selectedTtsEngine)
+        proceed(with: provider)
+    }
+
+    private func proceed(with provider: WelcomeTtsProvider) {
+        if !provider.requiresSetup || provider.isConfigured(in: model) {
+            model.setTtsEngine(provider.engineId)
+            withAnimation(.easeInOut(duration: 0.4)) {
+                currentStep = 3
+            }
+            return
+        }
+        openSetup(for: provider)
+    }
+
+    private func openSetup(for provider: WelcomeTtsProvider) {
+        switch provider {
+        case .system:
+            break
+        case .azure:
+            showAzureSetup = true
+        case .google:
+            showGoogleSetup = true
+        case .elevenLabs:
+            showElevenLabsSetup = true
+        }
+    }
+
+    private func completeProviderSetup(_ provider: WelcomeTtsProvider) {
+        let changedEngine = !provider.matches(engineId: model.ttsEngine)
+        selectedTtsEngine = provider.engineId
+        model.setTtsEngine(provider.engineId)
+        if changedEngine {
+            selectedVoice = nil
+            pendingLanguageSelection = false
+            languageOptions = []
+        }
+        withAnimation(.easeInOut(duration: 0.4)) {
+            currentStep = 3
+        }
     }
 
     private func availablePrimaryLanguages(for voice: Shared.Voice) -> [String] {
@@ -762,7 +937,7 @@ struct WelcomeFlow: View {
     }
 }
 
-// MARK: - Startup Mode Card Component
+// MARK: - TTS Option Card Component
 struct TtsOptionCard: View {
     let title: String
     let subtitle: String
@@ -774,27 +949,49 @@ struct TtsOptionCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Image(systemName: icon).font(.title2).foregroundColor(.blue)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                        .frame(width: 28, alignment: .center)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.headline).foregroundColor(.primary)
-                        Text(subtitle).font(.caption).foregroundColor(.secondary)
+                        Text(title)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.leading)
                     }
-                    Spacer()
+                    Spacer(minLength: 8)
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .foregroundColor(isSelected ? .blue : .secondary)
                 }
-                ForEach(pros, id: \.self) { item in
-                    Label(item, systemImage: "checkmark").font(.caption).foregroundColor(.primary)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(pros, id: \.self) { item in
+                        Label(item, systemImage: "checkmark")
+                            .font(.caption)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+                    }
+                    ForEach(cons, id: \.self) { item in
+                        Label(item, systemImage: "minus")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
                 }
-                ForEach(cons, id: \.self) { item in
-                    Label(item, systemImage: "minus").font(.caption).foregroundColor(.secondary)
-                }
+                Spacer(minLength: 0)
             }
-            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(14)
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.blue : Color(.separator).opacity(0.6), lineWidth: isSelected ? 2 : 1)
+            )
         }
         .buttonStyle(.plain)
     }

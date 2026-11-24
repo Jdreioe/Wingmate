@@ -30,6 +30,14 @@
 "welcome_flow.google_tts.con1" = "Requires internet";
 "welcome_flow.google_tts.con2" = "Google Cloud setup and billing required";
 "welcome_flow.google_tts.con3" = "Usage may cost money";
+"welcome_flow.elevenlabs_tts.title" = "ElevenLabs";
+"welcome_flow.elevenlabs_tts.subtitle" = "Expressive cloud and personal voices with your own API key";
+"welcome_flow.elevenlabs_tts.pro1" = "Highly expressive, natural voices";
+"welcome_flow.elevenlabs_tts.pro2" = "Supports personal voice clones";
+"welcome_flow.elevenlabs_tts.pro3" = "Wide multilingual support";
+"welcome_flow.elevenlabs_tts.con1" = "Requires internet";
+"welcome_flow.elevenlabs_tts.con2" = "ElevenLabs account and API key required";
+"welcome_flow.elevenlabs_tts.con3" = "Usage counts toward your account allowance";
 "welcome_flow.voice_setup.title" = "Choose Your Voice";
 "welcome_flow.get_started" = "Get Started";
 "welcome_flow.skip" = "Skip for now";
@@ -89,6 +97,7 @@
 "welcome_flow.test_voice" = "Test Your Voice";
 "welcome_flow.azure_voices_subtitle" = "Choose from high-quality Azure voices";
 "welcome_flow.google_voices_subtitle" = "Choose from Google Cloud voices";
+"welcome_flow.elevenlabs_voices_subtitle" = "Choose from your ElevenLabs voices";
 "welcome_flow.choose_voice" = "Choose Voice";
 "welcome_flow.change_voice" = "Change Voice";
 
