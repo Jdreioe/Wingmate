@@ -439,6 +439,9 @@ final class IosViewModel: ObservableObject {
         await refreshLanguagePreferences()
         await refreshScanningSettings()
         await refreshParitySettings()
+        // The startup workspace applies at launch only. Settings also refresh
+        // these values, and must not switch the workspace the user is in.
+        boardModeEnabled = startupUsesScreens
 
         // Determine if Azure is configured (endpoint + key)
         await refreshAzureConfiguration()
@@ -595,7 +598,6 @@ final class IosViewModel: ObservableObject {
                 self.swipeBetweenPages = settings.swipeBetweenPages
                 self.startupUsesScreens = opensScreens
                 self.startupBoardSetId = settings.startupBoardSetId
-                self.boardModeEnabled = opensScreens
             }
             await loadHistory()
         } catch {
