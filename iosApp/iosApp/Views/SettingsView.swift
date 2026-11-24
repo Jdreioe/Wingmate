@@ -303,7 +303,7 @@ private struct SpeechSettingsView: View {
         .navigationTitle(Text("settings.category.speech"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showVoicePicker) {
-            VoiceSelectionSheet(selected: model.selectedVoice, onClose: { showVoicePicker = false }) { voice in
+            VoiceSelectionSheet(selected: model.selectedVoice, primaryLanguage: model.primaryLanguage, onClose: { showVoicePicker = false }) { voice in
                 Task {
                     await model.chooseVoice(voice)
                     showVoicePicker = false
