@@ -483,6 +483,7 @@
 "board_sets.library.updated" = "Updated %@";
 "board_sets.library.more" = "More actions";
 "board_sets.library.open_hint" = "Opens this screen";
+"board_sets.library.locked" = "Locked";
 "board_sets.library.empty_guidance" = "A screen is a set of pages. Tap a screen to use it. Edit is separate, so communication does not change the buttons by accident.";
 "board_sets.library.duplicate" = "Duplicate";
 "board_sets.library.delete_title" = "Delete Screen";

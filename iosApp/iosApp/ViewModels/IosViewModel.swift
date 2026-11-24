@@ -13,6 +13,26 @@ struct BoardSetInfo: Codable, Identifiable, Equatable {
     var updatedAt: TimeInterval
 }
 
+struct ScreenPreviewCell: Identifiable, Equatable {
+    var row: Int
+    var column: Int
+    var rowSpan: Int
+    var columnSpan: Int
+    var colorHex: String?
+    var label: String?
+    var imageUrl: String?
+
+    var id: String { "\(row):\(column)" }
+}
+
+/// The home page of a screen, reduced to what a library thumbnail needs.
+struct ScreenPreview: Equatable {
+    var rows: Int
+    var columns: Int
+    var backgroundHex: String?
+    var cells: [ScreenPreviewCell]
+}
+
 struct BoardCellInfo: Identifiable, Equatable {
     var row: Int
     var col: Int
@@ -1478,6 +1498,57 @@ final class IosViewModel: ObservableObject {
         }
 
         boardNamesById = cache
+    }
+
+    /// Home-page thumbnail for the library. Hidden buttons are omitted so the
+    /// preview matches the page in use.
+    func loadScreenPreview(rootBoardId: String) async -> ScreenPreview? {
+        do {
+            guard let board = try await boardsFacade.getBoard(id: rootBoardId) else { return nil }
+            let rows = max(1, Int(board.grid?.rows ?? 1))
+            let columns = max(1, Int(board.grid?.columns ?? 1))
+            let fields = try await boardsFacade.listBoardFieldItems(boardId: rootBoardId)
+            let cells = try await boardsFacade.listBoardCells(boardId: rootBoardId)
+            struct AnchorCell {
+                var label: String?
+                var imageUrl: String?
+                var color: String?
+                var hidden: Bool
+            }
+            var byAnchor: [String: AnchorCell] = [:]
+            for cell in cells {
+                byAnchor["\(Int(cell.row)):\(Int(cell.col))"] = AnchorCell(
+                    label: cell.label,
+                    imageUrl: cell.imageUrl,
+                    color: cell.resolvedBackgroundColor ?? cell.backgroundColor,
+                    hidden: cell.hidden
+                )
+            }
+            let visible = fields.compactMap { field -> ScreenPreviewCell? in
+                guard let buttonId = field.buttonId, !buttonId.isEmpty,
+                      let cell = byAnchor["\(Int(field.row)):\(Int(field.column))"],
+                      !cell.hidden else { return nil }
+                let label = cell.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let image = cell.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return ScreenPreviewCell(
+                    row: Int(field.row),
+                    column: Int(field.column),
+                    rowSpan: max(1, Int(field.rowSpan)),
+                    columnSpan: max(1, Int(field.columnSpan)),
+                    colorHex: cell.color,
+                    label: (label?.isEmpty == false) ? label : nil,
+                    imageUrl: (image?.isEmpty == false) ? image : nil
+                )
+            }
+            return ScreenPreview(
+                rows: rows,
+                columns: columns,
+                backgroundHex: board.backgroundColor,
+                cells: visible
+            )
+        } catch {
+            return nil
+        }
     }
 
     func loadBoardSets() async {

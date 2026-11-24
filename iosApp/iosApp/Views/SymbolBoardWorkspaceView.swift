@@ -489,10 +489,14 @@ struct SymbolBoardWorkspaceView: View {
                 emptyLibraryState
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 280, maximum: 460), spacing: 16)],
+                        spacing: 16
+                    ) {
                         ForEach(model.boardSets) { set in
                             BoardSetLibraryCard(
                                 set: set,
+                                loadPreview: { await model.loadScreenPreview(rootBoardId: set.rootBoardId) },
                                 onOpen: {
                                     Task {
                                         await model.selectBoardSet(id: set.id)
@@ -2744,6 +2748,7 @@ struct SymbolBoardWorkspaceView: View {
 // MARK: - BoardSet Library Card Component
 struct BoardSetLibraryCard: View {
     let set: BoardSetInfo
+    let loadPreview: () async -> ScreenPreview?
     let onOpen: () -> Void
     let onEdit: () -> Void
     let onDuplicate: () -> Void
@@ -2752,34 +2757,39 @@ struct BoardSetLibraryCard: View {
     let onPrint: () -> Void
     let onDelete: () -> Void
 
+    @State private var preview: ScreenPreview?
+    @State private var previewLoaded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button(action: onOpen) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: set.isLocked ? "lock.fill" : "square.grid.2x2")
-                        .font(.title2)
-                        .foregroundStyle(set.isLocked ? Color.orange : Color.primary)
-                        .frame(width: 44, height: 44)
+                VStack(alignment: .leading, spacing: 10) {
+                    ScreenLibraryPreview(preview: preview, isLoaded: previewLoaded, isLocked: set.isLocked)
+                        .aspectRatio(4 / 3, contentMode: .fit)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(set.name)
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.leading)
-                        Text(pageSummary)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                        Text(updatedSummary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
+                    Text(set.name)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                    Text(pageSummary)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                    Text(updatedSummary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(openAccessibilityLabel))
             .accessibilityHint(Text("board_sets.library.open_hint"))
+            .task(id: set.updatedAt) {
+                previewLoaded = false
+                preview = await loadPreview()
+                previewLoaded = true
+            }
 
             HStack(spacing: 12) {
                 Button(action: onEdit) {
@@ -2844,4 +2854,130 @@ struct BoardSetLibraryCard: View {
         let relative = formatter.localizedString(for: date, relativeTo: Date())
         return String(format: NSLocalizedString("board_sets.library.updated", comment: ""), relative)
     }
+
+    private var openAccessibilityLabel: String {
+        if set.isLocked {
+            return "\(set.name), \(pageSummary), \(NSLocalizedString("board_sets.library.locked", comment: ""))"
+        }
+        return "\(set.name), \(pageSummary)"
+    }
+}
+
+/// A miniature of a screen's home page. Empty cells stay blank, matching use mode.
+private struct ScreenLibraryPreview: View {
+    var preview: ScreenPreview?
+    var isLoaded: Bool
+    var isLocked: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let rows = CGFloat(max(1, preview?.rows ?? 1))
+            let columns = CGFloat(max(1, preview?.columns ?? 1))
+            let inset: CGFloat = 8
+            let gap: CGFloat = 3
+            let gridWidth = max(0, geo.size.width - inset * 2)
+            let gridHeight = max(0, geo.size.height - inset * 2)
+            let cellWidth = max(0, (gridWidth - gap * (columns - 1)) / columns)
+            let cellHeight = max(0, (gridHeight - gap * (rows - 1)) / rows)
+            ZStack(alignment: .topLeading) {
+                ForEach(preview?.cells ?? []) { cell in
+                    previewTile(cell, cellWidth: cellWidth, cellHeight: cellHeight, gap: gap)
+                        .offset(
+                            x: inset + CGFloat(cell.column) * (cellWidth + gap),
+                            y: inset + CGFloat(cell.row) * (cellHeight + gap)
+                        )
+                }
+            }
+        }
+        .overlay {
+            if !isLoaded {
+                ProgressView()
+            }
+        }
+        .background(libraryPreviewColor(preview?.backgroundHex, fallback: Color(.tertiarySystemBackground)))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 1))
+        .overlay(alignment: .topTrailing) {
+            if isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(8)
+                    .background(.regularMaterial, in: Circle())
+                    .padding(8)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private func previewTile(_ cell: ScreenPreviewCell, cellWidth: CGFloat, cellHeight: CGFloat, gap: CGFloat) -> some View {
+        let width = cellWidth * CGFloat(cell.columnSpan) + gap * CGFloat(max(0, cell.columnSpan - 1))
+        let height = cellHeight * CGFloat(cell.rowSpan) + gap * CGFloat(max(0, cell.rowSpan - 1))
+        let fill = libraryPreviewColor(cell.colorHex, fallback: Color(.systemBackground))
+        return ZStack {
+            if let urlString = cell.imageUrl, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFit().padding(2)
+                    default:
+                        previewLabel(cell.label, colorHex: cell.colorHex)
+                    }
+                }
+            } else {
+                previewLabel(cell.label, colorHex: cell.colorHex)
+            }
+        }
+        .frame(width: max(0, width), height: max(0, height))
+        .background(fill, in: RoundedRectangle(cornerRadius: min(6, max(width, 1) / 6)))
+    }
+
+    @ViewBuilder
+    private func previewLabel(_ label: String?, colorHex: String?) -> some View {
+        if let label, !label.isEmpty {
+            Text(label)
+                .font(.caption2)
+                .lineLimit(2)
+                .minimumScaleFactor(0.4)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(libraryPreviewTextColor(colorHex))
+                .padding(1)
+        }
+    }
+}
+
+private func libraryPreviewColor(_ hex: String?, fallback: Color) -> Color {
+    var value = (hex ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else { return fallback }
+    if value.hasPrefix("#") { value.removeFirst() }
+    guard let parsed = UInt64(value, radix: 16) else { return fallback }
+    let red: Double
+    let green: Double
+    let blue: Double
+    let alpha: Double
+    if value.count == 6 {
+        red = Double((parsed >> 16) & 0xFF) / 255
+        green = Double((parsed >> 8) & 0xFF) / 255
+        blue = Double(parsed & 0xFF) / 255
+        alpha = 1
+    } else if value.count == 8 {
+        alpha = Double((parsed >> 24) & 0xFF) / 255
+        red = Double((parsed >> 16) & 0xFF) / 255
+        green = Double((parsed >> 8) & 0xFF) / 255
+        blue = Double(parsed & 0xFF) / 255
+    } else {
+        return fallback
+    }
+    return Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+}
+
+private func libraryPreviewTextColor(_ hex: String?) -> Color {
+    var value = (hex ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if value.hasPrefix("#") { value.removeFirst() }
+    guard value.count >= 6, let parsed = UInt64(value.suffix(6), radix: 16) else { return .primary }
+    let red = Double((parsed >> 16) & 0xFF)
+    let green = Double((parsed >> 8) & 0xFF)
+    let blue = Double(parsed & 0xFF)
+    let luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+    return luminance > 0.6 ? .black : .white
 }

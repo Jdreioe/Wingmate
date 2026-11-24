@@ -327,6 +327,7 @@
 "board_sets.library.updated" = "Aktualisiert %@";
 "board_sets.library.more" = "Weitere Aktionen";
 "board_sets.library.open_hint" = "Öffnet diesen Bildschirm";
+"board_sets.library.locked" = "Gesperrt";
 "board_sets.library.empty_guidance" = "Ein Bildschirm ist eine Gruppe von Seiten. Tippe auf einen Bildschirm, um ihn zu verwenden. Bearbeiten ist getrennt, damit die Kommunikation die Tasten nicht versehentlich ändert.";
 "board_sets.library.duplicate" = "Duplizieren";
 "board_sets.library.delete_title" = "Bildschirm löschen";

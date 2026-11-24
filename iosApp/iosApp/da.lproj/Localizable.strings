@@ -329,6 +329,7 @@
 "board_sets.library.updated" = "Opdateret %@";
 "board_sets.library.more" = "Flere handlinger";
 "board_sets.library.open_hint" = "Åbner denne skærm";
+"board_sets.library.locked" = "Låst";
 "board_sets.library.empty_guidance" = "En skærm er et sæt sider. Tryk på en skærm for at bruge den. Rediger er adskilt, så kommunikationen ikke ændrer knapperne ved et uheld.";
 "board_sets.library.duplicate" = "Duplikér";
 "board_sets.library.delete_title" = "Slet skærm";
