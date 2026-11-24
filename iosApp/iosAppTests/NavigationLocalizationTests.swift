@@ -1,4 +1,5 @@
 import XCTest
+@testable import Wingmate
 
 final class NavigationLocalizationTests: XCTestCase {
     func testPageNavigationLabelIncludesThePageNameInEveryLanguage() throws {
@@ -9,5 +10,25 @@ final class NavigationLocalizationTests: XCTestCase {
             let expectedPrefix = ["Base": "Opens page: ", "da": "Åbner side: ", "de": "Öffnet Seite: "][locale]!
             XCTAssertEqual(String(format: format, "Test page"), expectedPrefix + "Test page", locale)
         }
+    }
+
+    func testWelcomeSetupTreatsAllSpeechProvidersEqually() {
+        let providers = WelcomeTtsProvider.allCases
+        XCTAssertEqual(providers, [.system, .azure, .google, .elevenLabs])
+
+        for provider in providers {
+            XCTAssertFalse(provider.title.isEmpty)
+            XCTAssertFalse(provider.subtitle.isEmpty)
+            XCTAssertFalse(provider.icon.isEmpty)
+            XCTAssertFalse(provider.pros.isEmpty)
+            XCTAssertFalse(provider.cons.isEmpty)
+            XCTAssertFalse(provider.voicesSubtitle.isEmpty)
+            XCTAssertTrue(provider.matches(engineId: provider.engineId))
+            XCTAssertEqual(WelcomeTtsProvider.from(engineId: provider.engineId), provider)
+            XCTAssertEqual(provider.configureTitle != nil, provider.requiresSetup)
+        }
+
+        XCTAssertTrue(WelcomeTtsProvider.azure.matches(engineId: "AZURE_MANAGED"))
+        XCTAssertEqual(WelcomeTtsProvider.from(engineId: "AZURE_MANAGED"), .azure)
     }
 }

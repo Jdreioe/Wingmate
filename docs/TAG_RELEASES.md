@@ -19,25 +19,52 @@ release sequence.
 
 Ordinary branch pushes do not deploy the Android app.
 
-## iOS (Xcode Cloud)
+## iOS (Xcode Cloud via GitHub Actions)
 
 iOS releases use channel-prefixed tags:
 
-- `staging/1.2.3` builds version `1.2.3` for staging distribution.
-- `prod/1.2.3` builds version `1.2.3` for production distribution.
+- `staging/1.2.3` starts `.github/workflows/trigger-xcode-cloud.yml`, which calls
+  the App Store Connect API (`POST /v1/ciBuildRuns`) to run the staging Xcode
+  Cloud workflow against that tag.
+- `prod/1.2.3` starts `.github/workflows/trigger-xcode-cloud.yml` against the
+  production Xcode Cloud workflow.
+- You can also re-run any existing tag manually via **Actions → Trigger Xcode
+  Cloud release build → Run workflow** (`workflow_dispatch`).
 
-Xcode Cloud workflows are configured in Xcode or App Store Connect, not in a
-repository workflow file. Create or update two workflows:
+### Required credentials and configuration
 
-1. Give the staging workflow a **Git Tag Change** start condition matching
-   `staging/*`, and configure its archive/TestFlight distribution action.
-2. Give the production workflow a **Git Tag Change** start condition matching
-   `prod/*`, and configure its production archive/distribution action.
-3. Remove the **Branch Changes** start condition from both release workflows.
-4. Add a non-secret environment variable named `REQUIRE_RELEASE_TAG` with the
+Create an App Store Connect API key (App Manager or Admin role) and store these
+secrets in Infisical (fetched automatically by the workflow) or in GitHub
+Actions repository secrets:
+
+- `ASC_KEY_ID` — App Store Connect API Key ID
+- `ASC_ISSUER_ID` — App Store Connect Issuer ID (UUID)
+- `ASC_PRIVATE_KEY` — contents of the `.p8` key file (raw PEM, `\n`-escaped
+  PEM, or base64-encoded PEM)
+
+Workflow selection (optional GitHub repository variables or Infisical values):
+
+- Staging defaults to looking up the workflow named `Default` on App Store
+  Connect app `6743526254`. Override with `ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID`
+  (exact UUID) or `ASC_APP_ID` + `ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME`.
+- Production requires either `ASC_XCODE_CLOUD_PROD_WORKFLOW_ID` or
+  `ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME` (it never falls back to the staging
+  workflow).
+
+### Xcode Cloud workflow settings in App Store Connect
+
+1. Configure your staging workflow with an archive / TestFlight distribution
+   action, and your production workflow with its production archive /
+   distribution action.
+2. Remove **Branch Changes** and **Git Tag Change** start conditions so GitHub
+   Actions is the single trigger (on tag pushes the script also skips creating
+   a duplicate run if an active build for that tag is already queued/running).
+3. Add a non-secret environment variable named `REQUIRE_RELEASE_TAG` with the
    value `TRUE` to both release workflows.
 
-The post-clone script validates `CI_TAG`, assigns the part after the slash to
+Because `POST /v1/ciBuildRuns` targets the tag's `scmGitReferences` resource,
+Xcode Cloud still populates `CI_TAG` (`staging/1.2.3` or `prod/1.2.3`). The
+post-clone script validates `CI_TAG`, assigns the part after the slash to
 `MARKETING_VERSION`, and uses Xcode Cloud's `CI_BUILD_NUMBER` as
 `CURRENT_PROJECT_VERSION`. With `REQUIRE_RELEASE_TAG=TRUE`, a non-tag build
 intentionally fails so that a release cannot be created by an ordinary push.

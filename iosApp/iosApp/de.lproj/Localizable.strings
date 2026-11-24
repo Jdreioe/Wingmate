@@ -30,6 +30,14 @@
 "welcome_flow.google_tts.con1" = "Benötigt Internet";
 "welcome_flow.google_tts.con2" = "Google-Cloud-Einrichtung und Abrechnung erforderlich";
 "welcome_flow.google_tts.con3" = "Nutzung kann Kosten verursachen";
+"welcome_flow.elevenlabs_tts.title" = "ElevenLabs";
+"welcome_flow.elevenlabs_tts.subtitle" = "Ausdrucksstarke Cloud- und persönliche Stimmen mit deinem eigenen API-Schlüssel";
+"welcome_flow.elevenlabs_tts.pro1" = "Sehr ausdrucksstarke, natürliche Stimmen";
+"welcome_flow.elevenlabs_tts.pro2" = "Unterstützt persönliche Stimmklone";
+"welcome_flow.elevenlabs_tts.pro3" = "Breite mehrsprachige Unterstützung";
+"welcome_flow.elevenlabs_tts.con1" = "Benötigt Internet";
+"welcome_flow.elevenlabs_tts.con2" = "ElevenLabs-Konto und API-Schlüssel erforderlich";
+"welcome_flow.elevenlabs_tts.con3" = "Nutzung wird auf dein Kontingent angerechnet";
 "welcome_flow.voice_setup.title" = "Wähle deine Stimme";
 "welcome_flow.get_started" = "Loslegen";
 "welcome_flow.skip" = "Vorerst überspringen";
@@ -46,6 +54,7 @@
 "welcome_flow.test_voice" = "Teste deine Stimme";
 "welcome_flow.azure_voices_subtitle" = "Wähle aus hochwertigen Azure-Stimmen";
 "welcome_flow.google_voices_subtitle" = "Wähle aus Google-Cloud-Stimmen";
+"welcome_flow.elevenlabs_voices_subtitle" = "Wähle aus deinen ElevenLabs-Stimmen";
 "welcome_flow.choose_voice" = "Stimme wählen";
 "welcome_flow.change_voice" = "Stimme wechseln";
 "welcome_flow.test_text" = "Hallo, so klinge ich!";

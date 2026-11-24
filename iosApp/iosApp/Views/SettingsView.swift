@@ -896,9 +896,16 @@ private struct SettingsSliderRow: View {
 struct ElevenLabsSetupView: View {
     @ObservedObject var model: IosViewModel
     let onClose: () -> Void
+    let onSaved: (() -> Void)?
     @State private var apiKey = ""
     @State private var busy = false
     @State private var failed = false
+
+    init(model: IosViewModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
+        self.model = model
+        self.onClose = onClose
+        self.onSaved = onSaved
+    }
 
     var body: some View {
         NavigationStack {
@@ -921,7 +928,11 @@ struct ElevenLabsSetupView: View {
                             do {
                                 try await model.saveElevenLabsApiKey(apiKey)
                                 apiKey = ""
-                                onClose()
+                                if let onSaved {
+                                    onSaved()
+                                } else {
+                                    onClose()
+                                }
                             } catch { failed = true }
                         }
                     }

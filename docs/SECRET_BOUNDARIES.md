@@ -13,7 +13,8 @@ artifacts: values compiled into them can be extracted.
 | Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore or iOS Keychain |
 | Android keystore and passwords | Build secret | Android release CI process only |
 | Play service-account JSON | Deployment secret | Android release CI process only |
-| `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET` | CI control-plane secrets | GitHub Actions secrets for the Google Play workflows only |
+| App Store Connect API key (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`) | Deployment secret | iOS Xcode Cloud trigger CI workflow only |
+| `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET` | CI control-plane secrets | GitHub Actions secrets for release workflows only |
 | Cloudflare API token | Deployment secret | Worker deployment environment only |
 
 ## Infisical layout

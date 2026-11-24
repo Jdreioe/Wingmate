@@ -1,0 +1,95 @@
+name: Trigger Xcode Cloud release build
+
+on:
+  push:
+    tags:
+      - "staging/*.*.*"
+      - "prod/*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing iOS release tag to build, for example staging/1.9.0"
+        required: true
+        type: string
+      clean:
+        description: "Run a clean Xcode Cloud build"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xcode-cloud-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    name: Start Xcode Cloud build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate release tag
+        id: release
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="$INPUT_TAG"
+          fi
+
+          if [[ ! "$tag" =~ ^(staging|prod)/([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Expected a release tag such as staging/1.9.0 or prod/1.9.0, got: $tag" >&2
+            exit 1
+          fi
+
+          if ! git rev-parse --verify --quiet "refs/tags/${tag}^{commit}" >/dev/null; then
+            echo "Git tag '$tag' does not exist in this repository." >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch Infisical secrets
+        if: ${{ secrets.INFISICAL_CLIENT_ID != '' && secrets.INFISICAL_CLIENT_SECRET != '' && vars.INFISICAL_PROJECT_SLUG != '' }}
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          domain: https://eu.infisical.com
+
+      - name: Trigger Xcode Cloud via App Store Connect API
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          CLEAN_BUILD: ${{ inputs.clean || false }}
+          ASC_KEY_ID: ${{ env.ASC_KEY_ID || secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ env.ASC_ISSUER_ID || secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ env.ASC_PRIVATE_KEY || secrets.ASC_PRIVATE_KEY }}
+          ASC_APP_ID: ${{ env.ASC_APP_ID || vars.ASC_APP_ID || '6743526254' }}
+          ASC_XCODE_CLOUD_WORKFLOW_ID: ${{ env.ASC_XCODE_CLOUD_WORKFLOW_ID || vars.ASC_XCODE_CLOUD_WORKFLOW_ID }}
+          ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID: ${{ env.ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID || vars.ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID }}
+          ASC_XCODE_CLOUD_PROD_WORKFLOW_ID: ${{ env.ASC_XCODE_CLOUD_PROD_WORKFLOW_ID || vars.ASC_XCODE_CLOUD_PROD_WORKFLOW_ID }}
+          ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME: ${{ env.ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME || vars.ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME || 'Default' }}
+          ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME: ${{ env.ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME || vars.ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME }}
+        run: |
+          args=(--tag "$RELEASE_TAG")
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            args+=(--skip-if-active)
+          fi
+          if [[ "$CLEAN_BUILD" == "true" ]]; then
+            args+=(--clean)
+          fi
+          python3 ci_scripts/trigger_xcode_cloud.py "${args[@]}"
