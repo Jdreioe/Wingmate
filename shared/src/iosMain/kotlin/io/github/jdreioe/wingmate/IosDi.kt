@@ -104,7 +104,6 @@ private fun iosModule(deviceSpeech: IosDeviceSpeech, aptabaseEndpoint: AptabaseE
 
         // Share service
         singleOf(::IosShareService) { bind<ShareService>() }
-        singleOf(::BackupSharingFacade)
 
         // Pronunciation dictionary (persisted)
         singleOf(::IosPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }

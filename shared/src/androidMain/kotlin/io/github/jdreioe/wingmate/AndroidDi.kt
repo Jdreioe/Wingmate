@@ -46,50 +46,48 @@ import io.github.jdreioe.wingmate.platform.AudioClipboard
 import io.github.jdreioe.wingmate.platform.FilePicker
 import io.github.jdreioe.wingmate.platform.ShareService
 import okio.FileSystem
-import org.koin.core.context.loadKoinModules
+import org.koin.core.module.Module
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
-fun overrideAndroidSpeechService(context: Context, aptabaseAppKey: String) {
-    loadKoinModules(
-        module {
-            single<Context> { context }
-            single<GoogleApiRequestHeaders> { AndroidGoogleApiRequestHeaders(context) }
-            singleOf(::AndroidSpeechService) { bind<SpeechService>() }
-            singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
-            singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }
-            // Prefer SQLite-backed repositories on Android for parity with desktop
-            singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }
-            singleOf(::AndroidPreferencesCommunicationSessionDataSource) { bind<CommunicationSessionDataSource>() }
-            // Audio clipboard support
-            singleOf(::AndroidAudioClipboard) { bind<AudioClipboard>() }
-            // Share service for Android share sheet
-            singleOf(::AndroidShareService) { bind<ShareService>() }
-            singleOf(::AndroidSqlPhraseRepository) { bind<PhraseRepository>() }
-            singleOf(::AndroidSqlVoiceRepository) { bind<VoiceRepository>() }
-            singleOf(::AndroidSqlSettingsRepository) { bind<SettingsRepository>() }
-            singleOf(::AndroidSqlPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
-            singleOf(::AndroidSqlSaidTextRepository) { bind<SaidTextRepository>() }
-            singleOf(::AndroidBoardRepository) { bind<BoardRepository>() }
-            singleOf(::AndroidBoardSetRepository) { bind<BoardSetRepository>() }
-            singleOf(::AndroidFileStorage) { bind<FileStorage>() }
-            singleOf(::AndroidSoundPlayer) { bind<SoundPlayer>() }
-            singleOf(::AndroidFilePicker) { bind<FilePicker>() }
-            singleOf(::AndroidSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
-            singleOf(::AndroidBackupMediaAccess) { bind<BackupMediaAccess>() }
-            singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
-            single<FeatureUsageReporter> {
-                AndroidAptabaseFeatureUsageReporter(
-                    context = context,
-                    settingsStateManager = get(),
-                    appKey = aptabaseAppKey
-                )
-            }
-            single { FileSystem.SYSTEM }
-            // Usage-log destination for RealAacLogger (app-private files dir)
-            single(named("logDir")) { context.filesDir.absolutePath }
-        }
-    )
+/**
+ * Android platform bindings (SQLite persistence, speech, sharing, files,
+ * credentials, and optional feature usage reporting), overriding the defaults
+ * from [io.github.jdreioe.wingmate.di.sharedModules].
+ */
+fun androidModule(context: Context, aptabaseAppKey: String): Module = module {
+    single<Context> { context }
+    single<GoogleApiRequestHeaders> { AndroidGoogleApiRequestHeaders(context) }
+    singleOf(::AndroidSpeechService) { bind<SpeechService>() }
+    singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
+    singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }
+    singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }
+    singleOf(::AndroidPreferencesCommunicationSessionDataSource) { bind<CommunicationSessionDataSource>() }
+    singleOf(::AndroidAudioClipboard) { bind<AudioClipboard>() }
+    singleOf(::AndroidShareService) { bind<ShareService>() }
+    singleOf(::AndroidSqlPhraseRepository) { bind<PhraseRepository>() }
+    singleOf(::AndroidSqlVoiceRepository) { bind<VoiceRepository>() }
+    singleOf(::AndroidSqlSettingsRepository) { bind<SettingsRepository>() }
+    singleOf(::AndroidSqlPronunciationDictionaryRepository) { bind<PronunciationDictionaryRepository>() }
+    singleOf(::AndroidSqlSaidTextRepository) { bind<SaidTextRepository>() }
+    singleOf(::AndroidBoardRepository) { bind<BoardRepository>() }
+    singleOf(::AndroidBoardSetRepository) { bind<BoardSetRepository>() }
+    singleOf(::AndroidFileStorage) { bind<FileStorage>() }
+    singleOf(::AndroidSoundPlayer) { bind<SoundPlayer>() }
+    singleOf(::AndroidFilePicker) { bind<FilePicker>() }
+    singleOf(::AndroidSecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
+    singleOf(::AndroidBackupMediaAccess) { bind<BackupMediaAccess>() }
+    singleOf(::AndroidImageCacher) { bind<ImageCacher>() }
+    single<FeatureUsageReporter> {
+        AndroidAptabaseFeatureUsageReporter(
+            context = context,
+            settingsStateManager = get(),
+            appKey = aptabaseAppKey
+        )
+    }
+    single { FileSystem.SYSTEM }
+    // Usage-log destination for RealAacLogger (app-private files dir)
+    single(named("logDir")) { context.filesDir.absolutePath }
 }
