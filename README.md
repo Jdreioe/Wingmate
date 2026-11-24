@@ -33,15 +33,6 @@ row above the vocabulary. Grid plays supported recordings on selection and uses
 text for composed messages. Wingmate prediction, Page elements, background
 pictures, and per-button voice settings do not transfer.
 
-If you already have an exported `.obz` file, you can also convert it offline
-with Python 3.9 or newer (standard library only):
-
-```sh
-python3 tools/obz_to_gridset.py "My Screen.obz" "My Screen.gridset"
-```
-
-Omit the output path to write a `.gridset` alongside the OBZ.
-
 ## OpenSymbols proxy
 
 OpenSymbols search is routed through the Cloudflare Worker in
