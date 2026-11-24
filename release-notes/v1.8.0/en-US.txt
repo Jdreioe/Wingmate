@@ -1,0 +1,4 @@
+• iPhone and iPad: the screen library shows a preview of each screen. Tap a preview to open it, or tap Edit.
+• Empty cells stay blank while you communicate. In edit mode, drag a button to move it, or use the arrows and size controls.
+• A carer locks editing with a PIN. Wingmate does not use Face ID or the device passcode. After several wrong codes, it waits before the next try.
+• Restoring a backup now applies the saved settings.
