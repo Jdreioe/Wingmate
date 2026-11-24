@@ -668,6 +668,9 @@ struct SymbolBoardWorkspaceView: View {
                     HStack {
                         workspaceMenu(boardSetId: boardSetId)
                         Spacer(minLength: 0)
+                        if (model.selectedBoardSet?.boardIds.count ?? 0) > 1 {
+                            pageNavigation
+                        }
                     }
                     // Clear of the rounded corner when it sits beside the Dynamic Island.
                     .padding(.horizontal, horizontalSizeClass == .regular ? 16 : 28)
@@ -686,11 +689,6 @@ struct SymbolBoardWorkspaceView: View {
                         onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
                         animationNamespace: sentenceAnimationNamespace,
                         animatedTokenId: activeSentenceAnimation?.tokenId,
-                        showsPageNavigation: (model.selectedBoardSet?.boardIds.count ?? 0) > 1,
-                        canGoBack: model.canNavigateBoardBack,
-                        atStartPage: model.isOnStartPage,
-                        onBack: { Task { await model.navigateBoardBack() } },
-                        onStartPage: { Task { await model.navigateBoardHome() } },
                         onSpeakPart: { model.speakMessagePart(at: $0) }
                     )
                     messageControls(boardSetId: boardSetId, editing: false)
@@ -1036,6 +1034,41 @@ struct SymbolBoardWorkspaceView: View {
         }
         .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
         .accessibilityLabel(Text(key))
+    }
+
+    /// Back and start Page, in the top row opposite the menu. They stay visible,
+    /// disabled when there is nowhere to go, so the row does not jump.
+    private var pageNavigation: some View {
+        let showsLabels = horizontalSizeClass == .regular
+        return HStack(spacing: 4) {
+            Button { Task { await model.navigateBoardBack() } } label: {
+                topRowLabel("board_page.back", systemImage: "chevron.backward", showsTitle: showsLabels)
+            }
+            .disabled(!model.canNavigateBoardBack)
+            .accessibilityLabel(Text("board_page.back"))
+            Button { Task { await model.navigateBoardHome() } } label: {
+                topRowLabel("board_page.start", systemImage: "house", showsTitle: showsLabels)
+            }
+            .disabled(model.isOnStartPage)
+            .accessibilityLabel(Text("board_page.start"))
+        }
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+    }
+
+    private func topRowLabel(_ key: LocalizedStringKey, systemImage: String, showsTitle: Bool) -> some View {
+        Group {
+            if showsTitle {
+                Label(key, systemImage: systemImage)
+            } else {
+                Image(systemName: systemImage)
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(Color.accentColor)
+        .padding(.horizontal, 8)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     /// The one corner menu in use mode. It holds everything except the board and

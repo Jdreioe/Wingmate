@@ -137,12 +137,6 @@ struct ScreensMessageBar: View {
     var animationNamespace: Namespace.ID? = nil
     var animatedTokenId: String? = nil
     var iconSize: CGFloat = 36
-    /// Back and start stay visible, and disabled when there is nowhere to go, so the bar does not jump.
-    var showsPageNavigation: Bool = false
-    var canGoBack: Bool = false
-    var atStartPage: Bool = true
-    var onBack: () -> Void = {}
-    var onStartPage: () -> Void = {}
     /// Says one token again when it is tapped; its ✕ still removes it.
     var onSpeakPart: ((Int) -> Void)? = nil
 
@@ -150,7 +144,6 @@ struct ScreensMessageBar: View {
 
     private var buttonSize: CGFloat { min(max(iconSize * 1.55, 48), 72) }
     private var speakSize: CGFloat { min(max(iconSize * 1.75, 56), 88) }
-    private var showNavigationLabels: Bool { horizontalSizeClass != .compact }
     /// On iPad the bar is a large, readable strip above the board; phones keep it compact.
     private var isLarge: Bool { horizontalSizeClass == .regular }
     /// Matches the 2×2 button square beside the bar (two buttons plus their gap).
@@ -159,9 +152,6 @@ struct ScreensMessageBar: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            if showsPageNavigation {
-                pageNavigation
-            }
             ScrollViewReader { reader in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -187,40 +177,6 @@ struct ScreensMessageBar: View {
                 SpeechControls(model: model, buttonSize: buttonSize, speakSize: speakSize, onSpeak: onSpeak)
             }
         }
-    }
-
-    private var pageNavigation: some View {
-        HStack(spacing: 8) {
-            Button(action: onBack) {
-                navigationLabel("board_page.back", systemImage: "chevron.backward")
-            }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
-            .disabled(!canGoBack)
-            .accessibilityLabel(Text("board_page.back"))
-            Button(action: onStartPage) {
-                navigationLabel("board_page.start", systemImage: "house")
-            }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
-            .disabled(atStartPage)
-            .accessibilityLabel(Text("board_page.start"))
-        }
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-    }
-
-    private func navigationLabel(_ key: LocalizedStringKey, systemImage: String) -> some View {
-        Group {
-            if showNavigationLabels {
-                Label(key, systemImage: systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-            } else {
-                Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 44, height: 44)
-            }
-        }
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.tertiarySystemFill)))
     }
 
     @ViewBuilder
