@@ -405,6 +405,9 @@
 "welcome_mode.tour.boardsets.step3" = "Edit the screen later to customize symbols and layout.";
 "welcome_mode.tour.phrase_preview_title" = "Phrase Screen";
 "welcome_mode.tour.phrase_preview_message" = "I would like some water, please.";
+"welcome_mode.tour.sample.hello" = "Hello";
+"welcome_mode.tour.sample.yes" = "Yes";
+"welcome_mode.tour.sample.help" = "Help";
 "welcome_mode.tour.back" = "Back to choices";
 
 /* Analytics Consent */

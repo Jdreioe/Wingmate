@@ -636,7 +636,7 @@ struct SymbolBoardWorkspaceView: View {
                             .foregroundColor(.blue)
                     }
                     .accessibilityLabel(
-                        Text(showHiddenButtons ? "board_workspace.hide_hidden" : "board_workspace.show_hidden")
+                        Text(LocalizedStringKey(showHiddenButtons ? "board_workspace.hide_hidden" : "board_workspace.show_hidden"))
                     )
                     Button(action: {
                         if model.canEditSelectedBoardSet {
@@ -2101,7 +2101,7 @@ struct BoardSetLibraryCard: View {
                 .buttonStyle(.bordered)
 
                 Button(action: onToggleLock) {
-                    Label(set.isLocked ? "boardset.unlock" : "boardset.lock", systemImage: set.isLocked ? "lock.open.fill" : "lock.fill")
+                    Label(LocalizedStringKey(set.isLocked ? "boardset.unlock" : "boardset.lock"), systemImage: set.isLocked ? "lock.open.fill" : "lock.fill")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)

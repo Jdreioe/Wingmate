@@ -678,7 +678,7 @@ private struct EditingAccessSettingsView: View {
                     .keyboardType(.numberPad)
                 if error { Text("editing_access.incorrect").foregroundStyle(.red) }
 
-                Button(model.editingAccessEnabled ? "editing_access.change" : "editing_access.enable") {
+                Button(LocalizedStringKey(model.editingAccessEnabled ? "editing_access.change" : "editing_access.enable")) {
                     Task {
                         let valid = newCode.count >= 4 && newCode.count <= 8 && newCode == confirmation
                         let unlocked = !model.editingAccessEnabled ? true : await model.unlockEditingAccess(currentCode)
