@@ -1499,8 +1499,12 @@ fun SymbolBar(
                     BasicTextField(
                         value = fieldValue,
                         onValueChange = { newValue ->
+                            // The input session echoes the current text again once the
+                            // field is focused. Parents store a string, so only an edit
+                            // should notify them.
+                            val textChanged = newValue.text != fieldValue.text
                             fieldValue = newValue
-                            onTextChange(newValue.text)
+                            if (textChanged) onTextChange(newValue.text)
                         },
                         textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
