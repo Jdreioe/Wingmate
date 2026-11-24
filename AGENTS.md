@@ -7,11 +7,13 @@
 
 The paused desktop client lives at the `desktop-archive` tag, not on `main`.
 
+See `docs/ARCHITECTURE.md` for the module/feature-to-file map, `CONTEXT.md`-to-legacy-symbol terminology bridge, and unified Koin DI layout.
+
 ## Verify changes
 
-- Shared Kotlin: `./gradlew jvmTest`
-- Android: `bash ci_scripts/verify_android.sh` (build, lint, unit tests and jvmTest); UI tests need an emulator: `./gradlew :androidApp:connectedDebugAndroidTest`
-- iOS (macOS only): `bash ci_scripts/verify_ios.sh`
+- Shared Kotlin: `./gradlew jvmTest` (single test: `./gradlew :shared:jvmTest --tests "*TestName*"`)
+- Android: `bash ci_scripts/verify_android.sh` (build, lint, unit tests and jvmTest); unit tests only: `./gradlew :androidApp:testDebugUnitTest`; UI tests need an emulator: `./gradlew :androidApp:connectedDebugAndroidTest`
+- iOS (macOS only): `bash ci_scripts/verify_ios.sh` (compile-only without booting a simulator: `WINGMATE_IOS_BUILD_ONLY=1 bash ci_scripts/verify_ios.sh`)
 - Worker: `npm test && npm run check` in `infra/opensymbols-proxy`
 
 ## Agent skills

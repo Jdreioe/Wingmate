@@ -4,7 +4,6 @@ import android.app.Application
 import com.hojmoseit.wingmate.BuildConfig
 import io.github.jdreioe.wingmate.infrastructure.OpenSymbolsClient
 import org.koin.core.context.GlobalContext
-import org.koin.dsl.module
 
 class WingmateApplication : Application() {
 
@@ -12,11 +11,8 @@ class WingmateApplication : Application() {
         super.onCreate()
 
         if (GlobalContext.getOrNull() == null) {
-            initKoin(module { })
+            initKoin(androidModule(this, BuildConfig.APTABASE_APP_KEY))
         }
-
-        // Register Android-specific implementations once at app startup.
-        overrideAndroidSpeechService(this, BuildConfig.APTABASE_APP_KEY)
 
         val openSymbolsProxyUrl = sequenceOf(
             BuildConfig.OPENSYMBOLS_PROXY_URL,
