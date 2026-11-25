@@ -7,6 +7,10 @@ import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.loggingClassName
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 enum class HistoryStatus {
     Success,
@@ -35,6 +39,15 @@ class CommunicationFacade(
     private val saidTextRepository: SaidTextRepository,
 ) {
     fun phraseListStore(): PhraseListStore = phraseListStore
+
+    /** Calls [onChange] on the main thread with the current phrase state and subsequent changes. */
+    fun observePhrases(onChange: (PhraseListStore.State) -> Unit): NativeSubscription {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        scope.launch {
+            phraseListStore.states.collect { onChange(it) }
+        }
+        return NativeSubscription(scope)
+    }
 
     fun refreshPhrases() {
         phraseListStore.accept(PhraseListStore.Intent.Refresh)

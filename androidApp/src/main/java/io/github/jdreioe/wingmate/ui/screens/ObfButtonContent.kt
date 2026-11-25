@@ -164,6 +164,7 @@ internal fun ObfButtonContent(
     enabled: Boolean = true,
     isSelectionHighlighted: Boolean = false,
     fieldFontScale: Float = 1f,
+    rowSpan: Int = 1,
     onLongClick: (() -> Unit)? = null,
     settings: Settings,
     feedback: BoardFeedback = remember { BoardFeedback() },
@@ -398,7 +399,22 @@ internal fun ObfButtonContent(
              androidx.compose.foundation.BorderStroke(if (settings.highContrastMode) 3.dp else 2.dp, borderColor ?: highContrastContent)
         } else null,
     ) {
-        Box(modifier = Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(6.dp), contentAlignment = Alignment.Center) {
+            // Labels follow the height of one grid cell so they scale up cleanly on tablets
+            // and larger grids instead of staying at a fixed small point size.
+            val unitHeightDp = maxHeight.value / rowSpan.coerceAtLeast(1)
+            val symbolLabelSp = (unitHeightDp * 0.16f).coerceIn(14f, 32f) * boundedFontScale
+            val dynamicSymbolLabelStyle = MaterialTheme.typography.titleMedium.copy(
+                fontSize = symbolLabelSp.sp,
+                lineHeight = (symbolLabelSp * 1.15f).sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            val shortWordSp = (unitHeightDp * 0.22f).coerceIn(16f, 40f) * boundedFontScale
+            val dynamicShortWordStyle = shortWordStyle.copy(
+                fontSize = shortWordSp.sp,
+                lineHeight = (shortWordSp * 1.15f).sp,
+                fontWeight = FontWeight.SemiBold,
+            )
             if (isTemporarilyRevealed) {
                 Icon(
                     Icons.Default.Visibility,
@@ -448,7 +464,7 @@ internal fun ObfButtonContent(
                         Text(
                             text = labelText,
                             style = when {
-                                shortLabel -> shortWordStyle
+                                shortLabel -> dynamicShortWordStyle
                                 // Larger reading text where a tablet's cells have room for it.
                                 fullText != null && largeWindow -> readingTextStyle
                                 else -> phraseTextStyle
@@ -467,11 +483,12 @@ internal fun ObfButtonContent(
                     val labelText = displayLabel ?: displayVocalization ?: ""
                     Text(
                         text = labelText,
-                        style = scaledLabelMedium,
+                        style = dynamicSymbolLabelStyle,
                         textAlign = TextAlign.Center,
                         color = contentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     if (symbolUnavailable) {
@@ -512,11 +529,12 @@ internal fun ObfButtonContent(
                         val labelText = displayLabel ?: displayVocalization ?: ""
                         Text(
                             text = labelText,
-                            style = scaledLabelSmall,
+                            style = dynamicSymbolLabelStyle,
                             textAlign = TextAlign.Center,
                             color = contentColor,
-                            maxLines = if (showImg) 1 else 2,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -702,8 +720,13 @@ internal fun isShortButtonLabel(label: String): Boolean {
  * Speech Screens store long paragraphs; otherwise null and the label shows as it is.
  */
 internal fun expandedButtonText(label: String?, vocalization: String?): String? {
-    if (label == null || vocalization == null || !label.endsWith("…")) return null
-    val cue = label.removeSuffix("…").trimEnd()
+    if (label == null || vocalization == null) return null
+    val trimmedLabel = label.trim()
+    val cue = when {
+        trimmedLabel.endsWith("…") -> trimmedLabel.removeSuffix("…").trimEnd()
+        trimmedLabel.endsWith("...") -> trimmedLabel.removeSuffix("...").trimEnd()
+        else -> return null
+    }
     val spoken = vocalization.replace(Regex("\\s+"), " ").trim()
     return spoken.takeIf { cue.isNotEmpty() && it.length > cue.length && it.startsWith(cue) }
 }
