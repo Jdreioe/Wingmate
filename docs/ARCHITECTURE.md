@@ -82,6 +82,12 @@ All shared DI bindings live in one place: [shared/src/commonMain/kotlin/io/githu
 ## Platform Boundary Conventions & Known Asymmetries
 
 - **Shared business logic first**: Put domain rules, policies, state machines, formatting, and export/import logic in Kotlin (`:core:domain`, `:core:data`, or `:shared`) so `jvmTest` covers both clients in seconds.
+- **Enforced module layer direction (`./gradlew checkModuleGraph`)**:
+  - `*:domain` modules never depend on `*:data`, `*:presentation`, `:shared`, or `:androidApp`.
+  - `*:presentation` modules depend on domain contracts only (never on `*:data`, `:shared`, or `:androidApp`).
+  - `:shared` wires concrete data implementations internally (`implementation(project("...:data"))`) and does not re-export `*:data` via `api(...)`.
+  - Non-Android-app KMP modules do not pull in Compose UI plugins or dependencies.
+  - All versioned library coordinates come from [gradle/libs.versions.toml](../gradle/libs.versions.toml).
 - **Current Android vs iOS asymmetry**:
   - iOS talks to Kotlin exclusively through `*Facade` classes in `:shared` (plus `PhraseListStore` for the Phrase list) and receives state updates via `NativeSubscription`.
   - Android mostly injects use cases/repositories directly in ViewModels and Composables, though newer flows (e.g., cloud TTS setup) use shared facades. Prefer routing new cross-platform workflows through shared facades/controllers rather than duplicating logic in `androidApp` and `iosApp`.
@@ -92,6 +98,7 @@ All shared DI bindings live in one place: [shared/src/commonMain/kotlin/io/githu
 
 Use the fastest relevant loop while iterating, then run the full platform gate before finishing:
 
+- **Module graph & version catalog guard**: `./gradlew checkModuleGraph`
 - **Single shared test**: `./gradlew :shared:jvmTest --tests "*KoinWiringTest*"` (or `:core:domain:jvmTest`, `:core:data:jvmTest`, `:feature:communication:presentation:jvmTest`)
 - **All shared Kotlin tests**: `./gradlew jvmTest`
 - **Android unit tests only**: `./gradlew :androidApp:testDebugUnitTest`
