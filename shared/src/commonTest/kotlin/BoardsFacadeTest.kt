@@ -27,7 +27,7 @@ class BoardsFacadeTest {
     @Test
     fun backgroundEditingPreservesVocabularyAndRejectsLockedScreens() = runBlocking {
         val facade = facade()
-        val set = facade.createBoardSet("Test", rows = 1, columns = 1)
+        val set = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home")
         facade.upsertBoardCellButton(
             boardId = set.rootBoardId, row = 0, col = 0, label = "Hello", vocalization = null,
             backgroundColor = null, borderColor = null, linkedBoardId = null,
@@ -97,7 +97,7 @@ class BoardsFacadeTest {
     @Test
     fun cellUpsertPersistsButtonAndClearPrunesUnreferencedImage() = runBlocking {
         val facade = facade()
-        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2)
+        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home")
         val boardId = boardSet.rootBoardId
 
         val updated = facade.upsertBoardCellButton(
@@ -120,7 +120,7 @@ class BoardsFacadeTest {
     fun clearingACellKeepsThePageBackgroundImage() = runBlocking {
         val boards = InMemoryBoardRepository()
         val facade = facade(boards = boards)
-        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1).rootBoardId
+        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home").rootBoardId
         facade.upsertBoardCellButton(
             boardId = boardId, row = 0, col = 0, label = "Hello", vocalization = null,
             backgroundColor = null, borderColor = null, linkedBoardId = null,
@@ -138,7 +138,7 @@ class BoardsFacadeTest {
     @Test
     fun cellUpsertKeepsOrClearsAnImageOnlyWhenRequested() = runBlocking {
         val facade = facade()
-        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1).rootBoardId
+        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home").rootBoardId
 
         facade.upsertBoardCellButton(
             boardId = boardId, row = 0, col = 0, label = "Hello", vocalization = null,
@@ -167,7 +167,7 @@ class BoardsFacadeTest {
     @Test
     fun cellUpsertStoresAppearanceAndKeepsItWhenALaterEditOmitsIt() = runBlocking {
         val facade = facade()
-        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1).rootBoardId
+        val boardId = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home").rootBoardId
 
         facade.upsertBoardCellButton(
             boardId = boardId, row = 0, col = 0, label = "Hello", vocalization = null,
@@ -209,7 +209,7 @@ class BoardsFacadeTest {
     @Test
     fun messageBarButtonsAreChosenPerScreenAndSurviveTheSettingsForm() = runBlocking {
         val facade = facade()
-        val set = facade.createBoardSet("Test", rows = 1, columns = 1)
+        val set = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home")
         assertEquals(listOf("Speak"), facade.resolveBoardSettings(set.rootBoardId).messageBarActions)
 
         facade.updateMessageBarActions(set.id, listOf("Hold", "Speak", "Clear"))
@@ -228,7 +228,7 @@ class BoardsFacadeTest {
     @Test
     fun screenAndPageSettingsInheritUntilOverriddenAndRejectALockedScreen() = runBlocking {
         val facade = facade()
-        val set = facade.createBoardSet("Test", rows = 1, columns = 1)
+        val set = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home")
         val inherit = facade.boardSettingsDraft(set.id, set.rootBoardId, forPage = false)
         assertEquals("inherit", inherit.showMessageBar)
         assertEquals("inherit", inherit.activationBehavior)
@@ -271,7 +271,7 @@ class BoardsFacadeTest {
     @Test
     fun listBoardCellsRendersUpsertedButton() = runBlocking {
         val facade = facade()
-        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2)
+        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home")
         val boardId = boardSet.rootBoardId
 
         facade.upsertBoardCellButton(
@@ -290,7 +290,7 @@ class BoardsFacadeTest {
     @Test
     fun moveBoardFieldSwapsButtonsAndRefusesASpanThatDoesNotFit() = runBlocking {
         val facade = facade()
-        val boardId = facade.createBoardSet("Test", rows = 2, columns = 2).rootBoardId
+        val boardId = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home").rootBoardId
         facade.upsertBoardCellButton(
             boardId = boardId, row = 0, col = 0, label = "A", vocalization = null,
             backgroundColor = null, borderColor = null, linkedBoardId = null,
@@ -319,7 +319,7 @@ class BoardsFacadeTest {
     fun resolveBoardSettingsAppliesAppDefaultsWhenNoOverrides() = runBlocking {
         val settings = InMemorySettingsRepository()
         val facade = facade(settings = settings)
-        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2)
+        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home")
 
         val resolved = facade.resolveBoardSettings(boardSet.rootBoardId)
 
@@ -334,7 +334,7 @@ class BoardsFacadeTest {
     fun shareBoardSetAsObzReportsNotFoundShareFailureAndSuccess() = runBlocking {
         val share = RecordingShareService()
         val facade = facade(share = share)
-        val boardSet = facade.createBoardSet("MySet", rows = 1, columns = 1)
+        val boardSet = facade.createBoardSet("MySet", rows = 1, columns = 1, rootBoardName = "Home")
 
         val notFound = facade.shareBoardSetAsObz("missing")
         assertEquals(BoardSetExportStatus.NotFound, notFound.status)
@@ -354,7 +354,7 @@ class BoardsFacadeTest {
     fun shareBoardSetAsGridsetReportsNotFoundShareFailureAndSuccess() = runBlocking {
         val share = RecordingShareService()
         val facade = facade(share = share)
-        val boardSet = facade.createBoardSet("My/Set", rows = 1, columns = 1)
+        val boardSet = facade.createBoardSet("My/Set", rows = 1, columns = 1, rootBoardName = "Home")
 
         val notFound = facade.shareBoardSetAsGridset("missing")
         assertEquals(BoardSetExportStatus.NotFound, notFound.status)
@@ -373,7 +373,7 @@ class BoardsFacadeTest {
     @Test
     fun editsSeparateMissingTargetsFromRefusedChanges() = runBlocking {
         val facade = facade()
-        val boardSet = facade.createBoardSet("Test", rows = 1, columns = 1)
+        val boardSet = facade.createBoardSet("Test", rows = 1, columns = 1, rootBoardName = "Home")
 
         suspend fun kindOf(edit: suspend () -> Unit) = assertFailsWith<NativeFailure> { edit() }.kind
 

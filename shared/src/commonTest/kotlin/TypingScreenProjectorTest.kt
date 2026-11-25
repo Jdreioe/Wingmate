@@ -73,4 +73,14 @@ class TypingScreenProjectorTest {
         assertTrue(template.rootBoard!!.sounds.isEmpty())
         assertTrue(template.rootBoard!!.images.isEmpty())
     }
+
+    @Test
+    fun `default labels get a translation key until the user renames the Button`() {
+        val hold = TypingScreenProjector.defaultTemplate(columns = 3, now = 10)
+            .rootBoard!!.buttons.first { it.id == "typing:playback:hold" }
+
+        assertEquals("typing:playback:hold", TypingScreenProjector.defaultActionLabelKey(hold))
+        assertEquals(null, TypingScreenProjector.defaultActionLabelKey(hold.copy(label = "Gem til senere")))
+        assertEquals(null, TypingScreenProjector.defaultActionLabelKey(hold.copy(id = "user:hold")))
+    }
 }
