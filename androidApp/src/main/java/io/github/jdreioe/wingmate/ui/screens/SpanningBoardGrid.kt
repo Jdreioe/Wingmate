@@ -177,6 +177,7 @@ internal fun SpanningBoardGrid(
     selectedField: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    onRemoveField: ((row: Int, column: Int) -> Unit)? = null,
     focusedCell: Pair<Int, Int>? = null,
     reorder: BoardReorder? = null,
     cellMenu: BoardCellMenu? = null,
@@ -638,6 +639,39 @@ internal fun SpanningBoardGrid(
                             }
                             CompositionLocalProvider(LocalBoardCellActions provides cellActions) {
                                 content(item)
+                            }
+                            if (isSelected && onRemoveField != null && item.button != null) {
+                                val removeLabel = stringResource(R.string.board_cell_menu_remove)
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(44.dp)
+                                        .testTag("selected-field-remove")
+                                        .semantics {
+                                            role = Role.Button
+                                            contentDescription = removeLabel
+                                        }
+                                        .combinedClickable(
+                                            onClick = { onRemoveField(item.row, item.column) },
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.error,
+                                        contentColor = MaterialTheme.colorScheme.onError,
+                                        shadowElevation = 3.dp,
+                                        modifier = Modifier.size(30.dp),
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                             val menuButtonForCell = item.button
                             if (cellMenu != null && menuButtonForCell != null && cellMenuAnchor == (item.row to item.column)) {
