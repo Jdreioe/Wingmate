@@ -327,10 +327,8 @@
 "welcome_analytics.opt_in" = "Del anonym analysedata";
 
 /* BoardSets Library & Workspace */
-"board_sets.library.title" = "Skærme";
-"board_sets.library.subtitle" = "Visuelle gitre af symboler og forbundne sider";
 "board_sets.library.empty_title" = "Ingen skærme endnu";
-"board_sets.library.empty_body" = "Opret en skærm for at begynde at kommunikere med visuelle symboler og sider.";
+"board_sets.library.empty_body" = "Opret en skærm for at komme i gang.";
 "board_sets.library.open" = "Åbn";
 "board_sets.library.edit" = "Rediger";
 "board_sets.library.pages_one" = "%d side";
@@ -339,7 +337,6 @@
 "board_sets.library.more" = "Flere handlinger";
 "board_sets.library.open_hint" = "Åbner denne skærm";
 "board_sets.library.locked" = "Låst";
-"board_sets.library.empty_guidance" = "En skærm er et sæt sider. Tryk på en skærm for at bruge den. Rediger er adskilt, så kommunikationen ikke ændrer knapperne ved et uheld.";
 "board_sets.library.duplicate" = "Duplikér";
 "board_sets.library.delete_title" = "Slet skærm";
 "board_sets.library.delete_message" = "Er du sikker på, at du vil slette '%@'?";

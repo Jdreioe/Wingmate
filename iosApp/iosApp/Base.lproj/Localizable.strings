@@ -483,10 +483,8 @@
 "welcome_analytics.opt_in" = "Share anonymous analytics";
 
 /* BoardSets Library & Workspace */
-"board_sets.library.title" = "Screens";
-"board_sets.library.subtitle" = "Visual grids of symbols and linked pages";
 "board_sets.library.empty_title" = "No Screens Yet";
-"board_sets.library.empty_body" = "Create a screen to start communicating with visual symbols and pages.";
+"board_sets.library.empty_body" = "Create a screen to start communicating.";
 "board_sets.library.open" = "Open";
 "board_sets.library.edit" = "Edit";
 "board_sets.library.pages_one" = "%d page";
@@ -495,7 +493,6 @@
 "board_sets.library.more" = "More actions";
 "board_sets.library.open_hint" = "Opens this screen";
 "board_sets.library.locked" = "Locked";
-"board_sets.library.empty_guidance" = "A screen is a set of pages. Tap a screen to use it. Edit is separate, so communication does not change the buttons by accident.";
 "board_sets.library.duplicate" = "Duplicate";
 "board_sets.library.delete_title" = "Delete Screen";
 "board_sets.library.delete_message" = "Are you sure you want to delete '%@'?";

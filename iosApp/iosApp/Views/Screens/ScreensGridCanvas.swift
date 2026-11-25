@@ -293,13 +293,14 @@ extension SymbolBoardWorkspaceView {
             )
         }
         let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
+        let hasSymbol = model.boardShowSymbols && trimmed(cell?.imageUrl) != nil
         return AnyView(
             VStack(alignment: .center, spacing: 4) {
-            if model.boardLabelAtTop && model.boardShowLabels {
-                boardCellLabel(cell, size: labelSize)
+            if model.boardLabelAtTop && model.boardShowLabels && hasSymbol {
+                boardCellLabel(cell, size: labelSize, hasSymbol: true, rowSpan: rowSpan, columnSpan: columnSpan)
             }
 
-            if model.boardShowSymbols, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
+            if hasSymbol, let imageUrl = trimmed(cell?.imageUrl), let url = URL(string: imageUrl) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -319,18 +320,12 @@ extension SymbolBoardWorkspaceView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            if !model.boardLabelAtTop && model.boardShowLabels {
-                boardCellLabel(cell, size: labelSize)
+            if (!model.boardLabelAtTop || !hasSymbol) && model.boardShowLabels {
+                boardCellLabel(cell, size: labelSize, hasSymbol: hasSymbol, rowSpan: rowSpan, columnSpan: columnSpan)
             }
 
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
                 Label(model.boardDisplayName(id: linkedBoardId), systemImage: "arrowshape.turn.up.right")
-                    .font(.caption2)
-                    .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            } else if let vocalization = trimmed(cell?.vocalization), vocalization != trimmed(cell?.label) {
-                Text(vocalization)
                     .font(.caption2)
                     .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
                     .lineLimit(1)
@@ -366,16 +361,36 @@ extension SymbolBoardWorkspaceView {
     }
 
     @ViewBuilder
-    func boardCellLabel(_ cell: BoardCellInfo?, size: CGFloat) -> some View {
-        let text = boardCellDisplayLabel(cell)
+    func boardCellLabel(_ cell: BoardCellInfo?, size: CGFloat, hasSymbol: Bool, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
+        let expanded = !hasSymbol ? ScreenButtonText.expandedText(label: cell?.label, vocalization: cell?.vocalization) : nil
+        let text = expanded ?? boardCellDisplayLabel(cell)
+        let foreground = model.highContrastMode
+            ? Color.primary
+            : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary)
         if !text.isEmpty {
-            Text(text)
-                .font(.system(size: size, weight: .semibold))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.5)
-                .foregroundStyle(model.highContrastMode ? Color.primary : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary))
-                .frame(maxWidth: .infinity)
+            if !hasSymbol && (expanded != nil || !ScreenButtonText.isShortLabel(text)) {
+                // Speech paragraphs and longer sentences read cleanly from top-leading without
+                // duplicate vocalization lines or two-line truncation.
+                let readingBase: CGFloat = horizontalSizeClass == .regular ? 24 : 17
+                let readingSize = readingBase * min(model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan), 1.35)
+                Text(text)
+                    .font(.system(size: readingSize, weight: .medium))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(expanded != nil ? nil : 4)
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                Text(text)
+                    .font(.system(size: size, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.5)
+                    .foregroundStyle(foreground)
+                    .frame(maxWidth: .infinity)
+            }
         }
     }
 

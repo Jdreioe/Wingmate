@@ -325,10 +325,8 @@
 "welcome_analytics.opt_in" = "Anonyme Analysedaten teilen";
 
 /* BoardSets Library & Workspace */
-"board_sets.library.title" = "Bildschirme";
-"board_sets.library.subtitle" = "Visuelle Symbolraster und verknüpfte Seiten";
 "board_sets.library.empty_title" = "Noch keine Bildschirme";
-"board_sets.library.empty_body" = "Erstelle einen Bildschirm, um mit visuellen Symbolen und Seiten zu kommunizieren.";
+"board_sets.library.empty_body" = "Erstelle einen Bildschirm, um zu kommunizieren.";
 "board_sets.library.open" = "Öffnen";
 "board_sets.library.edit" = "Bearbeiten";
 "board_sets.library.pages_one" = "%d Seite";
@@ -337,7 +335,6 @@
 "board_sets.library.more" = "Weitere Aktionen";
 "board_sets.library.open_hint" = "Öffnet diesen Bildschirm";
 "board_sets.library.locked" = "Gesperrt";
-"board_sets.library.empty_guidance" = "Ein Bildschirm ist eine Gruppe von Seiten. Tippe auf einen Bildschirm, um ihn zu verwenden. Bearbeiten ist getrennt, damit die Kommunikation die Tasten nicht versehentlich ändert.";
 "board_sets.library.duplicate" = "Duplizieren";
 "board_sets.library.delete_title" = "Bildschirm löschen";
 "board_sets.library.delete_message" = "Möchtest du '%@' wirklich löschen?";
