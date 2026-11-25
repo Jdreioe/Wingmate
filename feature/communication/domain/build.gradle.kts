@@ -22,7 +22,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(project(":core:domain"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
             }
         }

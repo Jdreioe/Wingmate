@@ -1,6 +1,7 @@
 package io.github.jdreioe.wingmate.infrastructure
 
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.ElevenLabsVoiceCatalogPort
 import io.github.jdreioe.wingmate.domain.OperationalLogger
 import io.github.jdreioe.wingmate.domain.Voice
 import io.github.jdreioe.wingmate.domain.loggingClassName
@@ -12,14 +13,14 @@ import kotlinx.serialization.json.Json
 
 class ElevenLabsVoiceCatalog(
     private val configRepo: ConfigRepository,
-) {
+) : ElevenLabsVoiceCatalogPort {
     private val client = HttpClient {
         followRedirects = false
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; explicitNulls = false }) }
     }
 
     /** The catalog for the saved key, or empty when there is no key or loading fails. */
-    suspend fun list(): List<Voice> = try {
+    override suspend fun list(): List<Voice> = try {
         load()
     } catch (error: CancellationException) {
         throw error
@@ -37,7 +38,7 @@ class ElevenLabsVoiceCatalog(
      * [ElevenLabsRequestException] when ElevenLabs refuses the request and other
      * exceptions when it cannot be reached.
      */
-    suspend fun load(): List<Voice> {
+    override suspend fun load(): List<Voice> {
         val config = configRepo.getElevenLabsSpeechConfig() ?: return emptyList()
         return ElevenLabsTtsClient.getVoices(client, config)
     }

@@ -365,6 +365,11 @@ struct TypingActionButton: View {
         if single?.name == "SecondaryLanguage", !model.secondaryLanguage.isEmpty {
             return (model.secondaryLanguage.split(separator: "-").first.map(String.init) ?? model.secondaryLanguage).uppercased()
         }
+        if let key = action.defaultLabelKey {
+            let stringKey = "typing.action." + key
+            let translated = NSLocalizedString(stringKey, comment: "")
+            if translated != stringKey { return translated }
+        }
         return action.label
     }
 

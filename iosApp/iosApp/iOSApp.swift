@@ -5,7 +5,12 @@ import Shared
 struct iOSApp: App {
     @State private var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
     @Environment(\.scenePhase) private var scenePhase
-    // Avoid heavy work in App init to prevent a blank screen; DI is initialized on first view appearance
+    init() {
+        // Start dependency injection before any view can resolve a facade. Koin only
+        // registers definitions here; singletons are still created on first use.
+        IosViewModel.startDependencies()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

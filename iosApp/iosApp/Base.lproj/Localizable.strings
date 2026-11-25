@@ -708,3 +708,25 @@
 "voice.system.quality.premium" = "Premium";
 "voice.system.personal_voice.allow" = "Allow Personal Voice";
 "voice.system.personal_voice.footer" = "Lets Wingmate speak with a Personal Voice you created on this device.";
+
+/* Default Typing Screen Action-strip labels, shown until the user renames a Button */
+"typing.action.typing:playback:hold" = "Hold";
+"typing.action.typing:playback:secondary" = "Language";
+"typing.action.typing:tag:whispers" = "Whisper";
+"typing.action.typing:tag:laughs" = "Laugh";
+"typing.action.typing:tag:sighs" = "Sigh";
+"typing.action.typing:tag:happy" = "Happy";
+"typing.action.typing:tag:sad" = "Sad";
+"typing.action.typing:tag:excited" = "Excited";
+"typing.action.typing:tag:angry" = "Angry";
+"typing.action.typing:tag:sarcastic" = "Sarcastic";
+"typing.action.typing:ssml:emphasis-reduced" = "Reduced";
+"typing.action.typing:ssml:emphasis-moderate" = "Moderate";
+"typing.action.typing:ssml:emphasis-strong" = "Strong";
+"typing.action.typing:ssml:spell" = "Spell";
+"typing.action.typing:ssml:number" = "Number";
+"typing.action.typing:ssml:date" = "Date";
+"typing.action.typing:ssml:time" = "Time";
+"typing.action.typing:ssml:telephone" = "Telephone";
+"typing.action.typing:ssml:currency" = "Currency";
+"boardset.default_root_page" = "Home";
