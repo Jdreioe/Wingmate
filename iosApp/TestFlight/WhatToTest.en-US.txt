@@ -1,0 +1,4 @@
+• Sync Screens with Google Drive, OneDrive, or iCloud sharing (Settings → Sync) so supporters can edit Screens remotely while keeping an offline copy on your iPhone or iPad.
+• Fixed a startup crash on fresh installs.
+• iPad: kept the landscape Typing layout stable when the on-screen keyboard opens.
+• Speech expression buttons now match your active voice (ElevenLabs or Azure), default Typing buttons and new Screen home pages are localized, and Speech Screen buttons are cleaner to read.

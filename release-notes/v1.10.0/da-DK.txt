@@ -1,0 +1,3 @@
+• Synkroniser Skærme via Google Drev eller OneDrive, så nærtstående og hjælpere kan redigere skærme på afstand – stadig med lokal kopi offline.
+• Nyt fuldskærmslayout til Skærme med forhåndsvisning i oversigten, symboler i beskedlinjen, tryk på et ord for at gentage det, valgfrie handlingsknapper og redigering direkte på siden.
+• Udtryksknapper i Skrivning tilpasses den valgte stemme (ElevenLabs eller Azure), og standardknapperne vises nu på dansk.
