@@ -22,18 +22,17 @@ kotlin {
             dependencies {
                 implementation(project(":core:domain"))
                 implementation(project(":feature:communication:domain"))
-                implementation(project(":feature:communication:data"))
                 implementation(project(":core:presentation"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin:4.4.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-main:4.4.0")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:4.4.0")
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.mvikotlin.core)
+                implementation(libs.mvikotlin.main)
+                implementation(libs.mvikotlin.extensions.coroutines)
             }
         }
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+                implementation(libs.kotlinx.coroutines.test)
             }
         }
     }

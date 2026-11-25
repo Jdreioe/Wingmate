@@ -497,6 +497,34 @@ private fun TypingActionStrip(
     }
 }
 
+/** The translated label of a default Action-strip Button the user has not renamed. */
+@Composable
+private fun defaultTypingActionLabel(button: ObfButton): String? {
+    val resource = when (TypingScreenProjector.defaultActionLabelKey(button)) {
+        "typing:playback:hold" -> R.string.typing_action_hold
+        "typing:playback:secondary" -> R.string.typing_action_language
+        "typing:tag:whispers" -> R.string.typing_action_whisper
+        "typing:tag:laughs" -> R.string.typing_action_laugh
+        "typing:tag:sighs" -> R.string.typing_action_sigh
+        "typing:tag:happy" -> R.string.typing_action_happy
+        "typing:tag:sad" -> R.string.typing_action_sad
+        "typing:tag:excited" -> R.string.typing_action_excited
+        "typing:tag:angry" -> R.string.typing_action_angry
+        "typing:tag:sarcastic" -> R.string.typing_action_sarcastic
+        "typing:ssml:emphasis-reduced" -> R.string.typing_action_emphasis_reduced
+        "typing:ssml:emphasis-moderate" -> R.string.typing_action_emphasis_moderate
+        "typing:ssml:emphasis-strong" -> R.string.typing_action_emphasis_strong
+        "typing:ssml:spell" -> R.string.typing_action_spell
+        "typing:ssml:number" -> R.string.typing_action_number
+        "typing:ssml:date" -> R.string.typing_action_date
+        "typing:ssml:time" -> R.string.typing_action_time
+        "typing:ssml:telephone" -> R.string.typing_action_telephone
+        "typing:ssml:currency" -> R.string.typing_action_currency
+        else -> null
+    } ?: return null
+    return stringResource(resource)
+}
+
 /**
  * One Action-strip Button, styled by what it does (#299 prototype): SSML
  * insertions are compact outlined chips in a monospace face; Message controls
@@ -521,7 +549,7 @@ private fun TypingActionButton(
     val label = when {
         single == ObfButtonActionEffect.ToggleSecondaryLanguage && settings.secondaryLanguage.isNotBlank() ->
             settings.secondaryLanguage.substringBefore('-').uppercase()
-        else -> button.label.orEmpty()
+        else -> defaultTypingActionLabel(button) ?: button.label.orEmpty()
     }
     val icon = when (single) {
         ObfButtonActionEffect.SwapHeldMessage -> Icons.Filled.Bookmark

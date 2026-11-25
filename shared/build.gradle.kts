@@ -45,41 +45,38 @@ kotlin {
     }
 
     sourceSets {
-    val commonMain by getting {
+        val commonMain by getting {
             dependencies {
                 api(project(":core:domain"))
-                api(project(":core:data"))
                 api(project(":core:presentation"))
                 api(project(":feature:communication:domain"))
-                api(project(":feature:communication:data"))
                 api(project(":feature:communication:presentation"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                implementation(project(":core:data"))
+                implementation(project(":feature:communication:data"))
+                implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 api(libs.koin.core)
                 implementation(libs.ktor.client.core)
                 implementation(libs.okio)
 
                 // MVIKotlin for BLoC pattern
-                val mviKotlinVersion = "4.4.0"
-                implementation("com.arkivanov.mvikotlin:mvikotlin:$mviKotlinVersion")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-main:$mviKotlinVersion")
-                implementation("com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines:$mviKotlinVersion")
+                implementation(libs.mvikotlin.core)
+                implementation(libs.mvikotlin.main)
+                implementation(libs.mvikotlin.extensions.coroutines)
             }
         }
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
                 // Fake Main dispatcher for MVIKotlin CoroutineExecutor in tests
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+                implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.ktor.client.mock)
             }
         }
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation(
-                    "com.github.aptabase:aptabase-kotlin:${libs.versions.aptabase.get()}"
-                ) {
+                implementation(libs.aptabase.kotlin.get().toString()) {
                     // Aptabase does not reference Material Components, but declares it as a
                     // runtime dependency. Its retained dialogs call Android 15-deprecated
                     // system-bar color APIs even though Wingmate never uses those dialogs.

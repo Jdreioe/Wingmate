@@ -11,6 +11,7 @@ import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
 import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
+import io.github.jdreioe.wingmate.infrastructure.ElevenLabsVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.GoogleCloudRequestException
 import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
@@ -304,7 +305,7 @@ class SpeechFacadeTest {
             repo = voices,
             azure = AzureVoiceCatalog(config),
             google = GoogleVoiceCatalog(config),
-            configRepo = config,
+            elevenLabs = ElevenLabsVoiceCatalog(config),
             featureUsageReporter = NoopFeatureUsageReporter(),
         )
         return SpeechFacade(
