@@ -180,8 +180,11 @@ play {
 
 dependencies {
     implementation(project(":shared"))
+    // Explicit until remaining Android UI helpers (BoardImportService, ImageCacher,
+    // ArasaacSymbolDownloadService, OpenSymbolsClient, SystemVoiceProvider) move behind facades.
+    implementation(project(":core:data"))
 
-    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
+    val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     androidTestImplementation(composeBom)
     androidTestImplementation(libs.androidx.testExt.junit)
@@ -194,8 +197,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtimeKtx)
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:${libs.versions.androidx.lifecycle.get()}")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:${libs.versions.androidx.lifecycle.get()}")
+    implementation(libs.androidx.lifecycle.runtimeCompose)
+    implementation(libs.androidx.lifecycle.viewmodelCompose)
 
     implementation(libs.androidx.activity.compose)
     implementation("androidx.compose.ui:ui")
@@ -206,9 +209,9 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Image loading
-    implementation("io.coil-kt.coil3:coil-compose:3.6.3")
-    implementation("io.coil-kt.coil3:coil-svg:3.6.3")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
+    implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
+    implementation(libs.coil.network.okhttp)
 
     // DI
     implementation(libs.koin.core)
@@ -220,9 +223,10 @@ dependencies {
     implementation(libs.androidx.window)
 
     // Unit testing
+    testImplementation(project(":feature:communication:data"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:${libs.versions.kotlinx.coroutines.get()}")
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 kotlin {

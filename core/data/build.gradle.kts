@@ -27,10 +27,10 @@ kotlin {
             dependencies {
                 implementation(project(":core:domain"))
                 implementation(libs.koin.core)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
-                implementation("io.github.pdvrieze.xmlutil:core:1.0.2.1")
+                implementation(libs.xmlutil.core)
                 implementation(libs.okio)
             }
         }
@@ -38,8 +38,8 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
-                implementation("androidx.core:core-ktx:1.19.1")
-                implementation("org.apache.commons:commons-compress:1.28.0")
+                implementation(libs.androidx.core.ktx)
+                implementation(libs.commons.compress)
             }
         }
 
@@ -55,7 +55,7 @@ kotlin {
         val androidDeviceTest by getting {
             dependencies {
                 implementation(libs.androidx.testExt.junit)
-                implementation("androidx.test:runner:1.7.0")
+                implementation(libs.androidx.test.runner)
             }
         }
 
