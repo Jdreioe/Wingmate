@@ -55,7 +55,13 @@ if (!ciServiceAccountBase64.isNullOrBlank()) {
 
 android {
     namespace = "com.hojmoseit.wingmate"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    // Compose 1.13 (BOM 2026.11.01) requires compileSdk 37.1. Keep targetSdk
+    // on the catalog major so this bump does not opt the app into new runtime behavior.
+    compileSdk {
+        version = release(libs.versions.android.compileSdk.get().toInt()) {
+            minorApiLevel = 1
+        }
+    }
 
     val versionPropsFile = project.file("../version.properties")
     val versionProps = Properties()
