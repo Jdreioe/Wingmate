@@ -61,6 +61,8 @@ data class TypingTrayAction(
     val label: String,
     val effects: List<TypingEffect>,
     val engineScope: TypingActionEngineScope = TypingActionEngineScope.All,
+    /** Set while the Button keeps its English default label; iOS shows its translation instead. */
+    val defaultLabelKey: String? = null,
 ) {
     fun isVisibleForTtsEngine(engine: TtsEngine): Boolean = engineScope.matches(engine)
 
@@ -151,6 +153,7 @@ class TypingScreenFacade(
 private fun ObfButton.toTrayAction() = TypingTrayAction(
     id = id,
     label = label.orEmpty(),
+    defaultLabelKey = TypingScreenProjector.defaultActionLabelKey(this),
     effects = parseObfButtonActions(this).map { effect ->
         when (effect) {
             is ObfButtonActionEffect.AppendText -> TypingEffect(TypingEffectKind.InsertText, effect.text, "")

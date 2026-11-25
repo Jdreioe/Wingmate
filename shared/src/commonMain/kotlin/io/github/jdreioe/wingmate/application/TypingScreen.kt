@@ -125,8 +125,54 @@ object TypingScreenProjector {
     private const val PHRASE_COLLECTION_ID = "typing-element:phrases"
     private const val ACTION_STRIP_ID = "typing-element:actions"
 
+    /** English labels of the default template's Action-strip Buttons, keyed by Button ID. */
+    private val defaultActionLabels: Map<String, String> by lazy {
+        defaultActionButtons().associate { it.id to it.label.orEmpty() }
+    }
+
+    /**
+     * The ID of a default template Button that still shows its English default label,
+     * so a client can show its own translation. Null for Buttons the user added or renamed.
+     */
+    fun defaultActionLabelKey(button: ObfButton): String? =
+        button.id.takeIf { id -> defaultActionLabels[id]?.let { it == button.label } == true }
+
     fun defaultTemplate(columns: Int, now: Long = Clock.System.now().toEpochMilliseconds()): BoardSetGraph {
         val safeColumns = columns.coerceIn(1, 12)
+        val buttons = defaultActionButtons()
+        val elements = listOf(
+            PageElement(PAGE_NAVIGATION_ID, PageElementTypes.PageNavigation, 0, 0, columnSpan = safeColumns)
+                .withConfiguration(PageNavigationElementConfig()),
+            PageElement(PHRASE_COLLECTION_ID, PageElementTypes.PhraseCollection, 1, 0, rowSpan = 7, columnSpan = safeColumns)
+                .withConfiguration(PhraseCollectionElementConfig(columns = safeColumns)),
+            PageElement(ACTION_STRIP_ID, PageElementTypes.ActionStrip, 8, 0, columnSpan = safeColumns)
+                .withConfiguration(ActionStripElementConfig(buttons.map { it.id })),
+        )
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = TYPING_SCREEN_TEMPLATE_PAGE_ID,
+            name = "Typing",
+            buttons = buttons,
+            grid = ObfGrid(9, safeColumns, List(9) { List(safeColumns) { null } }),
+        ).withPageElements(elements)
+        val boardSet = ObfBoardSet(
+            id = TYPING_SCREEN_ID,
+            name = "Typing",
+            rootBoardId = board.id,
+            boardIds = listOf(board.id),
+            screenSettings = BoardSettingsOverrides(
+                activationBehavior = BoardActivationBehavior.SpeakOnly,
+                messageBarEditable = true,
+                showMessageBar = true,
+            ),
+            kind = ScreenKind.Typing,
+            createdAt = now,
+            updatedAt = now,
+        )
+        return BoardSetGraph(boardSet, listOf(board))
+    }
+
+    private fun defaultActionButtons(): List<ObfButton> {
         val ssmlButtons = listOf(
             actionButton("typing:ssml:pause-05", "0.5 s", "+ [0.5s] "),
             actionButton("typing:ssml:pause-10", "1.0 s", "+ [1.0s] "),
@@ -158,37 +204,7 @@ object TypingScreenProjector {
             actionButton("typing:playback:hold", "Hold", ":hold-message"),
             actionButton("typing:playback:secondary", "Language", ":secondary-language"),
         )
-        val buttons = messageButtons + emotionButtons + ssmlButtons
-        val elements = listOf(
-            PageElement(PAGE_NAVIGATION_ID, PageElementTypes.PageNavigation, 0, 0, columnSpan = safeColumns)
-                .withConfiguration(PageNavigationElementConfig()),
-            PageElement(PHRASE_COLLECTION_ID, PageElementTypes.PhraseCollection, 1, 0, rowSpan = 7, columnSpan = safeColumns)
-                .withConfiguration(PhraseCollectionElementConfig(columns = safeColumns)),
-            PageElement(ACTION_STRIP_ID, PageElementTypes.ActionStrip, 8, 0, columnSpan = safeColumns)
-                .withConfiguration(ActionStripElementConfig(buttons.map { it.id })),
-        )
-        val board = ObfBoard(
-            format = "open-board-0.1",
-            id = TYPING_SCREEN_TEMPLATE_PAGE_ID,
-            name = "Typing",
-            buttons = buttons,
-            grid = ObfGrid(9, safeColumns, List(9) { List(safeColumns) { null } }),
-        ).withPageElements(elements)
-        val boardSet = ObfBoardSet(
-            id = TYPING_SCREEN_ID,
-            name = "Typing",
-            rootBoardId = board.id,
-            boardIds = listOf(board.id),
-            screenSettings = BoardSettingsOverrides(
-                activationBehavior = BoardActivationBehavior.SpeakOnly,
-                messageBarEditable = true,
-                showMessageBar = true,
-            ),
-            kind = ScreenKind.Typing,
-            createdAt = now,
-            updatedAt = now,
-        )
-        return BoardSetGraph(boardSet, listOf(board))
+        return messageButtons + emotionButtons + ssmlButtons
     }
 
     fun project(

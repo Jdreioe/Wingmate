@@ -24,31 +24,17 @@ final class IosViewModel: ObservableObject {
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
-    // Shared feature facades, resolved from the iOS composition root.
-    // Ensure DI is started lazily in case a child view's .task runs before start().
-    private func ensureDiStarted() {
-        IosDiBridge().start(
-            deviceSpeech: SystemTtsManager.shared,
-            openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
-            aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
-        )
-    }
-
-    private func diBridge() -> IosDiBridge {
-        ensureDiStarted()
-        return IosDiBridge()
-    }
-
-    lazy var backupFacade = diBridge().backupFacade()
-    lazy var speechFacade = diBridge().speechFacade()
-    lazy var settingsFacade = diBridge().settingsFacade()
-    lazy var boardsFacade = diBridge().boardsFacade()
-    lazy var communicationFacade = diBridge().communicationFacade()
-    lazy var session = diBridge().communicationSessionFacade()
-    lazy var typingScreens = diBridge().typingScreenFacade()
-    lazy var predictionFacade = diBridge().predictionFacade()
-    lazy var pronunciationFacade = diBridge().pronunciationFacade()
-    lazy var symbolSearchFacade = diBridge().symbolSearchFacade()
+    // Shared feature facades, resolved from the iOS composition root after start()
+    lazy var backupFacade = IosDiBridge().backupFacade()
+    lazy var speechFacade = IosDiBridge().speechFacade()
+    lazy var settingsFacade = IosDiBridge().settingsFacade()
+    lazy var boardsFacade = IosDiBridge().boardsFacade()
+    lazy var communicationFacade = IosDiBridge().communicationFacade()
+    lazy var session = IosDiBridge().communicationSessionFacade()
+    lazy var typingScreens = IosDiBridge().typingScreenFacade()
+    lazy var predictionFacade = IosDiBridge().predictionFacade()
+    lazy var pronunciationFacade = IosDiBridge().pronunciationFacade()
+    lazy var symbolSearchFacade = IosDiBridge().symbolSearchFacade()
     // Shared access and highlight policies; Swift only supplies events and the clock.
     let accessInput = AccessInputController()
     let selectionHighlight = SelectionHighlight()
@@ -225,10 +211,19 @@ final class IosViewModel: ObservableObject {
     var lookedUpPageIds: Set<String> = []
     var lastActivationAtMillis: [String: Int64] = [:]
 
+    /// Starts the shared Koin graph. Later calls do nothing. The app calls this at launch,
+    /// before any view exists, because views such as the welcome flow resolve facades in
+    /// their first `.task`, which can run before `ContentView.onAppear` calls `start()`.
+    static func startDependencies() {
+        IosDiBridge().start(
+            deviceSpeech: SystemTtsManager.shared,
+            openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
+            aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
+        )
+    }
+
     func start() async {
-        await MainActor.run {
-            ensureDiStarted()
-        }
+        Self.startDependencies()
         sessionSubscription?.cancel()
         sessionSubscription = session.observe { [weak self] state in
             self?.applySessionState(state)

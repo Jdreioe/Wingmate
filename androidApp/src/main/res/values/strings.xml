@@ -750,4 +750,24 @@
     <string name="screens_message_bar_add_button">Add message bar button</string>
     <string name="screens_message_bar_remove_button">Remove button</string>
     <string name="screens_message_bar_edit_hint">Choose what this button does</string>
+    <!-- Default Typing Screen Action-strip labels, shown until the user renames a Button -->
+    <string name="typing_action_hold">Hold</string>
+    <string name="typing_action_language">Language</string>
+    <string name="typing_action_whisper">Whisper</string>
+    <string name="typing_action_laugh">Laugh</string>
+    <string name="typing_action_sigh">Sigh</string>
+    <string name="typing_action_happy">Happy</string>
+    <string name="typing_action_sad">Sad</string>
+    <string name="typing_action_excited">Excited</string>
+    <string name="typing_action_angry">Angry</string>
+    <string name="typing_action_sarcastic">Sarcastic</string>
+    <string name="typing_action_emphasis_reduced">Reduced</string>
+    <string name="typing_action_emphasis_moderate">Moderate</string>
+    <string name="typing_action_emphasis_strong">Strong</string>
+    <string name="typing_action_spell">Spell</string>
+    <string name="typing_action_number">Number</string>
+    <string name="typing_action_date">Date</string>
+    <string name="typing_action_time">Time</string>
+    <string name="typing_action_telephone">Telephone</string>
+    <string name="typing_action_currency">Currency</string>
 </resources>

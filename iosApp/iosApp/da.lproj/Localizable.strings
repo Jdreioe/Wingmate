@@ -707,3 +707,25 @@
 "voice.system.quality.premium" = "Premium";
 "voice.system.personal_voice.allow" = "Tillad personlig stemme";
 "voice.system.personal_voice.footer" = "Lader Wingmate tale med en personlig stemme, du har oprettet på denne enhed.";
+
+/* Default Typing Screen Action-strip labels, shown until the user renames a Button */
+"typing.action.typing:playback:hold" = "Parkér";
+"typing.action.typing:playback:secondary" = "Sprog";
+"typing.action.typing:tag:whispers" = "Hvisk";
+"typing.action.typing:tag:laughs" = "Grin";
+"typing.action.typing:tag:sighs" = "Suk";
+"typing.action.typing:tag:happy" = "Glad";
+"typing.action.typing:tag:sad" = "Trist";
+"typing.action.typing:tag:excited" = "Begejstret";
+"typing.action.typing:tag:angry" = "Vred";
+"typing.action.typing:tag:sarcastic" = "Sarkastisk";
+"typing.action.typing:ssml:emphasis-reduced" = "Svag";
+"typing.action.typing:ssml:emphasis-moderate" = "Moderat";
+"typing.action.typing:ssml:emphasis-strong" = "Stærk";
+"typing.action.typing:ssml:spell" = "Stav";
+"typing.action.typing:ssml:number" = "Tal";
+"typing.action.typing:ssml:date" = "Dato";
+"typing.action.typing:ssml:time" = "Klokkeslæt";
+"typing.action.typing:ssml:telephone" = "Telefon";
+"typing.action.typing:ssml:currency" = "Valuta";
+"boardset.default_root_page" = "Hjem";
