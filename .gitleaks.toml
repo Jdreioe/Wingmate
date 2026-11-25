@@ -20,6 +20,13 @@ id = "generic-api-key"
     paths = ['''^composeApp/src/commonMain/composeResources/files/starter_[^/]+\.obf$''']
 
     [[rules.allowlists]]
+    description = "Public Piper TTS voice pack identifiers in retired catalog history."
+    condition = "AND"
+    regexTarget = "line"
+    regexes = ['''^\s*key\s*=\s*"[a-z]{2}_[A-Z]{2}-[A-Za-z0-9_]+-(?:x_low|low|medium|high)"''']
+    paths = ['''^core/data/src/commonMain/kotlin/io/github/jdreioe/wingmate/infrastructure/PiperVoiceCatalog\.kt$''']
+
+    [[rules.allowlists]]
     description = "Firebase client project identifiers caught by the generic fallback rule."
     condition = "AND"
     regexTarget = "line"
