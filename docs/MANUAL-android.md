@@ -71,21 +71,22 @@ Første gang du åbner Wingmate, viser den en kort opsætning. Du kan ændre all
 Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede på den første side. Tryk **Gendan en sikkerhedskopi**. Se [Sikkerhedskopi](#sikkerhedskopi).
 
 1. Tryk **Opsæt Wingmate**.
-2. Vælg, hvad der skal tale for dig. Vælg **Denne enhed**, hvis du vil bruge telefonens egen stemme. Tryk **Fortsæt**. Vælger du en stemme på nettet, kan Wingmate bede om en nøgle, før du kommer videre. Se [Stemmer](#stemmer).
+2. Vælg, hvad der skal tale for dig. Vælg **Denne enhed**, hvis du vil bruge telefonens egen stemme. Vælger du en stemme på nettet, kan Wingmate bede om en nøgle, før du kommer videre. Se [Stemmer](#stemmer). Tryk **Fortsæt**.
 
    <!-- SCREENSHOT: Android welcome step “Hvad skal tale for dig?” with the four engine options visible: Denne enhed, Microsoft Azure, Google Cloud, ElevenLabs. -->
    <img src="images/welcome-stemmemotor.png" alt="Valg af, hvad der skal tale, i den første opsætning" width="300">
 
 3. Vælg en stemme.
-4. Tryk **Afspil** for at høre stemmen. Vil du ændre, hvor hurtigt den taler, så brug **Hastighed**.
-5. Vises **Skift sprog**, kan du vælge et andet sprog. Tryk **Fortsæt**.
-6. Vælg, hvordan du vil tale: **Skrivning** («Skriv beskeder, og tryk på gemte fraser») eller **Skærme** («Tryk på symboler på sider. Opret eller importér en skærm for at starte»). Tryk **Fortsæt**.
+4. På siden **Hør din stemme** trykker du **Afspil** for at høre stemmen. Vil du ændre, hvor hurtigt den taler, så brug **Hastighed**.
+5. Vil du skifte sprog, så tryk **Skift sprog**, hvis knappen vises. Vælg et sprog, og tryk **Fortsæt**. Så kommer du tilbage til **Hør din stemme**.
+6. Tryk **Fortsæt** på **Hør din stemme** for at gå videre.
+7. Vælg, hvordan du vil tale: **Skrivning** («Skriv beskeder, og tryk på gemte fraser») eller **Skærme** («Tryk på symboler på sider. Opret eller importér en skærm for at starte»). Tryk **Fortsæt**.
 
    <!-- SCREENSHOT: Android welcome step “Hvordan vil du kommunikere?” showing the two cards Skrivning and Skærme. -->
    <img src="images/welcome-arbejdsomraade.png" alt="Valg mellem Skrivning og Skærme" width="300">
 
-7. Vælg, om du vil slå **Vis talehistorik** og **Del anonym analysedata** til. Analysedata er slukket fra start. De indeholder ikke dine ord eller nøgler. Tryk **Fortsæt**.
-8. På siden **Klar til at kommunikere** kan du se dine valg. Tryk **Begynd at kommunikere**.
+8. Vælg, om du vil slå **Vis talehistorik** og **Del anonym analysedata** til. Analysedata er slukket fra start. De indeholder ikke dine ord eller nøgler. Tryk **Fortsæt**.
+9. På siden **Klar til at kommunikere** kan du se dine valg. Tryk **Begynd at kommunikere**.
 
 ## De to arbejdsområder
 
@@ -112,7 +113,7 @@ I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et
 ### Skriv og læs op
 
 - Skriv i feltet **Indtast tekst der skal tales**.
-- Tryk på den runde afspil-knap (▶), så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
+- Tryk på den runde afspil-knap (▶) – på en bred skærm knappen **Afspil** i panelet til højre – så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
 - På en telefon: tryk på tastatur-knappen til venstre for tekstfeltet for at få tastaturet frem. Mens tastaturet er fremme, er knappen et plus. Tryk på plusset for at komme tilbage til fraserne og de tre prikker øverst. TalkBack kalder knappen **Vis tastatur** eller **Vis skriveskærm**.
 - På en bred skærm, fx en tablet: tryk **Vis tastatur** i panelet til højre. Tryk **Skjul tastatur** samme sted for at skjule tastaturet igen.
 - Skriveskærmen viser dine fraser som knapper.
@@ -199,7 +200,7 @@ Tryk på en skærms navn i oversigten for at åbne den. Ikonerne til højre på 
 Er **Beskedlinje** vist, har den knapper med ikoner. På en bred skærm står navnet ved siden af ikonet:
 
 - ▶ læser beskeden op (**Afspil**).
-- ⌫ sletter det sidste ord (**Slet ord**).
+- ⌫ (**Slet ord**) fjerner den sidste del af beskeden, fx hele teksten fra den sidste knap, du trykkede på. På en staveside fjerner den det sidste tegn.
 - ✕ sletter hele beskeden (**Ryd**).
 
 Har skærmen flere sider, er der også to knapper til at gå rundt mellem siderne:
@@ -221,7 +222,12 @@ Vil du se de skjulte knapper et øjeblik, så tryk på de tre prikker øverst ti
 > [!TIP]
 > Er du bange for at ødelægge noget? Tryk **Dupliker** i oversigten først. Så har du en kopi af skærmen, som den var.
 
-Tryk på blyanten (**Rediger**) i oversigten **Skærme**. Har du skærmen åben, så tryk på de tre prikker øverst til højre, og vælg **Rediger skærm**. Ser du en blyant øverst i stedet, så tryk på blyanten. Er skærmen låst, vises **Rediger skærm** ikke. Gå så tilbage til oversigten **Skærme**, og tryk på hængelåsen (**Lås op**) først. Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
+Er skærmen låst, så tryk først på den åbne hængelås til højre på kortet (**Lås op**) i oversigten **Skærme**. Er der sat en redigeringskode, så tast den. Se [Låsning af redigering](#låsning-af-redigering).
+
+Sådan åbner du en skærm til redigering:
+
+- I oversigten **Skærme**: tryk på blyanten (**Rediger**).
+- På en åben skærm: tryk på de tre prikker øverst til højre, og vælg **Rediger skærm**. Ser du en blyant øverst i stedet, så tryk på blyanten.
 
 Mens du redigerer:
 
@@ -315,7 +321,7 @@ Bagefter kan du trykke **Skift redigeringskode**, **Deaktivér redigeringskode**
 > Wingmate kan ikke nulstille en glemt redigeringskode. Skriv koden ned, og gem den et sikkert sted.
 
 <!-- SCREENSHOT: Settings section Redigeringsadgang, with the description “Kræv eventuelt en kode til redigering. Kommunikation er altid tilgængelig.” and the action Kræv en redigeringskode (or the enabled state with Skift / Deaktivér). -->
-<img src="images/redigeringsadgang.png" alt="Indstillingen Redigeringsadgang" width="300">
+<img src="images/redigeringsadgang.png" alt="Indstillingen Redigeringsadgang under System og data, kortet under Sikkerhedskopiér Wingmate" width="300">
 
 ### Lås på en enkelt skærm
 

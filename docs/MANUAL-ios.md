@@ -79,8 +79,8 @@ Første gang du åbner Wingmate, viser den en kort opsætning. Du kan ændre all
 Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede på den første side. Tryk **Gendan sikkerhedskopi**. Se [Sikkerhedskopi](#sikkerhedskopi).
 
 1. Tryk **Næste** på den første side.
-2. Vælg, hvordan du vil tale: tryk **Tastatur og fraser** (Skrivning) eller **Skærme**. Vil du først se, hvordan de to virker, så tryk **En hurtig rundvisning**.
-3. Under **Vælg din stemmemodel** trykker du på det, der skal tale for dig. Vælg **System Tekst-til-Tale** for at bruge enhedens egen stemme. Når du trykker, går appen selv videre. Vælger du en stemme på nettet, beder Wingmate om en nøgle. Se [Stemmer](#stemmer).
+2. Vælg, hvordan du vil tale. Vil du først se, hvordan de to virker, så tryk **En hurtig rundvisning**. Tryk derefter **Tastatur og fraser** (Skrivning) eller **Skærme**. Når du trykker, går appen selv videre.
+3. Under **Vælg din stemmemodel** trykker du på det, der skal tale for dig. Vælg **System Tekst-til-Tale** for at bruge enhedens egen stemme. Når du trykker, går appen selv videre. Er den allerede valgt, så tryk **Næste**. Vælger du en stemme på nettet, beder Wingmate om en nøgle. Se [Stemmer](#stemmer).
 
    <!-- SCREENSHOT: iPhone welcome step choosing the speech engine. -->
    <img src="images/ios/iphone-welcome-stemmemotor.png" alt="Vælg din stemmemodel i den første opsætning (iPhone)" width="300">
@@ -119,7 +119,7 @@ I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et
 ### Skriv og læs op
 
 - Skriv i feltet **Tekst der skal oplæses**.
-- Tryk på den runde afspil-knap (▶), så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
+- Tryk på den runde afspil-knap (▶) på iPhone eller den blå knap **Afspil** til højre på iPad, så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
 - På iPhone: tryk på tastatur-knappen til venstre for tekstfeltet for at få tastaturet frem. Mens tastaturet er fremme, er knappen et plus. Tryk på plusset for at komme tilbage til fraserne og knapperne øverst. VoiceOver kalder knappen **Vis tastatur** eller **Vis skriveskærm**.
 - På iPad: tryk **Vis tastatur** i kolonnen til højre. Tryk **Skjul tastatur** samme sted for at skjule tastaturet igen.
 - Skriveskærmen viser dine fraser som knapper i stedet for tastaturet.
@@ -129,13 +129,13 @@ I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et
 - Du starter som regel på siden **Alle**. Den viser alle dine fraser.
 - Hver kategori får sin egen side.
 - Er talehistorik tændt, kan siden **Historik** vises.
-- **Sandsynligt næste** er en side, der foreslår hele beskeder ud fra det, der er sagt på denne enhed. Den er stadig ny. Du tænder den med **Næste beskeder (eksperimentelt)** under **Indstillinger → Privatliv**.
+- **Sandsynligt næste** er en side, der foreslår hele beskeder ud fra det, der er sagt på denne enhed. Den er stadig ny. Gå til **Indstillinger → Privatliv**. Slå først **Vis talehistorik** til, og slå derefter **Næste beskeder (eksperimentelt)** til.
 
 Skriveskærmen bygger selv sine sider ud fra dine fraser og kategorier. Du kan ikke flytte rundt på siderne eller slette skriveskærmen. Vil du selv bygge sider, bruger du **Skærme**.
 
 ### Gem en frase
 
-Tryk på feltet **Tilføj** med plusset nederst blandt dine fraser. Rul ned, hvis du ikke kan se det. VoiceOver kalder feltet **Ny frase**. Så åbner **Ny frase**. (Det runde plus sidst i rækken med kategorier laver en ny kategori.)
+Tryk på feltet med det sorte plus nederst blandt dine fraser. Der står **Tilføj** under plusset. Rul ned, hvis du ikke kan se det. VoiceOver kalder feltet **Ny frase**. Så åbner **Ny frase**. (Det runde plus sidst i rækken med kategorier laver en ny kategori.)
 
 Felterne hedder **Titel** og **Udtale**. Pas på, for navnene er byttet om i appen:
 
@@ -191,7 +191,7 @@ Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele 
 
 På iPhone og iPad kan du ikke hente tavlefiler (`.obf` eller `.obz`) ind i denne version.
 
-Tryk på en skærm i oversigten for at åbne den, eller tryk **Rediger**. Under **Flere handlinger** finder du **Duplikér**, **Lås skærm** / **Lås skærm op**, **Eksportér**, **Eksportér skærm som PDF** og **Slet**.
+Tryk på en skærm i oversigten for at åbne den, eller tryk **Rediger**. Under **Flere handlinger** (cirklen med tre prikker på skærmens kort) finder du **Duplikér**, **Lås skærm** / **Lås skærm op**, **Eksportér**, **Eksportér skærm som PDF** og **Slet**.
 
 > [!WARNING]
 > En slettet skærm kan ikke hentes tilbage.
@@ -265,7 +265,14 @@ Ordtypefarver er Fitzgerald-farver. Hver ordtype får sin egen farve, så det er
 
 ### Sider og navigation
 
-I **Rediger felt** bestemmer du, hvad en knap gør, under **Hvad knappen gør**. Vælg **Tilføj og udtal** eller **Åbn side**. Vælger du **Åbn side**, trykker du **Vælg en side** under **Forbundet side**. Har skærmen kun én side, så lav først den nye side med **Tilføj side**.
+I **Rediger felt** bestemmer du, hvad en knap gør, under **Hvad knappen gør**. Vælg **Tilføj og udtal** eller **Åbn side**.
+
+Sådan får du en knap til at åbne en anden side:
+
+1. Siden skal findes først. Mangler den, så lav den med **Tilføj side**.
+2. Tryk på knappen for at åbne **Rediger felt**, og vælg **Åbn side** under **Hvad knappen gør**.
+3. Tryk **Vælg en side** under **Forbundet side**, og tryk på den side, knappen skal åbne.
+4. Tryk **Gem** øverst.
 
 **Særlige handlinger** kan lægges på en knap:
 
@@ -293,7 +300,7 @@ Du kan også bestemme, hvad der sker, når du har trykket på en almindelig knap
 
 Sidens baggrund vælger du i menuen under sidens navn: **Sidebaggrund** og **Sidens baggrundsbillede**. Billedet kan fylde hele siden (**Udfyld**) eller vises helt (**Tilpas**).
 
-En skærm kan følge appen med **Brug appstandard**, og en side kan følge skærmen med **Brug skærmindstilling**. **Nulstil skærmindstillinger** og **Nulstil sidetilpasninger** fjerner dine egne valg.
+En skærm kan følge appen med **Brug appstandard**, og en side kan følge skærmen med **Brug skærmindstilling**. **Nulstil skærmindstillinger** og **Nulstil sidetilpasninger** fjerner dine egne valg. Tryk **Gem** øverst, når du er færdig.
 
 ## Låsning af redigering
 
@@ -353,7 +360,7 @@ Under **Udtaleordbog** kan du lære Wingmate, hvordan navne og ord skal siges. O
 Vil du vide mere om nøgler og stemmer, så se [elevenlabs-tts.md](elevenlabs-tts.md) og [google-cloud-tts.md](google-cloud-tts.md) (på engelsk).
 
 <!-- SCREENSHOT: iPhone Settings → Tale og sprog. -->
-<img src="images/ios/iphone-indstillinger-tale.png" alt="Indstillinger for tale og sprog med Betjening øverst (iPhone)" width="300">
+<img src="images/ios/iphone-indstillinger-tale.png" alt="Indstillinger for tale og sprog (iPhone)" width="300">
 
 ## Eksport og udskrift
 
@@ -457,7 +464,7 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 **Stemmen på nettet virker ikke.** Tjek, at du har internet, og at nøglen stadig virker. Wingmate bruger enhedens stemme i stedet og beholder beskeden. Er nøglen blevet ændret, så sæt den nye ind under **Indstillinger → Tale og sprog**.
 
-**Stemmerne på enheden mangler eller lyder forkert.** Vælg stemmen i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**. Mangler stemmen på listen, så hent den i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed → Oplæst indhold → Stemmer**. Gå tilbage til Wingmate, og vælg den.
+**Stemmerne på enheden mangler eller lyder forkert.** Vælg stemmen i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**. Mangler stemmen på listen, så hent den i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed → Oplæst indhold → Stemmer**. På nogle versioner hedder **Oplæst indhold** i stedet **Læs og tal**. Gå tilbage til Wingmate, og vælg den.
 
 **Jeg kan ikke hente en tavlefil ind.** Det kan man ikke på iPhone og iPad i denne version. Brug **Importér tale**, eller byg skærmen i Wingmate.
 
