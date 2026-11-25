@@ -4,7 +4,7 @@ Manualen passer til Wingmate **1.9.0** på Android (november 2026). Bruger du iP
 
 ## Sådan bruger du manualen
 
-Manualen er til dig, der bruger Wingmate, og til familie, hjælpere og terapeuter, der hjælper med at sætte den op.
+Manualen er til dig, der bruger Wingmate, og til familie, hjælpere, lærere og terapeuter, der hjælper med at sætte den op.
 
 - Er du helt ny? Start med [Første start](#første-start) og [De to arbejdsområder](#de-to-arbejdsområder).
 - Knap- og menunavne står med **fed**, præcis som de står i appen. Appen er på dansk, når telefonen eller tabletten er sat til dansk.
@@ -49,6 +49,15 @@ Du kan tale på to måder. Begge er rigtige måder at bruge appen på:
 - **Skærme** – tryk på symboler og knapper. Knapperne ligger på sider, der hænger sammen.
 
 Beskeden, du er i gang med, bliver liggende. Den følger med, når du skifter mellem skrivning og skærme, lukker appen eller genstarter enheden. Den forsvinder først, når du selv rydder den.
+
+### Wingmate følger med dig gennem livet
+
+Du behøver ikke skifte app, når dine behov ændrer sig – Wingmate kan vokse med dig fra de første symboler til skole, tastatur og oplæg:
+
+- **Tidlig kommunikation** – byg **Skærme** med symboler, og brug tid på at lære at kommunikere med ASK. Forældre og pædagoger vil også kunne fjernredigere skærme (kommer snart).
+- **Skolen** – lærere kan lave skærme til deres elever og dele dem med alle, der bruger Wingmate, via Google Drive, OneDrive eller iCloud (kommer snart). Brugere kan også dele skærme med hinanden som filer (se [Import og eksport](#import-og-eksport)).
+- **Skrivning med tastatur** – når du vil, kan du nemt skifte til **Skrivning** og stave med et tastatur. Dine skærme er stadig bare et par tryk væk (se [De to arbejdsområder](#de-to-arbejdsområder)).
+- **Oplæg og taler** – når du skal holde et oplæg eller en tale, kan du skrive teksten i fx Word og kopiere den direkte ind i **Importér tale** (se [Opret eller importér en skærm](#opret-eller-importér-en-skærm)).
 
 ### Dine data
 
@@ -174,7 +183,7 @@ Sådan laver du en ny skærm:
 
 Har du en tavlefil fra en anden ASK-app, kan du hente den ind. Tryk på pilene ↑↓ øverst til højre i oversigten (**Importer skærm**), og vælg filen. Filen ender på `.obf` (én side) eller `.obz` (flere sider og billeder). Filer med adgangskode kan ikke hentes ind. Gem dem først uden adgangskode.
 
-Du kan også lave en skærm ud fra en tale eller en anden tekst:
+Skal du holde et oplæg eller en tale, kan du skrive teksten i fx Word og lave en skærm ud fra den:
 
 1. Tryk **Importér tale**.
 2. Skriv et navn under **Talens navn**.
