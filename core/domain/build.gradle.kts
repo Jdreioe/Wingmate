@@ -21,9 +21,9 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                api(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
-                implementation("io.github.oshai:kotlin-logging:8.0.4")
+                implementation(libs.kotlin.logging)
             }
         }
         val commonTest by getting {

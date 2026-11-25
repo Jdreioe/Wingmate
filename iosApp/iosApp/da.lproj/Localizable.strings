@@ -145,7 +145,7 @@
 
 "voice.system_tts.enabled_info" = "System-TTS er aktiveret. Valg af stemme håndteres i iOS-indstillinger.";
 "voice.system_tts.using" = "Bruger System tekst-til-tale";
-"voice.system_tts.settings_info" = "Stemmeindstillinger håndteres i iOS Indstillinger > Tilgængelighed > Talt indhold > Stemmer";
+"voice.system_tts.settings_info" = "Vælg en stemme for hvert sprog her. Hent flere stemmer under iOS Indstillinger > Tilgængelighed > Talt indhold > Stemmer, eller installer en stemme-app.";
 
 "accessibility.double_tap_select_voice" = "Dobbelttryk for at vælge denne stemme";
 "accessibility.double_tap_select_language" = "Dobbelttryk for at vælge dette sprog";
@@ -703,8 +703,15 @@
 "partner_display.speaking" = "Taler";
 "toolbar.partner_display.pause" = "Skjul partnerskærm";
 "toolbar.partner_display.resume" = "Vis på partnerskærm";
+"voice.system.default" = "Systemstandard";
+"voice.system.preview" = "Afspil prøve";
+"voice.system.personal" = "Personlig stemme";
+"voice.system.quality.enhanced" = "Forbedret";
+"voice.system.quality.premium" = "Premium";
+"voice.system.personal_voice.allow" = "Tillad personlig stemme";
+"voice.system.personal_voice.footer" = "Lader Wingmate tale med en personlig stemme, du har oprettet på denne enhed.";
 
-/* Remote Screens */
+/* Remote Screens and Sync */
 "remote_screen.open" = "Åbn fjernskærm";
 "remote_screen.storage" = "Fjernlagring";
 "remote_screen.provider.label" = "Lagringsudbyder";

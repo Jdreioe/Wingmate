@@ -9,7 +9,7 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: gradle
     directory: /
@@ -34,47 +34,47 @@ updates:
         patterns:
           - "org.jetbrains.kotlin*"
           - "org.jetbrains.kotlinx*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       android-gradle-plugin:
         patterns:
           - "com.android*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       compose:
         patterns:
           - "org.jetbrains.compose*"
           - "androidx.compose*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       androidx:
         patterns:
           - "androidx*"
         exclude-patterns:
           - "androidx.compose*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       ktor:
         patterns:
           - "io.ktor*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       koin:
         patterns:
           - "io.insert-koin*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       sqldelight:
         patterns:
           - "app.cash.sqldelight*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       okio-okhttp:
         patterns:
           - "com.squareup.okio*"
           - "com.squareup.okhttp3*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       gradle-wrapper:
         patterns:
           - "gradle-wrapper"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       play-publisher:
         patterns:
           - "com.github.triplet.play"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       other-gradle:
         patterns: ["*"]
         exclude-patterns:
@@ -90,7 +90,7 @@ updates:
           - "com.squareup.okhttp3*"
           - "gradle-wrapper"
           - "com.github.triplet.play"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
 
   - package-ecosystem: npm
     directory: /infra/opensymbols-proxy
@@ -105,7 +105,7 @@ updates:
     groups:
       npm-minor-patch:
         patterns: ["*"]
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+        update-types: ["patch", "minor"]
       npm-major:
         patterns: ["*"]
-        update-types: ["version-update:semver-major"]
+        update-types: ["major"]

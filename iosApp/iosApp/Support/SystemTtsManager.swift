@@ -81,10 +81,23 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSp
         finished.onFinished(KotlinBoolean(bool: spoken))
     }
 
-    private func resolveVoice(for language: String?) -> AVSpeechSynthesisVoice? {
-        guard let raw = language?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-            return nil
+    func preview(_ voice: AVSpeechSynthesisVoice, text: String) {
+        stop()
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = voice
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        AudioSessionHelper.activatePlayback()
+        synth.speak(utterance)
+    }
+
+    /// Resolves the voice for a language: the voice the user picked in Wingmate for that
+    /// language wins; otherwise fall back to a language-based match.
+    func resolveVoice(for language: String?) -> AVSpeechSynthesisVoice? {
+        let raw = language?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let chosen = SystemVoicePreferences.voice(forLanguage: raw.isEmpty ? Locale.current.identifier : raw) {
+            return chosen
         }
+        guard !raw.isEmpty else { return nil }
 
         let candidates = normalizedLanguageCandidates(from: raw)
         let allVoices = AVSpeechSynthesisVoice.speechVoices()
@@ -149,5 +162,38 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSp
     private func languageCodeOnly(from value: String) -> String {
         let normalized = value.replacingOccurrences(of: "_", with: "-").lowercased()
         return normalized.split(separator: "-").first.map(String.init) ?? ""
+    }
+}
+
+/// In-app choice of on-device voice per language, keyed by language code (e.g. "da").
+/// Stores `AVSpeechSynthesisVoice.identifier`, so it covers Apple voices, Personal Voice and
+/// voices from third-party speech-synthesis provider apps — without relying on the
+/// Spoken Content defaults in iOS Accessibility settings.
+enum SystemVoicePreferences {
+    private static let key = "ios_system_voice_by_language"
+
+    static func languageCode(of language: String) -> String {
+        let normalized = language.replacingOccurrences(of: "_", with: "-").lowercased()
+        return normalized.split(separator: "-").first.map(String.init) ?? normalized
+    }
+
+    static var all: [String: String] {
+        UserDefaults.standard.dictionary(forKey: key) as? [String: String] ?? [:]
+    }
+
+    static func identifier(forLanguage language: String) -> String? {
+        all[languageCode(of: language)]
+    }
+
+    static func voice(forLanguage language: String) -> AVSpeechSynthesisVoice? {
+        guard let id = identifier(forLanguage: language) else { return nil }
+        // Returns nil if the voice was deleted or Personal Voice access was revoked.
+        return AVSpeechSynthesisVoice(identifier: id)
+    }
+
+    static func setIdentifier(_ identifier: String?, forLanguage language: String) {
+        var map = all
+        map[languageCode(of: language)] = identifier
+        UserDefaults.standard.set(map, forKey: key)
     }
 }

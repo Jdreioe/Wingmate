@@ -7,6 +7,7 @@ set -euo pipefail
 # runners (4 cores, 16 GB), so override gradle.properties' Xcode Cloud limits and
 # reuse task outputs that setup-gradle restores from main.
 exec ./gradlew \
+  checkModuleGraph \
   :androidApp:assembleDebug \
   :androidApp:lintDebug \
   :androidApp:testDebugUnitTest \

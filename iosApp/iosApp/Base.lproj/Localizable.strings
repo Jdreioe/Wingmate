@@ -145,7 +145,7 @@
 
 "voice.system_tts.enabled_info" = "System TTS is enabled. Voice selection is handled through iOS Settings.";
 "voice.system_tts.using" = "Using System Text-to-Speech";
-"voice.system_tts.settings_info" = "Voice options are managed in iOS Settings > Accessibility > Spoken Content > Voices";
+"voice.system_tts.settings_info" = "Choose a voice for each language here. To download more voices, go to iOS Settings > Accessibility > Spoken Content > Voices, or install a voice app.";
 
 "accessibility.double_tap_select_voice" = "Double tap to select this voice";
 "accessibility.double_tap_select_language" = "Double tap to select this language";
@@ -701,8 +701,15 @@
 "partner_display.speaking" = "Speaking";
 "toolbar.partner_display.pause" = "Hide partner display";
 "toolbar.partner_display.resume" = "Show on partner display";
+"voice.system.default" = "System default";
+"voice.system.preview" = "Preview voice";
+"voice.system.personal" = "Personal Voice";
+"voice.system.quality.enhanced" = "Enhanced";
+"voice.system.quality.premium" = "Premium";
+"voice.system.personal_voice.allow" = "Allow Personal Voice";
+"voice.system.personal_voice.footer" = "Lets Wingmate speak with a Personal Voice you created on this device.";
 
-/* Remote Screens */
+/* Remote Screens and Sync */
 "remote_screen.open" = "Open remote Screen";
 "remote_screen.storage" = "Remote storage";
 "remote_screen.provider.label" = "Storage provider";
