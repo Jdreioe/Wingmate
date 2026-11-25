@@ -188,518 +188,9 @@ import kotlin.time.Clock
 
 import com.hojmoseit.wingmate.R
 
-internal const val BOARD_SET_OPEN_TEST_TAG_PREFIX = "board-set-open-"
-
-private data class WorkspaceCellTarget(
-    val row: Int,
-    val column: Int,
-    val button: ObfButton?
-)
-
-/**
- * Board-set entry point with a familiar library -> Run/Edit workspace flow.
- */
-@Composable
-fun BoardSetManagerRoot(
-    onBack: () -> Unit,
-    onBackToWelcome: () -> Unit,
-    initialBoardSetId: String? = null,
-    initialMode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
-) {
-    val koin = org.koin.compose.getKoin()
-    val useCase = koinInject<BoardSetUseCase>()
-    val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
-    val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
-    val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
-    val operations = remember(
-        useCase,
-        boardSetSpeechCache,
-        boardImportService,
-        editingAccessController,
-    ) {
-        DefaultBoardSetManagerOperations(
-            useCase = useCase,
-            speechCache = boardSetSpeechCache,
-            importService = boardImportService,
-            editingAccessController = editingAccessController,
-        )
-    }
-    val factory = remember(operations) {
-        viewModelFactory {
-            initializer {
-                BoardSetManagerViewModel(
-                    savedStateHandle = createSavedStateHandle(),
-                    operations = operations,
-                )
-            }
-        }
-    }
-    val viewModel: BoardSetManagerViewModel = viewModel(factory = factory)
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val defaultBoardName = stringResource(R.string.board_dialog_default_board_name)
-
-    LaunchedEffect(viewModel, initialBoardSetId, initialMode) {
-        viewModel.onAction(
-            BoardSetManagerAction.Initialize(
-                initialBoardSetId = initialBoardSetId,
-                initialMode = initialMode,
-            )
-        )
-    }
-    LaunchedEffect(viewModel, onBack) {
-        viewModel.events.collect { event ->
-            when (event) {
-                BoardSetManagerEvent.NavigateBack -> onBack()
-            }
-        }
-    }
-
-    when (val route = state.route) {
-        BoardSetManagerRoute.Library -> BoardSetManagerScreen(
-            state = state,
-            status = state.status,
-            importAvailable = boardImportService != null,
-            onAction = viewModel::onAction,
-        )
-        is BoardSetManagerRoute.Workspace -> BoardSetWorkspaceRoot(
-            boardSetId = route.boardSetId,
-            initialMode = route.mode,
-            onSwitchToKeyboard = { viewModel.onAction(BoardSetManagerAction.BackClicked) },
-            onExitToLibrary = { viewModel.onAction(BoardSetManagerAction.WorkspaceExited) },
-        )
-    }
-
-    if (state.showSpeechImport) {
-        SpeechImportDialog(state = state, onAction = viewModel::onAction)
-    }
-
-    if (state.showCreateDialog) {
-        CreateBoardSetDialog(
-            draft = state.createDraft,
-            onDismiss = { viewModel.onAction(BoardSetManagerAction.CreateDismissed) },
-            onNameChange = { viewModel.onAction(BoardSetManagerAction.CreateNameChanged(it)) },
-            onRowsChange = { viewModel.onAction(BoardSetManagerAction.CreateRowsChanged(it)) },
-            onColumnsChange = { viewModel.onAction(BoardSetManagerAction.CreateColumnsChanged(it)) },
-            onTemplateSelected = { template, suggestedName ->
-                viewModel.onAction(BoardSetManagerAction.CreateTemplateSelected(template, suggestedName))
-            },
-            onKeyboardPresetSelected = {
-                viewModel.onAction(BoardSetManagerAction.CreateKeyboardPresetSelected(it))
-            },
-            onCreate = {
-                val draft = state.createDraft
-                viewModel.onAction(
-                    BoardSetManagerAction.CreateSubmitted(
-                        name = draft.name,
-                        rows = draft.rowsText.toIntOrNull() ?: 4,
-                        columns = draft.columnsText.toIntOrNull() ?: 8,
-                        template = draft.template,
-                        keyboardPreset = draft.keyboardPreset,
-                        defaultBoardName = defaultBoardName,
-                    )
-                )
-            },
-        )
-    }
-
-    state.deleteTargetId?.let { targetId ->
-        val boardSet = state.boardSets.firstOrNull { it.id == targetId } ?: return@let
-        AlertDialog(
-            onDismissRequest = { viewModel.onAction(BoardSetManagerAction.DeleteDismissed) },
-            title = { Text(stringResource(R.string.board_sets_delete_title)) },
-            text = { Text(stringResource(R.string.board_sets_delete_body, boardSet.name)) },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.onAction(BoardSetManagerAction.DeleteConfirmed) }
-                ) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.onAction(BoardSetManagerAction.DeleteDismissed) }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
-        )
-    }
-
-    if (state.showDeleteAccessDialog && editingAccessController != null) {
-        EditingAccessDialog(
-            controller = editingAccessController,
-            mode = EditingAccessDialogMode.Unlock,
-            onDismiss = { viewModel.onAction(BoardSetManagerAction.DeleteAccessDismissed) },
-            onSuccess = { viewModel.onAction(BoardSetManagerAction.DeleteAccessGranted) },
-        )
-    }
-
-    if (state.showSettings) {
-        SettingsScreen(
-            onDismiss = { viewModel.onAction(BoardSetManagerAction.SettingsDismissed) },
-            onBackToWelcome = {
-                viewModel.onAction(BoardSetManagerAction.SettingsDismissed)
-                onBackToWelcome()
-            },
-        )
-    }
-}
-
-@Composable
-private fun BoardSetManagerMessage.resolve(): String = when (this) {
-    is BoardSetManagerMessage.Dynamic -> value
-    is BoardSetManagerMessage.Resource -> stringResource(id)
-}
-
-@Composable
-internal fun BoardSetManagerScreen(
-    state: BoardSetManagerState,
-    status: LibraryStatus?,
-    importAvailable: Boolean,
-    onAction: (BoardSetManagerAction) -> Unit,
-) {
-    BoardSetLibraryScreen(
-        boardSets = state.boardSets,
-        isLoading = state.isLoading,
-        isCreating = state.isCreating,
-        status = status,
-        onBack = { onAction(BoardSetManagerAction.BackClicked) },
-        onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
-        onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
-        onImportSpeech = { onAction(BoardSetManagerAction.SpeechImportClicked) },
-        onRetry = { onAction(BoardSetManagerAction.RetryLoad) },
-        onImport = if (importAvailable) {
-            { onAction(BoardSetManagerAction.ImportClicked) }
-        } else {
-            null
-        },
-        onOpen = { onAction(BoardSetManagerAction.OpenClicked(it.id)) },
-        onEdit = { onAction(BoardSetManagerAction.EditClicked(it.id)) },
-        onDuplicate = { onAction(BoardSetManagerAction.DuplicateClicked(it.id)) },
-        onToggleLock = { onAction(BoardSetManagerAction.ToggleLockClicked(it.id)) },
-        onDelete = { onAction(BoardSetManagerAction.DeleteClicked(it.id)) },
-    )
-}
-
-@Preview(showBackground = true, widthDp = 1000, heightDp = 700)
-@Composable
-private fun BoardSetManagerScreenPreview() {
-    AppTheme {
-        BoardSetManagerScreen(
-            state = BoardSetManagerState(
-                boardSets = listOf(
-                    ObfBoardSet(
-                        id = "core-words",
-                        name = "Core words",
-                        rootBoardId = "home",
-                        boardIds = listOf("home", "people", "places"),
-                        createdAt = 1L,
-                        updatedAt = 2L,
-                    ),
-                    ObfBoardSet(
-                        id = "school",
-                        name = "School",
-                        rootBoardId = "classroom",
-                        boardIds = listOf("classroom", "subjects"),
-                        isLocked = true,
-                        createdAt = 1L,
-                        updatedAt = 2L,
-                    ),
-                ),
-                isLoading = false,
-            ),
-            status = null,
-            importAvailable = true,
-            onAction = {},
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BoardSetLibraryScreen(
-    boardSets: List<ObfBoardSet>,
-    isLoading: Boolean,
-    isCreating: Boolean,
-    status: LibraryStatus?,
-    onBack: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onCreate: () -> Unit,
-    onImportSpeech: () -> Unit,
-    onRetry: () -> Unit,
-    onImport: (() -> Unit)?,
-    onOpen: (ObfBoardSet) -> Unit,
-    onEdit: (ObfBoardSet) -> Unit,
-    onDuplicate: (ObfBoardSet) -> Unit,
-    onToggleLock: (ObfBoardSet) -> Unit,
-    onDelete: (ObfBoardSet) -> Unit
-) {
-    // A large window shows the library as one readable column with its actions above it,
-    // instead of floating buttons stranded in a far corner.
-    val large = currentWindowWidth().isLarge
-    val actionsReady = !isLoading && !isCreating
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(stringResource(R.string.board_sets_title), fontWeight = FontWeight.SemiBold)
-                        Text(
-                            stringResource(R.string.board_sets_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.Default.Keyboard,
-                            contentDescription = stringResource(R.string.mode_switch_to_keyboard)
-                        )
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = stringResource(R.string.phrase_screen_app_settings)
-                        )
-                    }
-                    if (onImport != null) {
-                        IconButton(onClick = onImport) {
-                            Icon(
-                                Icons.Default.ImportExport,
-                                contentDescription = stringResource(R.string.board_sets_import)
-                            )
-                        }
-                    }
-                }
-            )
-        },
-        floatingActionButton = {
-            if (actionsReady && !large) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
-                    Button(onClick = onImportSpeech) { Text(stringResource(R.string.speech_import_title)) }
-                    ExtendedFloatingActionButton(
-                        onClick = onCreate,
-                        icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                        text = { Text(stringResource(R.string.board_sets_new)) }
-                    )
-                }
-            }
-        }
-    ) { innerPadding ->
-        Column(
-            Modifier.fillMaxSize().padding(innerPadding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (large && actionsReady && boardSets.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .widthIn(max = BoardSetLibraryMaxWidth)
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
-                ) {
-                    BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
-                }
-            }
-            Box(Modifier.widthIn(max = if (large) BoardSetLibraryMaxWidth else Dp.Unspecified).fillMaxSize()) {
-                when {
-                    isCreating -> Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        CircularProgressIndicator()
-                        Text(stringResource(R.string.board_sets_creating))
-                    }
-                    isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    boardSets.isEmpty() -> Column(
-                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(stringResource(R.string.board_sets_empty_title), style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            stringResource(R.string.board_sets_empty_body),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        status?.let {
-                            Spacer(Modifier.height(12.dp))
-                            LibraryStatusBanner(it)
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        if (large) {
-                            // Without floating buttons, the empty library always offers both ways to
-                            // start, also after a failure (e.g. a failed import or the last delete).
-                            // The same buttons, in the same order, as above a list.
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                if ((status as? LibraryStatus.Failed)?.canRetry == true) {
-                                    TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 56.dp)) {
-                                        Text(stringResource(R.string.common_retry))
-                                    }
-                                }
-                                BoardSetLibraryActions(onImportSpeech = onImportSpeech, onCreate = onCreate)
-                            }
-                        } else if ((status as? LibraryStatus.Failed)?.canRetry == true) {
-                            Button(onClick = onRetry) { Text(stringResource(R.string.common_retry)) }
-                        } else {
-                            Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
-                        }
-                    }
-                    else -> LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        // Room for the floating buttons, which a large window does not have.
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        status?.let {
-                            item(key = "status") { LibraryStatusBanner(it) }
-                        }
-                        items(boardSets, key = { it.id }) { boardSet ->
-                            BoardSetLibraryCard(
-                                boardSet = boardSet,
-                                onOpen = { onOpen(boardSet) },
-                                onEdit = { onEdit(boardSet) },
-                                onDuplicate = { onDuplicate(boardSet) },
-                                onToggleLock = { onToggleLock(boardSet) },
-                                onDelete = { onDelete(boardSet) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * The library's last result. A failure is an error container with an icon, so it does not rely
- * on colour alone; both are announced politely.
- */
-@Composable
-private fun LibraryStatusBanner(status: LibraryStatus) {
-    val failed = status is LibraryStatus.Failed
-    Surface(
-        color = if (failed) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = if (failed) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(if (failed) Icons.Default.ErrorOutline else Icons.Default.CheckCircle, contentDescription = null)
-            Text(status.message.resolve(), style = MaterialTheme.typography.bodyLarge)
-        }
-    }
-}
-
-/** Import speech and New screen, as a large window shows them in both library states. */
-@Composable
-private fun BoardSetLibraryActions(onImportSpeech: () -> Unit, onCreate: () -> Unit) {
-    FilledTonalButton(onClick = onImportSpeech, modifier = Modifier.heightIn(min = 56.dp)) {
-        Text(stringResource(R.string.speech_import_title))
-    }
-    Button(onClick = onCreate, modifier = Modifier.heightIn(min = 56.dp)) {
-        Icon(Icons.Default.Add, contentDescription = null)
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.board_sets_new))
-    }
-}
-
-/**
- * The edit top bar while a Button is selected, as Android shows a selection: what is selected,
- * and labelled actions for it. The non-gesture way to edit or remove a Button.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SelectedButtonTopBar(label: String, onEdit: () -> Unit, onRemove: () -> Unit, onDeselect: () -> Unit) {
-    TopAppBar(
-        title = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        navigationIcon = {
-            IconButton(onClick = onDeselect) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.board_selection_done))
-            }
-        },
-        actions = {
-            TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Default.Edit, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.board_cell_menu_edit))
-            }
-            TextButton(onClick = onRemove, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.board_cell_menu_remove), color = MaterialTheme.colorScheme.error)
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-    )
-}
-
-/** How wide the Screens library grows on a large window. */
-private val BoardSetLibraryMaxWidth = 840.dp
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun BoardSetLibraryCard(
-    boardSet: ObfBoardSet,
-    onOpen: () -> Unit,
-    onEdit: () -> Unit,
-    onDuplicate: () -> Unit,
-    onToggleLock: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val openLabel = stringResource(R.string.board_sets_open)
-            ListItem(
-                headlineContent = { Text(boardSet.name, fontWeight = FontWeight.SemiBold) },
-                supportingContent = {
-                    Text(pluralStringResource(R.plurals.board_sets_board_count, boardSet.boardIds.size, boardSet.boardIds.size))
-                },
-                leadingContent = {
-                    Icon(
-                        if (boardSet.isLocked) Icons.Default.Lock else Icons.Default.Home,
-                        contentDescription = if (boardSet.isLocked) stringResource(R.string.board_sets_locked) else null
-                    )
-                },
-                // The card supplies the background, so the row and its actions read as one surface.
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(onClickLabel = openLabel, onClick = onOpen)
-                    .testTag("$BOARD_SET_OPEN_TEST_TAG_PREFIX${boardSet.id}"),
-            )
-            Row {
-                IconButton(onClick = onEdit, enabled = !boardSet.isLocked) {
-                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.board_sets_edit))
-                }
-                IconButton(onClick = onDuplicate) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.board_sets_duplicate))
-                }
-                IconButton(onClick = onToggleLock) {
-                    Icon(
-                        if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                        contentDescription = stringResource(if (boardSet.isLocked) R.string.board_sets_unlock else R.string.board_sets_lock)
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error)
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BoardSetWorkspaceRoot(
+internal fun BoardSetWorkspaceRoot(
     boardSetId: String,
     initialMode: BoardWorkspaceMode,
     onSwitchToKeyboard: () -> Unit,
@@ -1091,75 +582,33 @@ private fun BoardSetWorkspaceRoot(
     }
 
     if (showExportDialog) {
-        AlertDialog(
-            onDismissRequest = { showExportDialog = false },
-            title = { Text(stringResource(R.string.board_workspace_export)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            showExportDialog = false
-                            exportBoardSet()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isExporting,
-                    ) {
-                        Icon(Icons.Default.ImportExport, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.board_workspace_export_obz))
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            showExportDialog = false
-                            exportGridset()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isExporting,
-                    ) {
-                        Icon(Icons.Default.GridView, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.board_workspace_export_gridset))
-                    }
-                }
+        ExportBoardSetFormatDialog(
+            isExporting = isExporting,
+            onDismiss = { showExportDialog = false },
+            onExportObz = {
+                showExportDialog = false
+                exportBoardSet()
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showExportDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
+            onExportGridset = {
+                showExportDialog = false
+                exportGridset()
             },
         )
     }
 
     nativeKeyboardDraft?.let { currentDraft ->
-        AlertDialog(
-            onDismissRequest = { nativeKeyboardDraft = null },
-            title = { Text(stringResource(R.string.board_native_keyboard_title)) },
-            text = {
-                OutlinedTextField(
-                    value = currentDraft,
-                    onValueChange = { nativeKeyboardDraft = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.board_native_keyboard_hint)) },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    communicationSession.accept(
-                        Message.fromTextDiff(
-                            currentText = communicationSession.state.value.activeMessage.displayText,
-                            newText = currentDraft,
-                        )
+        NativeKeyboardDraftDialog(
+            draft = currentDraft,
+            onDraftChange = { nativeKeyboardDraft = it },
+            onDismiss = { nativeKeyboardDraft = null },
+            onConfirm = {
+                communicationSession.accept(
+                    Message.fromTextDiff(
+                        currentText = communicationSession.state.value.activeMessage.displayText,
+                        newText = currentDraft,
                     )
-                    nativeKeyboardDraft = null
-                }) {
-                    Text(stringResource(R.string.board_native_keyboard_return))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { nativeKeyboardDraft = null }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
+                )
+                nativeKeyboardDraft = null
             },
         )
     }
@@ -2058,59 +1507,44 @@ private fun BoardSetWorkspaceRoot(
     }
 
     if (showFinishDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                workspaceViewModel.onAction(BoardWorkspaceAction.KeepEditing)
+        FinishEditingBoardDialog(
+            onKeepEditing = { workspaceViewModel.onAction(BoardWorkspaceAction.KeepEditing) },
+            onDiscard = {
+                selectedField = null
+                workspaceViewModel.onAction(BoardWorkspaceAction.DiscardEdits)
             },
-            title = { Text(stringResource(R.string.board_workspace_finish_title)) },
-            text = { Text(stringResource(R.string.board_workspace_finish_body)) },
-            confirmButton = {
-                Button(onClick = {
-                    val session = editSession ?: return@Button
-                    selectedField = null
-                    workspaceViewModel.onAction(BoardWorkspaceAction.SaveStarted)
-                    val graph = session.draft
-                    // Persist on an application-scoped scope so leaving this screen can't
-                    // cancel the write halfway; branch back to the main thread for state updates.
-                    val appScope = koin.get<CoroutineScope>()
-                    appScope.launch {
-                        val result = withContext(Dispatchers.Default) {
-                            useCase.saveBoardSetGraph(graph)
-                        }
-                        // State updates remain tied to this screen even though persistence is
-                        // allowed to finish after navigation.
-                        scope.launch {
-                            result.onSuccess { saved ->
-                                workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
-                                // Prewarm TTS audio off the critical path; persistence
-                                // must never wait on per-button synthesis.
-                                appScope.launch {
-                                    runCatching { useCase.warmSpeechCache(saved) }
-                                }
-                            }.onFailure {
-                                // Persistence failed: drop back into editing with the draft intact
-                                // so the user does not lose their work.
-                                workspaceViewModel.onAction(
-                                    BoardWorkspaceAction.SaveFailed(saveErrorMessage)
-                                )
-                            }
-                        }
+            onSave = {
+                val session = editSession ?: return@FinishEditingBoardDialog
+                selectedField = null
+                workspaceViewModel.onAction(BoardWorkspaceAction.SaveStarted)
+                val graph = session.draft
+                // Persist on an application-scoped scope so leaving this screen can't
+                // cancel the write halfway; branch back to the main thread for state updates.
+                val appScope = koin.get<CoroutineScope>()
+                appScope.launch {
+                    val result = withContext(Dispatchers.Default) {
+                        useCase.saveBoardSetGraph(graph)
                     }
-                }) { Text(stringResource(R.string.board_workspace_save_changes)) }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        selectedField = null
-                        workspaceViewModel.onAction(BoardWorkspaceAction.DiscardEdits)
-                    }) { Text(stringResource(R.string.board_workspace_discard)) }
-                    TextButton(onClick = {
-                        workspaceViewModel.onAction(BoardWorkspaceAction.KeepEditing)
-                    }) {
-                        Text(stringResource(R.string.board_workspace_keep_editing))
+                    // State updates remain tied to this screen even though persistence is
+                    // allowed to finish after navigation.
+                    scope.launch {
+                        result.onSuccess { saved ->
+                            workspaceViewModel.onAction(BoardWorkspaceAction.SaveSucceeded(saved))
+                            // Prewarm TTS audio off the critical path; persistence
+                            // must never wait on per-button synthesis.
+                            appScope.launch {
+                                runCatching { useCase.warmSpeechCache(saved) }
+                            }
+                        }.onFailure {
+                            // Persistence failed: drop back into editing with the draft intact
+                            // so the user does not lose their work.
+                            workspaceViewModel.onAction(
+                                BoardWorkspaceAction.SaveFailed(saveErrorMessage)
+                            )
+                        }
                     }
                 }
-            }
+            },
         )
     }
 
@@ -2136,349 +1570,20 @@ private fun BoardSetWorkspaceRoot(
     }
 
     if (showDeleteBoardDialog && activeBoard != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteBoardDialog = false },
-            title = { Text(stringResource(R.string.board_workspace_delete_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.board_workspace_delete_body,
-                        activeBoard.name ?: stringResource(R.string.board_workspace_board_fallback)
+        DeleteBoardConfirmationDialog(
+            boardName = activeBoard.name ?: stringResource(R.string.board_workspace_board_fallback),
+            onDismiss = { showDeleteBoardDialog = false },
+            onConfirmDelete = {
+                val session = editSession
+                if (session != null) {
+                    val updated = deleteDraftBoard(session.draft, activeBoard.id)
+                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
+                    workspaceViewModel.onAction(
+                        BoardWorkspaceAction.GoHome(updated.boardSet.rootBoardId)
                     )
-                )
+                }
+                showDeleteBoardDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val session = editSession
-                    if (session != null) {
-                        val updated = deleteDraftBoard(session.draft, activeBoard.id)
-                        workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
-                        workspaceViewModel.onAction(
-                            BoardWorkspaceAction.GoHome(updated.boardSet.rootBoardId)
-                        )
-                    }
-                    showDeleteBoardDialog = false
-                }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteBoardDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            }
         )
     }
-}
-
-/**
- * Stateless workspace shell. It keeps loading and failure rendering independent from the
- * orchestration-heavy root while allowing the real board surface to remain a cohesive section.
- */
-@Composable
-internal fun BoardWorkspaceContent(
-    state: BoardWorkspaceState,
-    hasActiveBoard: Boolean,
-    onBackToLibrary: () -> Unit,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Box(modifier.fillMaxSize()) {
-        when {
-            state.contentStatus == BoardWorkspaceContentStatus.Loading && !hasActiveBoard -> {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
-            }
-            !hasActiveBoard -> Column(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                val failure = state.contentStatus as? BoardWorkspaceContentStatus.RecoverableFailure
-                Text(failure?.message ?: stringResource(R.string.board_workspace_load_error))
-                if (failure != null) {
-                    TextButton(onClick = onRetry) {
-                        Text(stringResource(R.string.common_retry))
-                    }
-                }
-                TextButton(onClick = onBackToLibrary) {
-                    Text(stringResource(R.string.board_workspace_back_to_library))
-                }
-            }
-            else -> Column(Modifier.fillMaxSize()) {
-                if (!state.isFullscreen) state.statusMessage?.let { message ->
-                    Text(
-                        message,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                content()
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true, widthDp = 600, heightDp = 400)
-@Composable
-private fun BoardWorkspaceContentPreview() {
-    AppTheme {
-        BoardWorkspaceContent(
-            state = BoardWorkspaceState(
-                contentStatus = BoardWorkspaceContentStatus.Ready,
-                statusMessage = "Board saved",
-            ),
-            hasActiveBoard = true,
-            onBackToLibrary = {},
-            onRetry = {},
-        ) {
-            Text(
-                text = "Communication board",
-                modifier = Modifier.padding(24.dp),
-                style = MaterialTheme.typography.headlineMedium,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ResizeBoardDialog(
-    currentRows: Int,
-    currentColumns: Int,
-    onDismiss: () -> Unit,
-    onResize: (rows: Int, columns: Int) -> Boolean
-) {
-    var rowsText by remember(currentRows) { mutableStateOf(currentRows.toString()) }
-    var columnsText by remember(currentColumns) { mutableStateOf(currentColumns.toString()) }
-    var blocked by remember { mutableStateOf(false) }
-    val rows = rowsText.toIntOrNull()
-    val columns = columnsText.toIntOrNull()
-    val dimensionsValid = rows in 1..20 && columns in 1..20
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.board_workspace_resize)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.board_workspace_resize_body))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = rowsText,
-                        onValueChange = { rowsText = it.filter(Char::isDigit); blocked = false },
-                        label = { Text(stringResource(R.string.board_dialog_rows)) },
-                        isError = rowsText.isNotEmpty() && rows !in 1..20,
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = columnsText,
-                        onValueChange = { columnsText = it.filter(Char::isDigit); blocked = false },
-                        label = { Text(stringResource(R.string.board_dialog_columns)) },
-                        isError = columnsText.isNotEmpty() && columns !in 1..20,
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
-                if (blocked) {
-                    Text(
-                        stringResource(R.string.board_workspace_resize_blocked),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    blocked = !onResize(requireNotNull(rows), requireNotNull(columns))
-                },
-                enabled = dimensionsValid && (rows != currentRows || columns != currentColumns)
-            ) { Text(stringResource(R.string.board_workspace_resize_action)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
-        }
-    )
-}
-
-@Composable
-private fun BoardStrip(
-    boards: List<ObfBoard>,
-    selectedBoardId: String?,
-    onSelect: (String) -> Unit
-) {
-    val listState = rememberLazyListState()
-    val fallbackName = stringResource(R.string.board_workspace_board_fallback)
-    LaunchedEffect(boards, selectedBoardId) {
-        val index = boards.indexOfFirst { it.id == selectedBoardId }
-        if (index >= 0) listState.animateScrollToItem(index)
-    }
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        state = listState,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(boards, key = { it.id }) { board ->
-            androidx.compose.material3.FilterChip(
-                selected = board.id == selectedBoardId,
-                onClick = { onSelect(board.id) },
-                modifier = Modifier.semantics {
-                    contentDescription = board.name ?: fallbackName
-                },
-                label = {
-                    Text(
-                        board.name ?: fallbackName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            )
-        }
-    }
-}
-
-private fun addDraftBoard(
-    graph: BoardSetGraph,
-    name: String,
-    rows: Int,
-    columns: Int,
-    keyboardLayout: ObfKeyboardLayout? = null
-): BoardSetGraph {
-    val boardId = workspaceId("board")
-    val safeRows = rows.coerceAtLeast(1)
-    val safeColumns = columns.coerceAtLeast(1)
-    var board = ObfBoard(
-        format = "open-board-0.1",
-        id = boardId,
-        name = name.trim(),
-        grid = ObfGrid(
-            rows = safeRows,
-            columns = safeColumns,
-            order = List(safeRows) { List(safeColumns) { null } }
-        )
-    )
-    if (keyboardLayout != null) {
-        board = board
-            .withCompactGrid(true)
-            .withSpellingMode(true)
-            .withKeyboardLayout(keyboardLayout)
-    }
-    return graph.copy(
-        boardSet = graph.boardSet.copy(boardIds = graph.boardSet.boardIds + boardId),
-        boards = graph.boards + board
-    )
-}
-
-
-private fun setDraftRoot(graph: BoardSetGraph, boardId: String): BoardSetGraph {
-    if (boardId !in graph.boardSet.boardIds) return graph
-    return graph.copy(boardSet = graph.boardSet.copy(rootBoardId = boardId))
-}
-
-private fun deleteDraftBoard(graph: BoardSetGraph, boardId: String): BoardSetGraph {
-    if (graph.boards.size <= 1 || boardId !in graph.boardSet.boardIds) return graph
-    val remainingBoards = graph.boards.filterNot { it.id == boardId }.map { board ->
-        board.copy(
-            buttons = board.buttons.map { button ->
-                if (button.loadBoard?.id == boardId) button.copy(loadBoard = null) else button
-            }
-        )
-    }
-    val remainingIds = graph.boardSet.boardIds.filterNot { it == boardId }
-    val rootId = if (graph.boardSet.rootBoardId == boardId) remainingIds.first() else graph.boardSet.rootBoardId
-    return graph.copy(
-        boardSet = graph.boardSet.copy(rootBoardId = rootId, boardIds = remainingIds),
-        boards = remainingBoards
-    )
-}
-
-private fun workspaceId(prefix: String): String {
-    return "${prefix}_${Clock.System.now().toEpochMilliseconds()}_${Random.nextInt(1000, 9999)}"
-}
-
-/**
- * Plays an OBF button sound from storage or inline data. Returns true when playback started.
- */
-internal suspend fun playButtonSound(
-    sound: ObfSound?,
-    fileStorage: FileStorage,
-    soundPlayer: SoundPlayer,
-    urlLoader: ObfMediaUrlLoader? = null
-): Boolean {
-    if (sound == null) return false
-    for (source in obfSoundSources(sound)) {
-        val bytes = when (source) {
-            is ObfMediaSource.Data -> decodeObfDataUri(source.value)
-            is ObfMediaSource.Path -> fileStorage.loadBytes(source.value)
-            is ObfMediaSource.Url -> urlLoader?.load(source.value)
-            is ObfMediaSource.Symbol -> null
-        }
-        if (bytes != null && bytes.isNotEmpty() && soundPlayer.playBytes(bytes, sound.contentType)) return true
-    }
-    return false
-}
-
-/**
- * Copies a picked background image into app storage, beside imported Screen media, so it
- * survives cache clearing, OBZ export and backups. Returns null when it is not a usable picture.
- */
-internal suspend fun storeBackgroundImage(
-    boardSetId: String,
-    source: String,
-    fileStorage: FileStorage,
-    urlLoader: ObfMediaUrlLoader?,
-): ObfImage? = withContext(Dispatchers.IO) {
-    val bytes = try {
-        if (source.startsWith("http")) urlLoader?.load(source) else java.io.File(source.removePrefix("file://")).readBytes()
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Exception) {
-        null
-    } ?: return@withContext null
-    // Background images are drawn as bitmaps, so only formats BitmapFactory decodes are accepted.
-    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    val type = bounds.outMimeType ?: return@withContext null
-    val id = "bg_${java.util.UUID.randomUUID()}"
-    val path = "boardsets/$boardSetId/images/$id.${type.substringAfter('/')}"
-    fileStorage.saveBytes(path, bytes)
-    ObfImage(id = id, contentType = type, path = path, width = bounds.outWidth, height = bounds.outHeight)
-}
-
-/** Loads an OBF image's bytes from inline data, app storage, or its URL. Symbols have no bytes. */
-internal suspend fun loadObfImageBytes(
-    image: ObfImage,
-    fileStorage: FileStorage,
-    urlLoader: ObfMediaUrlLoader?,
-): ByteArray? {
-    for (source in obfImageSources(image)) {
-        val bytes = try {
-            when (source) {
-                is ObfMediaSource.Data -> decodeObfDataUri(source.value)
-                is ObfMediaSource.Path -> fileStorage.loadBytes(source.value)
-                is ObfMediaSource.Url -> urlLoader?.load(source.value)
-                is ObfMediaSource.Symbol -> null
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            null // Try the next source; a missing image prints as its label.
-        }
-        if (bytes != null && bytes.isNotEmpty()) return bytes
-    }
-    return null
-}
-
-private fun decodeObfDataUri(data: String): ByteArray? {
-    return Base64Decoder.decodeOrNull(data.substringAfter("base64,", data))
-}
-
-private fun languageName(
-    languageTag: String,
-    englishName: String,
-    danishName: String,
-    fallbackName: String
-): String = when (languageTag.substringBefore('-').lowercase()) {
-    "en" -> englishName
-    "da" -> danishName
-    else -> fallbackName
 }
