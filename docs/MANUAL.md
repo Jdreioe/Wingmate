@@ -1,6 +1,6 @@
 # Wingmate – manual til nye brugere
 
-Wingmate er en gratis app, der kan tale for dig. Den er lavet til at følge med dig gennem livet – fra de første symbolskærme til skole, tastatur og oplæg.
+Wingmate er en gratis app, der kan tale for dig. Den er lavet til at følge med dig gennem livet – uanset om du bruger skærme, tastatur eller begge dele.
 
 Manualen findes i to udgaver. Vælg den, der passer til din enhed:
 

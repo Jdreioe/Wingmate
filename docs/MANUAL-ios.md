@@ -54,11 +54,11 @@ Beskeden, du er i gang med, bliver liggende. Den følger med, når du skifter me
 
 ### Wingmate følger med dig gennem livet
 
-Du behøver ikke skifte app, når dine behov ændrer sig – Wingmate kan vokse med dig fra de første symboler til skole, tastatur og oplæg:
+Du behøver ikke skifte app, når dine behov ændrer sig. Wingmate kan vokse med dig – uanset om du altid bruger skærme, skriver med tastatur eller bruger begge dele:
 
-- **Tidlig kommunikation** – byg **Skærme** med symboler, og brug tid på at lære at kommunikere med ASK. Forældre og pædagoger vil også kunne fjernredigere skærme (kommer snart).
+- **Kommunikation med skærme** – byg **Skærme** med symboler, billeder og tekst, fra de første ord til et stort ordforråd i hverdagen. Det er helt fint kun at bruge **Skærme** og aldrig skrive med tastatur. Familie, hjælpere og pædagoger vil også kunne fjernredigere skærme (kommer snart).
 - **Skolen** – lærere kan lave skærme til deres elever og dele dem med alle, der bruger Wingmate, via Google Drive, OneDrive eller iCloud (kommer snart). Du kan også eksportere skærme som filer og dele dem med andre (se [Eksport og udskrift](#eksport-og-udskrift)).
-- **Skrivning med tastatur** – når du vil, kan du nemt skifte til **Skrivning** (**Tastatur og fraser**) og stave med et tastatur. Dine skærme er stadig bare et par tryk væk (se [De to arbejdsområder](#de-to-arbejdsområder)).
+- **Skrivning med tastatur** – hvis du vil stave med et tastatur, kan du bruge **Skrivning** (**Tastatur og fraser**), enten alene eller sammen med dine skærme. Dine skærme er altid bare et par tryk væk (se [De to arbejdsområder](#de-to-arbejdsområder)).
 - **Oplæg og taler** – når du skal holde et oplæg eller en tale, kan du skrive teksten i fx Word og kopiere den direkte ind i **Importér tale** (se [Opret en skærm](#opret-en-skærm)).
 
 ### Dine data
