@@ -186,8 +186,8 @@ class BoardsFacade(
         boardSetUseCase.touchBoardSet(id) ?: throw NativeFailure(NativeFailureKind.NotFound)
     }
     @Throws(NativeFailure::class, CancellationException::class)
-    suspend fun createBoardSet(name: String, rows: Int, columns: Int): ObfBoardSet =
-        nativeCall { boardSetUseCase.createBoardSet(name, rows, columns) }
+    suspend fun createBoardSet(name: String, rows: Int, columns: Int, rootBoardName: String): ObfBoardSet =
+        nativeCall { boardSetUseCase.createBoardSet(name, rows, columns, rootBoardName) }
     @Throws(NativeFailure::class)
     fun previewSpeech(name: String, text: String, paragraphsPerPage: Int): List<io.github.jdreioe.wingmate.domain.obf.SpeechImportPage> {
         if (paragraphsPerPage !in 1..io.github.jdreioe.wingmate.domain.obf.SpeechScreenImport.MAX_PARAGRAPHS_PER_PAGE) {

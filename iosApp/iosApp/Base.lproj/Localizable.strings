@@ -772,3 +772,24 @@
 "settings.sync.icloud_note" = "To share an individual Screen with another Apple Account via iCloud, open the Screen’s menu in Screens.";
 "board_sets.library.delete_with_remote" = "Delete here and in %@";
 "board_sets.library.delete_here_only" = "Delete only on this device";
+/* Default Typing Screen Action-strip labels, shown until the user renames a Button */
+"typing.action.typing:playback:hold" = "Hold";
+"typing.action.typing:playback:secondary" = "Language";
+"typing.action.typing:tag:whispers" = "Whisper";
+"typing.action.typing:tag:laughs" = "Laugh";
+"typing.action.typing:tag:sighs" = "Sigh";
+"typing.action.typing:tag:happy" = "Happy";
+"typing.action.typing:tag:sad" = "Sad";
+"typing.action.typing:tag:excited" = "Excited";
+"typing.action.typing:tag:angry" = "Angry";
+"typing.action.typing:tag:sarcastic" = "Sarcastic";
+"typing.action.typing:ssml:emphasis-reduced" = "Reduced";
+"typing.action.typing:ssml:emphasis-moderate" = "Moderate";
+"typing.action.typing:ssml:emphasis-strong" = "Strong";
+"typing.action.typing:ssml:spell" = "Spell";
+"typing.action.typing:ssml:number" = "Number";
+"typing.action.typing:ssml:date" = "Date";
+"typing.action.typing:ssml:time" = "Time";
+"typing.action.typing:ssml:telephone" = "Telephone";
+"typing.action.typing:ssml:currency" = "Currency";
+"boardset.default_root_page" = "Home";

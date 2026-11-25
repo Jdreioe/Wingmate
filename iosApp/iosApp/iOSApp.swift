@@ -8,7 +8,12 @@ struct iOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @UIApplicationDelegateAdaptor(WingmateAppDelegate.self) private var appDelegate
 
-    // Avoid heavy work in App init to prevent a blank screen; DI is initialized on first view appearance
+    init() {
+        // Start dependency injection before any view can resolve a facade. Koin only
+        // registers definitions here; singletons are still created on first use.
+        IosViewModel.startDependencies()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

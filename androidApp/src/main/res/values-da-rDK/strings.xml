@@ -775,4 +775,24 @@
     <string name="settings_sync_folder_footer">Wingmate henter og gemmer automatisk skærme i en Wingmate-mappe i hvert forbundet drev eller mappe, mens alle skærme stadig fungerer offline.</string>
     <string name="board_sets_delete_with_remote">Slet her og i %1$s</string>
     <string name="board_sets_delete_here_only">Slet kun på denne enhed</string>
+    <!-- Default Typing Screen Action-strip labels, shown until the user renames a Button -->
+    <string name="typing_action_hold">Parkér</string>
+    <string name="typing_action_language">Sprog</string>
+    <string name="typing_action_whisper">Hvisk</string>
+    <string name="typing_action_laugh">Grin</string>
+    <string name="typing_action_sigh">Suk</string>
+    <string name="typing_action_happy">Glad</string>
+    <string name="typing_action_sad">Trist</string>
+    <string name="typing_action_excited">Begejstret</string>
+    <string name="typing_action_angry">Vred</string>
+    <string name="typing_action_sarcastic">Sarkastisk</string>
+    <string name="typing_action_emphasis_reduced">Svag</string>
+    <string name="typing_action_emphasis_moderate">Moderat</string>
+    <string name="typing_action_emphasis_strong">Stærk</string>
+    <string name="typing_action_spell">Stav</string>
+    <string name="typing_action_number">Tal</string>
+    <string name="typing_action_date">Dato</string>
+    <string name="typing_action_time">Klokkeslæt</string>
+    <string name="typing_action_telephone">Telefon</string>
+    <string name="typing_action_currency">Valuta</string>
 </resources>
