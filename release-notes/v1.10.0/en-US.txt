@@ -1,0 +1,3 @@
+• Sync Screens with Google Drive or OneDrive so supporters can edit Screens remotely, while keeping an offline copy on your device.
+• Redesigned full-screen Screens workspace with library preview cards, symbol chips in the message bar, tap any word to repeat it, custom action buttons, and on-canvas editing.
+• Speech expression buttons now match your active voice (ElevenLabs or Azure), and default Typing buttons are localized.
