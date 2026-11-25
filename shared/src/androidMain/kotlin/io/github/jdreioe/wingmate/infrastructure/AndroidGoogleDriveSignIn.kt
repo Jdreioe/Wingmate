@@ -42,11 +42,14 @@ class AndroidGoogleDriveSignIn(
         launchResolution = launch
     }
 
-    /** Called from the launcher callback. A null [data] or non-OK [resultCode] means cancelled. */
+    /**
+     * Called from the launcher callback. Google returns its error status in [data] even when the
+     * result is not OK, so only a missing [data] counts as the person cancelling.
+     */
     fun onResolutionResult(resultCode: Int, data: Intent?) {
         val waiting = pendingResolution
         pendingResolution = null
-        waiting?.complete(data.takeIf { resultCode == Activity.RESULT_OK })
+        waiting?.complete(data ?: Intent().takeIf { resultCode == Activity.RESULT_OK })
     }
 
     override suspend fun signIn(kind: RemoteStorageKind): String? {
@@ -66,7 +69,7 @@ class AndroidGoogleDriveSignIn(
                 client().getAuthorizationResultFromIntent(data)
             } catch (error: com.google.android.gms.common.api.ApiException) {
                 if (error.statusCode == com.google.android.gms.common.api.CommonStatusCodes.CANCELED) return null
-                throw RemoteStorageException(RemoteStorageErrorCode.UNAUTHORIZED, "Google sign-in failed", error)
+                throw googleSignInError(error)
             }
         } else {
             first
@@ -94,6 +97,21 @@ class AndroidGoogleDriveSignIn(
 
     private fun client() = Identity.getAuthorizationClient(context)
 
+    /** Turns Google's status into something a Supporter (or the developer) can act on. */
+    private fun googleSignInError(error: com.google.android.gms.common.api.ApiException): RemoteStorageException {
+        val code = error.statusCode
+        val message = when (code) {
+            com.google.android.gms.common.api.CommonStatusCodes.DEVELOPER_ERROR,
+            com.google.android.gms.common.api.CommonStatusCodes.INTERNAL_ERROR ->
+                // Usually UNREGISTERED_ON_API_CONSOLE: no Android OAuth client for this package and signing key.
+                "Google Drive is not set up for this copy of Wingmate (Google error $code)"
+            com.google.android.gms.common.api.CommonStatusCodes.NETWORK_ERROR ->
+                "Google could not be reached. Try again when online"
+            else -> "Google sign-in failed (Google error $code)"
+        }
+        return RemoteStorageException(RemoteStorageErrorCode.UNAUTHORIZED, message, error)
+    }
+
     private suspend fun authorize(): AuthorizationResult {
         val request = AuthorizationRequest.builder()
             .setRequestedScopes(listOf(Scope(CloudDriveOAuth.GOOGLE_DRIVE_FILE_SCOPE)))
@@ -102,6 +120,8 @@ class AndroidGoogleDriveSignIn(
             client().authorize(request).await()
         } catch (error: RemoteStorageException) {
             throw error
+        } catch (error: com.google.android.gms.common.api.ApiException) {
+            throw googleSignInError(error)
         } catch (error: Exception) {
             throw RemoteStorageException(RemoteStorageErrorCode.UNAUTHORIZED, "Google sign-in is unavailable on this device", error)
         }
