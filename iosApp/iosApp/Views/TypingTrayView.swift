@@ -292,11 +292,15 @@ struct TypingActionStrip: View {
     let onShowKeyboard: () -> Void
     var leading: AnyView? = nil
 
+    private var visibleActions: [Shared.TypingTrayAction] {
+        actions.filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 if let leading { leading }
-                ForEach(actions, id: \.id) { action in
+                ForEach(visibleActions, id: \.id) { action in
                     TypingActionButton(model: model, action: action, onShowKeyboard: onShowKeyboard)
                 }
             }
@@ -319,9 +323,13 @@ struct TypingActionGrid: View {
         GridItem(.flexible(), spacing: 8),
     ]
 
+    private var visibleActions: [Shared.TypingTrayAction] {
+        actions.filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
+    }
+
     var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(actions, id: \.id) { action in
+            ForEach(visibleActions, id: \.id) { action in
                 TypingActionButton(model: model, action: action, onShowKeyboard: onShowKeyboard, fillsWidth: true)
                     .frame(height: 56)
             }

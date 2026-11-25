@@ -5,6 +5,8 @@ import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidText
+import io.github.jdreioe.wingmate.domain.SpeechTextProcessor
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.obf.ActionStripElementConfig
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
@@ -12,6 +14,7 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
@@ -20,6 +23,7 @@ import io.github.jdreioe.wingmate.domain.obf.PageElementTypes
 import io.github.jdreioe.wingmate.domain.obf.PageNavigationElementConfig
 import io.github.jdreioe.wingmate.domain.obf.PhraseCollectionElementConfig
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
+import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import io.github.jdreioe.wingmate.domain.obf.withConfiguration
 import io.github.jdreioe.wingmate.domain.obf.withPageElements
 import kotlinx.serialization.json.JsonPrimitive
@@ -35,6 +39,48 @@ const val OBF_PHRASE_ID_EXTENSION = "ext_wingmate_phrase_id"
 const val OBF_HISTORY_ID_EXTENSION = "ext_wingmate_history_id"
 
 fun typingCategoryPageId(categoryId: String): String = "typing:category:$categoryId"
+
+/**
+ * Classifies which TTS engines support a Typing Action-strip Button:
+ * - ElevenLabs audio tags (`typing:tag:*` or bracketed tags such as `[whispers]`) apply only to ElevenLabs.
+ * - XML SSML tags (`<emphasis>`, `<say-as>`, etc., or `typing:ssml:*` other than universal `[0.5s]` pauses) apply only to Azure.
+ * - Playback controls, pause shorthands, and custom plain-text Buttons apply to all engines.
+ */
+fun ObfButton.typingActionEngineScope(): TypingActionEngineScope =
+    typingActionEngineScopeFor(id, parseObfButtonActions(this))
+
+fun ObfButton.isVisibleForTtsEngine(ttsEngine: TtsEngine): Boolean =
+    typingActionEngineScope().matches(ttsEngine)
+
+internal fun typingActionEngineScopeFor(
+    buttonId: String,
+    effects: List<ObfButtonActionEffect>,
+): TypingActionEngineScope {
+    if (isElevenLabsTagAction(buttonId, effects)) return TypingActionEngineScope.ElevenLabs
+    if (isAzureSsmlTagAction(buttonId, effects)) return TypingActionEngineScope.Azure
+    return TypingActionEngineScope.All
+}
+
+private fun isElevenLabsTagAction(buttonId: String, effects: List<ObfButtonActionEffect>): Boolean {
+    if (buttonId.startsWith("typing:tag:")) return true
+    return effects.any { effect ->
+        effect is ObfButtonActionEffect.AppendText &&
+            SpeechTextProcessor.stripAudioTags(effect.text) != effect.text
+    }
+}
+
+private fun isAzureSsmlTagAction(buttonId: String, effects: List<ObfButtonActionEffect>): Boolean {
+    if (buttonId.startsWith("typing:ssml:") && !buttonId.startsWith("typing:ssml:pause-")) return true
+    return effects.any { effect ->
+        when (effect) {
+            is ObfButtonActionEffect.WrapSelection ->
+                effect.prefix.contains('<') || effect.suffix.contains('<')
+            is ObfButtonActionEffect.AppendText ->
+                effect.text.contains('<') && effect.text.contains('>')
+            else -> false
+        }
+    }
+}
 
 data class TypingScreenPage(
     val id: String,

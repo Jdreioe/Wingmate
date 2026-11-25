@@ -66,11 +66,13 @@ import io.github.jdreioe.wingmate.application.TYPING_HISTORY_PAGE_ID
 import io.github.jdreioe.wingmate.application.TYPING_LIKELY_NEXT_PAGE_ID
 import io.github.jdreioe.wingmate.application.TypingScreenPage
 import io.github.jdreioe.wingmate.application.TypingScreenProjector
+import io.github.jdreioe.wingmate.application.isVisibleForTtsEngine
 import io.github.jdreioe.wingmate.application.typingCategoryPageId
 import io.github.jdreioe.wingmate.domain.CategoryItem
 import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.SaidText
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
@@ -283,7 +285,10 @@ internal fun TypingScreenTray(
 
             is PageElementContent.ActionStrip -> {
                     val ids = content.configuration.buttonIds
-                    val buttons = ids.mapNotNull { id -> template.buttons.firstOrNull { it.id == id } }
+                    val buttons = remember(template, ids, settings.ttsEngine) {
+                        ids.mapNotNull { id -> template.buttons.firstOrNull { it.id == id } }
+                            .filter { it.isVisibleForTtsEngine(settings.ttsEngine) }
+                    }
                     Column(Modifier.fillMaxSize()) {
                         HorizontalDivider()
                         TypingActionStrip(
@@ -384,7 +389,7 @@ internal fun TypingActionRow(
     settings: Settings,
     feedback: BoardFeedback = remember { BoardFeedback() },
 ) {
-    val buttons = remember(template) { template.typingActionButtons() }
+    val buttons = remember(template, settings.ttsEngine) { template.typingActionButtons(settings.ttsEngine) }
     TypingActionStrip(
                             settings = settings, feedback = feedback,
         buttons = buttons,
@@ -395,8 +400,8 @@ internal fun TypingActionRow(
     )
 }
 
-/** The Typing Screen's Action-strip Buttons, in template order. */
-private fun ObfBoard.typingActionButtons(): List<ObfButton> =
+/** The Typing Screen's Action-strip Buttons applicable to [ttsEngine], in template order. */
+private fun ObfBoard.typingActionButtons(ttsEngine: TtsEngine): List<ObfButton> =
     pageElements()
         .sortedWith(compareBy({ it.row }, { it.column }))
         .map(PageElement::content)
@@ -404,6 +409,7 @@ private fun ObfBoard.typingActionButtons(): List<ObfButton> =
         .flatMap { it.configuration.buttonIds }
         .distinct()
         .mapNotNull { id -> buttons.firstOrNull { it.id == id } }
+        .filter { it.isVisibleForTtsEngine(ttsEngine) }
 
 /**
  * The Action strip as a two-column grid, for the wide layout's side panel. Same Buttons, order
@@ -421,7 +427,7 @@ internal fun TypingActionGrid(
     /** Applied to each row, e.g. so a pager can stop at whole rows. */
     rowModifier: (row: Int) -> Modifier = { Modifier },
 ) {
-    val buttons = remember(template) { template.typingActionButtons() }
+    val buttons = remember(template, settings.ttsEngine) { template.typingActionButtons(settings.ttsEngine) }
     val unsupportedDescription = stringResource(R.string.typing_screen_unsupported_action)
     val unavailableDescription = stringResource(R.string.typing_screen_unavailable_action)
     val cellHeight = 56.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)

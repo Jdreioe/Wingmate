@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var partnerDisplayAvailable = false
     @State private var partnerDisplayMuted = false
     @State private var hingePosture: DuoHingePosture = .unavailable
+    @State private var restingWindowHeight: CGFloat = 0
 
     @State private var recorder = AudioRecorder()
     @State private var recordingForPhraseId: String? = nil
@@ -87,6 +88,7 @@ struct ContentView: View {
                 uiTextFieldHeight: uiTextFieldHeight,
                 uiChipFontSize: uiChipFontSize,
                 uiPlayIconSize: uiPlayIconSize,
+                restingWindowHeight: restingWindowHeight,
                 requestMicAndStart: requestMicAndStart
             )
         }
@@ -150,6 +152,16 @@ struct ContentView: View {
                             // Screens owns its full-screen edge-to-edge padding; Typing adapts to window size.
                             .padding(model.boardModeEnabled ? 0 : (widePadding ? 12 : 16))
                             .frame(width: proxy.size.width, height: proxy.size.height)
+                        }
+                        // Measure resting window height outside the keyboard-inset GeometryReader so
+                        // raising the on-screen keyboard on iPad or unfolded Duo never shrinks it.
+                        .background {
+                            GeometryReader { restingProxy in
+                                Color.clear
+                                    .onAppear { restingWindowHeight = restingProxy.size.height }
+                                    .onChange(of: restingProxy.size.height) { _, h in restingWindowHeight = h }
+                            }
+                            .ignoresSafeArea(.keyboard)
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.application
 
+import io.github.jdreioe.wingmate.domain.TtsEngine
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
@@ -9,6 +10,19 @@ import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
 import kotlin.coroutines.cancellation.CancellationException
 
 enum class TypingTrayElementKind { PageNavigation, PhraseCollection, ActionStrip }
+
+/** Which TTS engines support a Typing Action-strip Button. */
+enum class TypingActionEngineScope {
+    All,
+    ElevenLabs,
+    Azure;
+
+    fun matches(engine: TtsEngine): Boolean = when (this) {
+        All -> true
+        ElevenLabs -> engine == TtsEngine.ELEVENLABS
+        Azure -> engine == TtsEngine.AZURE_USER_RESOURCE || engine == TtsEngine.AZURE_MANAGED
+    }
+}
 
 /** What one Action-strip effect does. Text effects carry their text in [TypingEffect]. */
 enum class TypingEffectKind {
@@ -46,7 +60,16 @@ data class TypingTrayAction(
     val id: String,
     val label: String,
     val effects: List<TypingEffect>,
-)
+    val engineScope: TypingActionEngineScope = TypingActionEngineScope.All,
+) {
+    fun isVisibleForTtsEngine(engine: TtsEngine): Boolean = engineScope.matches(engine)
+
+    fun isVisibleForTtsEngineNamed(engineName: String): Boolean {
+        val parsed = runCatching { TtsEngine.valueOf(engineName.trim().uppercase()) }.getOrNull()
+            ?: TtsEngine.SYSTEM
+        return isVisibleForTtsEngine(parsed)
+    }
+}
 
 /** A Page element of the Typing Screen, placed on the template's grid. */
 data class TypingTrayElement(
@@ -145,4 +168,5 @@ private fun ObfButton.toTrayAction() = TypingTrayAction(
             is ObfButtonActionEffect.Unsupported -> TypingEffect(TypingEffectKind.Unsupported, "", "")
         }
     },
+    engineScope = typingActionEngineScope(),
 )
