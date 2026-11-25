@@ -77,14 +77,15 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
    <img src="images/welcome-stemmemotor.png" alt="Valg af, hvad der skal tale, i den første opsætning" width="300">
 
 3. Vælg en stemme.
-4. Tryk **Afspil** for at høre stemmen. Her kan du også ændre **Hastighed**. Vises **Skift sprog**, kan du vælge et andet sprog. Tryk **Fortsæt**.
-5. Vælg, hvordan du vil tale: **Skrivning** («Skriv beskeder, og tryk på gemte fraser») eller **Skærme** («Tryk på symboler på sider. Opret eller importér en skærm for at starte»). Tryk **Fortsæt**.
+4. Tryk **Afspil** for at høre stemmen. Vil du ændre, hvor hurtigt den taler, så brug **Hastighed**.
+5. Vises **Skift sprog**, kan du vælge et andet sprog. Tryk **Fortsæt**.
+6. Vælg, hvordan du vil tale: **Skrivning** («Skriv beskeder, og tryk på gemte fraser») eller **Skærme** («Tryk på symboler på sider. Opret eller importér en skærm for at starte»). Tryk **Fortsæt**.
 
    <!-- SCREENSHOT: Android welcome step “Hvordan vil du kommunikere?” showing the two cards Skrivning and Skærme. -->
    <img src="images/welcome-arbejdsomraade.png" alt="Valg mellem Skrivning og Skærme" width="300">
 
-6. Vælg, om talehistorik skal vises, og om du vil slå **Del anonym analysedata** til. Analysedata er slukket fra start. De indeholder ikke dine ord eller nøgler. Tryk **Fortsæt**.
-7. På siden **Klar til at kommunikere** kan du se dine valg. Tryk **Begynd at kommunikere**.
+7. Vælg, om talehistorik skal vises, og om du vil slå **Del anonym analysedata** til. Analysedata er slukket fra start. De indeholder ikke dine ord eller nøgler. Tryk **Fortsæt**.
+8. På siden **Klar til at kommunikere** kan du se dine valg. Tryk **Begynd at kommunikere**.
 
 ## De to arbejdsområder
 
@@ -100,7 +101,7 @@ Når opsætningen er færdig, åbner Wingmate det sted, du valgte. Du kan skifte
   <!-- SCREENSHOT: Screens library (Skærme) with the title “Skærme”, at least one screen card, and actions such as Ny skærm / Opret skærm and Importer skærm / Importér tale visible. -->
   <img src="images/skaerme-bibliotek.png" alt="Oversigten Skærme" width="300">
 
-- Fra en åben skærm på en telefon: tryk på de tre prikker øverst til højre, og vælg **Skift til tastatur og fraser**. På en bred skærm er der et tastatur-ikon øverst.
+- Fra en åben skærm på en telefon: tryk på de tre prikker øverst til højre, og vælg **Skift til tastatur og fraser**. På en bred skærm er der et tastatur-ikon øverst. Vil du tilbage til oversigten **Skærme**, så tryk på pilen øverst til venstre.
 
 Du kan også vælge, hvor appen skal starte. Gå til **Indstillinger → System og data**, og vælg under **Åbn ved opstart**: **Tastatur** eller **Skærme**. Vælger du Skærme, kan du også vælge en bestemt skærm eller **Skærmoversigt**.
 
@@ -127,8 +128,8 @@ Skriveskærmen bygger selv sine sider ud fra dine fraser og kategorier. Du kan i
 
 Tryk på knappen **Tilføj ny frase**. Den står sidst blandt dine fraser, så rul ned, hvis du ikke kan se den. Her kan du sætte:
 
-- **Ny frasetekst** – teksten, der står på knappen. Den skal udfyldes.
-- **Vokalisering (det der skal siges)** – kun hvis Wingmate skal sige noget andet end teksten.
+- **Vokalisering (det der skal siges)** – det øverste felt. Det, Wingmate siger.
+- **Ny frasetekst** – teksten, der står på knappen. Lader du feltet stå tomt, bruges teksten fra **Vokalisering**.
 - **Billede** – tryk, og vælg **Foto** eller **Symbol**.
 - **Optagelse** – tryk **Optag** for at indtale frasen selv.
 - **Farve** – vælg en farve, eller tryk **Brug farve**.
@@ -141,8 +142,12 @@ Du kan også markere frasen som **Skjult**, så den ikke vises blandt knapperne.
 
 ### Ordn dine fraser
 
-- Hold fingeren på en frase for at rette den, eller træk den for at flytte den.
-- Tryk på **+** ved siden af **Alle** for at lave en kategori (**Tilføj kategori**). En kategori kan ikke ligge inde i en anden kategori.
+- Hold fingeren på en frase, og vælg **Rediger** for at rette den. Træk frasen for at flytte den.
+
+> [!TIP]
+> Bruger du **Hold for at vælge** eller **Vælg ved berøring**, kan du komme til at vælge frasen, når du vil rette den. Sæt **Hold for at vælge (ms)** til `0`, og slå **Vælg ved berøring** fra under **Indstillinger → Tilgængelighed**, mens du retter. Slå dem til igen bagefter.
+
+- Tryk på **+** sidst i rækken med kategorier (efter **Alle** og dine egne kategorier) for at lave en kategori (**Tilføj kategori**). En kategori kan ikke ligge inde i en anden kategori.
 
 ### Læg en besked til side
 
@@ -212,7 +217,7 @@ Vil du se de skjulte knapper et øjeblik, så tryk på de tre prikker øverst ti
 > [!TIP]
 > Er du bange for at ødelægge noget? Tryk **Dupliker** i oversigten først. Så har du en kopi af skærmen, som den var.
 
-Tryk på blyanten (**Rediger**) i oversigten **Skærme**. Har du skærmen åben, så tryk på de tre prikker øverst til højre, og vælg **Rediger skærm**. Er skærmen låst, skal du låse den op først («Lås skærmen op før redigering»). Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
+Tryk på blyanten (**Rediger**) i oversigten **Skærme**. Har du skærmen åben, så tryk på de tre prikker øverst til højre, og vælg **Rediger skærm**. Er skærmen låst, vises **Rediger skærm** ikke. Gå så tilbage til oversigten **Skærme**, og lås skærmen op først. Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
 
 Mens du redigerer:
 
@@ -234,7 +239,7 @@ Når du redigerer et felt, kan du blandt andet sætte:
 
 - **Etiket** – teksten, der står på knappen.
 - **Udtale (valgfri)** – det, der skal siges, hvis det skal være noget andet end etiketten.
-- Et billede. Søg efter et symbol, eller vælg et foto fra enheden. Søgeskærmen hedder **Søg efter symboler**, og du skriver i feltet **Søg efter piktogram...**. Symbolerne kommer fra OpenSymbols. Det er en samling af billeder, blandt andet fra ARASAAC og Mulberry.
+- **Billede** – søg efter et symbol, eller vælg et foto fra enheden. Søgeskærmen hedder **Søg efter symboler**, og du skriver i feltet **Søg efter piktogram...**. Symbolerne kommer fra OpenSymbols. Det er en samling af billeder, blandt andet fra ARASAAC og Mulberry.
 - **Feltfarve**, **Knapform** (**Rundet**, **Firkantet**, **Pille**, **Taleboble**, **Tankeboble**) og **Ordtype**. Ordtype kan være **Automatisk**, eller du vælger selv: **Stedord**, **Udsagnsord**, **Beskrivende ord**, **Navneord**, **Socialt ord** eller **Andet**.
 - **Skjult i brugstilstand** – knappen er der stadig, når du redigerer, men den vises ikke, når du bruger skærmen.
 - **Sprog** for den enkelte knap, hvis den skal siges på et andet sprog end det normale.
@@ -265,11 +270,11 @@ Du bestemmer, hvad en knap gør, under **Felthandling**. Vælg **Tilføj og udta
 
 Har du tændt flere handlinger, kan du ændre rækkefølgen med **Flyt handling op** og **Flyt handling ned**.
 
-Du kan også bestemme, hvad der sker, når du har trykket på en almindelig knap. Under **Efter valg** vælger du **Bliv på denne side**, **Gå tilbage til forrige side** eller **Gå til startsiden**. Du kan sætte det for hele appen i **Indstillinger** og vælge noget andet for en enkelt skærm eller side.
+Du kan også bestemme, hvad der sker, når du har trykket på en almindelig knap. Under **Efter valg** vælger du **Bliv på denne side**, **Gå tilbage til forrige side** eller **Gå til startsiden**. Du kan sætte det for hele appen under **Indstillinger → Skærm og layout** og vælge noget andet for en enkelt skærm eller side.
 
 ### Skærm- og sideindstillinger
 
-Gå i gang med at redigere. Tryk på de tre prikker øverst til højre, og vælg **Skærmindstillinger** eller **Sideindstillinger**. Her kan du blandt andet:
+Åbn skærmen til redigering (se [Rediger sider og knapper](#rediger-sider-og-knapper)). Tryk på de tre prikker øverst til højre, og vælg **Skærmindstillinger** eller **Sideindstillinger**. Ser du ikoner øverst i stedet for tre prikker, åbner tandhjulet **Skærmindstillinger**, og blyanten åbner **Sideindstillinger**. Her kan du blandt andet:
 
 - give skærmen eller siden et nyt navn
 - slå **Vis etiketter** og **Vis symboler** til eller fra, og vælge **Etikettens placering** (**Øverst** eller **Nederst**), når begge vises
@@ -367,7 +372,7 @@ Fra oversigten **Skærme**:
 ### Send en skærm ud
 
 1. Åbn skærmen.
-2. Tryk på de tre prikker øverst til højre, og vælg **Importer/eksporter data**. Så åbner **Eksportér**.
+2. Tryk på de tre prikker øverst til højre, og vælg **Importer/eksporter data**. På en bred skærm, fx en tablet, trykker du i stedet på pilene ↑↓ øverst. Så åbner **Eksportér**.
 3. Vælg, hvad du vil lave:
    - **Open Board (.obz)** – skærmen i en fil, som andre ASK-apps også kan læse.
    - **Eksportér til Grid** – en fil til Smartbox Grid 3. I Grid Explorer vælger du **Add Grid Set → Grid set file**. Se [Smartbox’ vejledning til Grid Explorer](https://hub.smartboxaac.com/knowledgebase/grid-explorer-in-grid-3/) (på engelsk).
@@ -375,7 +380,7 @@ Fra oversigten **Skærme**:
    <!-- SCREENSHOT: The Eksportér dialog, showing Open Board (.obz) and Eksportér til Grid. -->
    <img src="images/eksport-menu.png" alt="Dialogen Eksportér med Open Board (.obz) og Eksportér til Grid" width="300">
 
-Vil du udskrive skærmen, laver du en PDF. Tryk **Udskriv (PDF)**. Den ligger i samme menu som **Importer/eksporter data**. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
+Vil du udskrive skærmen, laver du en PDF. Tryk på de tre prikker øverst til højre, og vælg **Udskriv (PDF)**. På en bred skærm uden tre prikker kan du ikke udskrive i denne version. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
 
 ### Hvad følger med til Grid
 
@@ -419,9 +424,9 @@ Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **App-indsti
 Andre valg, der er gode at kende:
 
 - **Tale ved valg** (under **Tilgængelighed**): **Straks** eller **Kun sætning**. Ved **Kun sætning** er appen stille, indtil den samlede besked læses op.
-- **Vis talehistorik**: kun tale, der afspilles, mens dette er tændt, vises i historikken. Tale, der er skjult, kan stadig ligge på enheden, så lyden kan bruges igen.
+- **Vis talehistorik**: kun tale, der afspilles, mens dette er tændt, vises i historikken. Tale, der afspilles, mens det er slukket, vises ikke, men lyden kan stadig være gemt på enheden, så den kan bruges igen.
 - **Rapportering af funktionsbrug**: valgfri, og slukket fra start. Ingen frasetekst, nøgler eller filstier sendes. Se [PRIVACY_POLICY.md](../PRIVACY_POLICY.md) (på engelsk).
-- **Standardiseret logning (OBL)**: en liste over brugen, som en terapeut kan gennemgå. Listen bliver på enheden.
+- **Standardiseret logning (OBL)** (under **Privatliv**): en liste over brugen, som en terapeut kan gennemgå. Listen bliver på enheden.
 - **Velkomstskærm** under **System og data** kører den første opsætning igen.
 
 <!-- SCREENSHOT: The Settings home/overview, showing the category list: Tale og sprog, Skærm og layout, Tilgængelighed, Privatliv, and System og data. -->
@@ -429,7 +434,7 @@ Andre valg, der er gode at kende:
 
 ## Tilgængelighed og betjening
 
-Under **Tilgængelighed** kan du ændre, hvordan der peges og vælges. **Valgtast** og hviletilstand ligger i gruppen **Interaktion**.
+Under **Tilgængelighed** kan du ændre, hvordan der peges og vælges. **Valgtast** og **Tast til hviletilstand** ligger i gruppen **Interaktion**.
 
 Tider står i millisekunder (ms). 1000 ms er 1 sekund.
 
@@ -441,7 +446,7 @@ Tider står i millisekunder (ms). 1000 ms er 1 sekund.
 - **Markeringsfremhævning (ms)** og **Markeringslyd** – en kort ramme og en lyd, når en knap er valgt.
 - **Auditiv bekræftelse** – Wingmate hvisker knappens tekst, når du rører knappen eller holder markøren over den.
 - **Valgtast** – vælg en tast: **Space**, **Enter**, **F8** eller **F9**. Når du trykker på den, vælges den knap, markøren eller tastaturet står på.
-- **Tast til hviletilstand** – vælg en tast, der sætter **Dwell-valg** og **Valgtast** på pause. Nederst på skærmen er der også en knap, der skifter mellem **Hviletilstand** og **Genoptag input**. Almindelige tryk virker stadig, mens der hviles. Hold valgtasten nede i 2 sekunder for at starte igen.
+- **Tast til hviletilstand** – vælg en tast, der sætter **Dwell-valg** og **Valgtast** på pause. Når **Dwell-valg** eller **Valgtast** er tændt, er der også en rund pause-/afspil-knap nederst til venstre. TalkBack kalder den **Hviletilstand** eller **Genoptag input**. Almindelige tryk virker stadig, mens der hviles. Hold valgtasten nede i 2 sekunder for at starte igen.
 - **Fremhævelse af markør** – behold den almindelige markør, eller læg en tydelig ring eller et omrids ovenpå. Under **Markørtype** er valgene **System**, **Ring** og **Outline**.
 
 Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør, systemet stiller til rådighed. Det gælder også øjen- og hovedstyring, når systemet giver en markør. Se [HEAD_EYE_TRACKING.md](HEAD_EYE_TRACKING.md) (på engelsk).
