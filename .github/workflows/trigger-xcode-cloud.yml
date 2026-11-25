@@ -29,6 +29,10 @@ jobs:
     name: Start Xcode Cloud build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # `secrets` is not a valid context in a step `if`. Store only booleans.
+      HAS_INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID != '' }}
+      HAS_INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,7 +63,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Fetch Infisical secrets
-        if: ${{ secrets.INFISICAL_CLIENT_ID != '' && secrets.INFISICAL_CLIENT_SECRET != '' && vars.INFISICAL_PROJECT_SLUG != '' }}
+        if: ${{ env.HAS_INFISICAL_CLIENT_ID == 'true' && env.HAS_INFISICAL_CLIENT_SECRET == 'true' && vars.INFISICAL_PROJECT_SLUG != '' }}
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: universal
@@ -75,16 +79,53 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
           EVENT_NAME: ${{ github.event_name }}
           CLEAN_BUILD: ${{ inputs.clean || false }}
-          ASC_KEY_ID: ${{ env.ASC_KEY_ID || secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ env.ASC_ISSUER_ID || secrets.ASC_ISSUER_ID }}
-          ASC_PRIVATE_KEY: ${{ env.ASC_PRIVATE_KEY || secrets.ASC_PRIVATE_KEY }}
-          ASC_APP_ID: ${{ env.ASC_APP_ID || vars.ASC_APP_ID || '6743526254' }}
-          ASC_XCODE_CLOUD_WORKFLOW_ID: ${{ env.ASC_XCODE_CLOUD_WORKFLOW_ID || vars.ASC_XCODE_CLOUD_WORKFLOW_ID }}
-          ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID: ${{ env.ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID || vars.ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID }}
-          ASC_XCODE_CLOUD_PROD_WORKFLOW_ID: ${{ env.ASC_XCODE_CLOUD_PROD_WORKFLOW_ID || vars.ASC_XCODE_CLOUD_PROD_WORKFLOW_ID }}
-          ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME: ${{ env.ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME || vars.ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME || 'Default' }}
-          ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME: ${{ env.ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME || vars.ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME }}
+          # GitHub fallbacks use different names. Assigning ASC_* here would
+          # replace Infisical exports: those arrive through the process
+          # environment, and the `env` context cannot see them.
+          GH_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          GH_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          GH_ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          GH_ASC_APP_ID: ${{ vars.ASC_APP_ID }}
+          GH_ASC_XCODE_CLOUD_WORKFLOW_ID: ${{ vars.ASC_XCODE_CLOUD_WORKFLOW_ID }}
+          GH_ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID: ${{ vars.ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID }}
+          GH_ASC_XCODE_CLOUD_PROD_WORKFLOW_ID: ${{ vars.ASC_XCODE_CLOUD_PROD_WORKFLOW_ID }}
+          GH_ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME: ${{ vars.ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME }}
+          GH_ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME: ${{ vars.ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME }}
         run: |
+          set -euo pipefail
+
+          # Prefer a value Infisical already exported. Otherwise use the GitHub
+          # secret or variable, then the optional default.
+          use_fallback() {
+            local name="$1"
+            local fallback_name="$2"
+            local default_value="${3-}"
+            if [[ -n "${!name:-}" ]]; then
+              return 0
+            fi
+            local value="${!fallback_name:-}"
+            if [[ -z "$value" ]]; then
+              value="$default_value"
+            fi
+            printf -v "$name" '%s' "$value"
+            export "$name"
+          }
+
+          use_fallback ASC_KEY_ID GH_ASC_KEY_ID
+          use_fallback ASC_ISSUER_ID GH_ASC_ISSUER_ID
+          use_fallback ASC_PRIVATE_KEY GH_ASC_PRIVATE_KEY
+          use_fallback ASC_APP_ID GH_ASC_APP_ID "6743526254"
+          use_fallback ASC_XCODE_CLOUD_WORKFLOW_ID GH_ASC_XCODE_CLOUD_WORKFLOW_ID
+          use_fallback ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID GH_ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID
+          use_fallback ASC_XCODE_CLOUD_PROD_WORKFLOW_ID GH_ASC_XCODE_CLOUD_PROD_WORKFLOW_ID
+          use_fallback ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME GH_ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME "Default"
+          use_fallback ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME GH_ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME
+
+          unset GH_ASC_KEY_ID GH_ASC_ISSUER_ID GH_ASC_PRIVATE_KEY \
+            GH_ASC_APP_ID GH_ASC_XCODE_CLOUD_WORKFLOW_ID \
+            GH_ASC_XCODE_CLOUD_STAGING_WORKFLOW_ID GH_ASC_XCODE_CLOUD_PROD_WORKFLOW_ID \
+            GH_ASC_XCODE_CLOUD_STAGING_WORKFLOW_NAME GH_ASC_XCODE_CLOUD_PROD_WORKFLOW_NAME
+
           args=(--tag "$RELEASE_TAG")
           if [[ "$EVENT_NAME" == "push" ]]; then
             args+=(--skip-if-active)
