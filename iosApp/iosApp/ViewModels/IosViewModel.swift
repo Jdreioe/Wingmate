@@ -16,6 +16,10 @@ struct BoardSetInfo: Codable, Identifiable, Equatable {
     var remoteConflict: Bool = false
     var remoteKind: String? = nil
     var remoteLocation: String? = nil
+    var remoteOwnership: String? = nil
+    var remoteOwnerName: String? = nil
+    /// Deleting may also delete the Google Drive / OneDrive file (asked each time).
+    var remoteOffersDelete: Bool = false
 }
 
 struct ScreenPreviewCell: Identifiable, Equatable {
@@ -1462,7 +1466,10 @@ final class IosViewModel: ObservableObject {
             remoteWritable: set.remoteLink?.isWritable == true,
             remoteConflict: set.remoteLink?.hasConflict == true,
             remoteKind: set.remoteLink?.kind.wireValue,
-            remoteLocation: set.remoteLink?.location
+            remoteLocation: set.remoteLink?.location,
+            remoteOwnership: set.remoteLink?.resolvedOwnership?.wireValue,
+            remoteOwnerName: set.remoteLink?.ownerName,
+            remoteOffersDelete: set.remoteLink?.offersRemoteDelete == true
         )
     }
 
@@ -2266,9 +2273,18 @@ final class IosViewModel: ObservableObject {
         }
     }
 
-    func deleteBoardSet(id: String) async {
+    /// Deletes a Screen; with `deleteRemote` its Google Drive / OneDrive file goes to that trash too.
+    func deleteBoardSet(id: String, deleteRemote: Bool = false) async {
         do {
-            try await boardsFacade.deleteBoardSet(id: id)
+            if deleteRemote {
+                let result = try await IosDiBridge().remoteScreenActions().deleteScreen(screenId: id, deleteRemote: true)
+                guard result.status == "ok" else {
+                    boardStatusMessage = result.message
+                    return
+                }
+            } else {
+                try await boardsFacade.deleteBoardSet(id: id)
+            }
             await loadBoardSets()
             if selectedBoardSetId == id {
                 selectedBoardSetId = boardSets.first?.id

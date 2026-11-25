@@ -11,8 +11,10 @@ import kotlin.uuid.Uuid
 import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
 import io.github.jdreioe.wingmate.domain.obf.RemoteConflictResolution
 import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.domain.obf.RemoteScreenOwnership
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
 import io.github.jdreioe.wingmate.domain.obf.RemoteSyncOutcome
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
 import io.github.jdreioe.wingmate.domain.obf.UnsupportedLinkedRemoteFileStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
@@ -31,17 +33,17 @@ class KeyedRemoteScreenCredentialStorage(
 class RemoteScreenRequest(
     val action: String,
     val screenId: String? = null,
-    val provider: String = "webdav",
+    val provider: String = "linked_file",
     val location: String = "",
     val displayName: String = "",
-    val username: String = "",
-    val secret: String = "",
-    val branch: String = "",
-    val filePath: String = "",
     /** Set by the platform when the storage itself grants view-only access (e.g. a read-only iCloud share). */
     val readOnly: Boolean = false,
     /** Reference to a Google Drive / OneDrive sign-in returned by `sign_in`. Tokens never leave Kotlin. */
     val accountRef: String = "",
+    /** Optional ownership hint (`"owner"` or `"shared"`). */
+    val ownership: String = "",
+    /** Optional human-readable owner name when opening a Screen shared by someone else. */
+    val ownerName: String = "",
 )
 
 @Serializable
@@ -90,7 +92,9 @@ class RemoteScreenActions(
         return outcomes.any {
             it is RemoteSyncOutcome.Pulled ||
                 it is RemoteSyncOutcome.Pushed ||
-                it is RemoteSyncOutcome.Conflict
+                it is RemoteSyncOutcome.Conflict ||
+                it is RemoteSyncOutcome.Disconnected ||
+                it is RemoteSyncOutcome.Deleted
         }
     }
 
@@ -98,6 +102,113 @@ class RemoteScreenActions(
 
     suspend fun createLinkedFile(suggestedFileName: String): LinkedFileHandle? =
         linkedFileStorage.createLinkedFile(suggestedFileName)
+
+    /**
+     * Deletes a Screen. With [deleteRemote] its Google Drive / OneDrive file is moved to that
+     * provider's trash too; ask the person first (see [RemoteScreenLink.offersRemoteDelete]).
+     */
+    suspend fun deleteScreen(screenId: String, deleteRemote: Boolean): RemoteScreenResult = try {
+        if (editingAccess.requiresUnlock()) {
+            RemoteScreenResult("locked", "Unlock Editing access before deleting Screens")
+        } else {
+            when (val outcome = sync.deleteScreen(screenId, deleteRemote)) {
+                is RemoteSyncOutcome.Deleted -> RemoteScreenResult("ok", "Screen deleted")
+                is RemoteSyncOutcome.Offline -> RemoteScreenResult("offline", outcome.message)
+                is RemoteSyncOutcome.Error -> RemoteScreenResult("error", outcome.message)
+                else -> RemoteScreenResult("error", "The Screen could not be deleted")
+            }
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        RemoteScreenResult("error", error.message?.trim()?.take(180)?.takeIf(String::isNotEmpty) ?: "The Screen could not be deleted")
+    }
+
+    /** Lists persistent Sync connections configured in Settings → Sync. */
+    suspend fun listSyncConnections(): List<SyncConnection> = sync.listConnections()
+
+    /** Signs into Google Drive or OneDrive, prepares its `Wingmate` folder, saves the connection, and syncs. */
+    suspend fun connectCloudSync(provider: String): RemoteScreenResult = try {
+        if (editingAccess.requiresUnlock()) {
+            return RemoteScreenResult("locked", "Unlock Editing access before changing Sync connections")
+        }
+        val kind = RemoteStorageKind.fromWireValue(provider)?.takeIf { it.isCloudDrive } ?: return invalidRequest()
+        if (!cloudDriveSignIn.isSupported(kind)) {
+            return RemoteScreenResult("error", "Sign-in for this storage is not set up in this build of Wingmate")
+        }
+        val files = cloudDriveFiles ?: return invalidRequest()
+        val bundle = cloudDriveSignIn.signIn(kind) ?: return RemoteScreenResult("cancelled", "Sign-in was cancelled")
+        val label = runCatching { files.accountLabel(kind, bundle) }.getOrNull()
+        val folder = files.ensureWingmateFolder(kind, bundle)
+        sync.addCloudConnection(
+            kind = kind,
+            secret = bundle,
+            accountLabel = label,
+            folderLocation = folder?.location.orEmpty(),
+            folderName = folder?.displayName ?: SyncConnection.WINGMATE_SYNC_FOLDER_NAME,
+        )
+        sync.syncAllAutomatic(minIntervalMillis = 0L, force = true)
+        RemoteScreenResult(
+            "ok",
+            label?.let { "Connected ($it) · Wingmate folder" } ?: "Connected · Wingmate folder",
+        )
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        val detail = error.message?.trim()?.take(180)?.takeIf(String::isNotEmpty)
+        RemoteScreenResult("error", detail ?: "Could not connect sync account")
+    }
+
+    /** Connects an OS folder (Android SAF picker if [folderLocation] is blank, or iOS folder bookmark) and syncs its `Wingmate` subfolder. */
+    suspend fun connectFolderSync(folderLocation: String = "", folderName: String = ""): RemoteScreenResult = try {
+        if (editingAccess.requiresUnlock()) {
+            return RemoteScreenResult("locked", "Unlock Editing access before changing Sync connections")
+        }
+        val resolvedLocation: String
+        val resolvedName: String
+        if (folderLocation.isBlank()) {
+            val picked = linkedFileStorage.pickSyncFolder()
+                ?: return RemoteScreenResult("cancelled", "Folder selection cancelled")
+            resolvedLocation = picked.location
+            resolvedName = picked.displayName
+        } else {
+            resolvedLocation = folderLocation
+            resolvedName = folderName.ifBlank { SyncConnection.WINGMATE_SYNC_FOLDER_NAME }
+        }
+        sync.addFolderConnection(resolvedLocation, resolvedName)
+        sync.syncAllAutomatic(minIntervalMillis = 0L, force = true)
+        RemoteScreenResult("ok", "Connected folder: $resolvedName")
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        val detail = error.message?.trim()?.take(180)?.takeIf(String::isNotEmpty)
+        RemoteScreenResult("error", detail ?: "Could not connect folder")
+    }
+
+    /** Disconnects a Sync connection in Settings → Sync while keeping all local Screen copies intact. */
+    suspend fun disconnectSyncConnection(connectionId: String): RemoteScreenResult = try {
+        if (editingAccess.requiresUnlock()) {
+            return RemoteScreenResult("locked", "Unlock Editing access before changing Sync connections")
+        }
+        sync.removeConnection(connectionId)
+        RemoteScreenResult("ok", "Sync connection removed")
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        val detail = error.message?.trim()?.take(180)?.takeIf(String::isNotEmpty)
+        RemoteScreenResult("error", detail ?: "Could not remove sync connection")
+    }
+
+    /** Runs an immediate pull/push across all connected folders and linked Screens. */
+    suspend fun syncNowAll(): RemoteScreenResult = try {
+        val changed = syncAllAutomatic(force = true)
+        RemoteScreenResult("ok", if (changed) "Screens synced" else "Screens are up to date")
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        val detail = error.message?.trim()?.take(180)?.takeIf(String::isNotEmpty)
+        RemoteScreenResult("error", detail ?: "Sync failed")
+    }
 
     suspend fun perform(request: RemoteScreenRequest): RemoteScreenResult = try {
         if (request.action == "sync_auto") {
@@ -131,17 +242,21 @@ class RemoteScreenActions(
                 val secret = if (kind.isCloudDrive) {
                     account(request.accountRef, kind) ?: return signInFirst()
                 } else {
-                    request.secret
+                    ""
                 }
                 val draft = RemoteScreenLinkDraft(
                     kind = kind,
                     location = request.location,
                     displayName = request.displayName,
-                    username = request.username,
                     secret = secret,
-                    branch = request.branch,
-                    filePath = request.filePath,
                     readOnly = request.readOnly,
+                    ownership = RemoteScreenOwnership.fromWireValue(request.ownership)
+                        ?: if (request.action == "connect" && (kind.isCloudDrive || kind == RemoteStorageKind.ICLOUD_SHARE)) {
+                            RemoteScreenOwnership.OWNER
+                        } else {
+                            null
+                        },
+                    ownerName = request.ownerName.trim().takeIf(String::isNotEmpty),
                 )
                 if (request.action == "connect" && id != null) sync.connect(id, draft)
                 else if (request.action == "open" && id == null) sync.openRemote(draft)
@@ -169,14 +284,31 @@ class RemoteScreenActions(
             is RemoteSyncOutcome.CopiedRemote -> RemoteScreenResult("ok", "Remote Screen saved as a separate copy")
             is RemoteSyncOutcome.LockedUpdateAvailable -> RemoteScreenResult("error", "Unlock the Screen to apply the remote update")
             is RemoteSyncOutcome.Disconnected -> RemoteScreenResult("ok", "Remote link removed")
+            is RemoteSyncOutcome.Deleted -> RemoteScreenResult("ok", "Screen deleted")
             is RemoteSyncOutcome.ReadOnlyLocalEdits -> RemoteScreenResult("ok", "Local edits stay on this device. This subscription is read-only")
             is RemoteSyncOutcome.Offline -> RemoteScreenResult("offline", outcome.message)
             is RemoteSyncOutcome.Error -> RemoteScreenResult("error", outcome.message)
         }
     }
 
+    /** Cloud drives (`google_drive`, `onedrive`) that already have an account in Settings → Sync. */
+    suspend fun connectedCloudDrives(): List<String> = cloudDriveProviders.filter { provider ->
+        RemoteStorageKind.fromWireValue(provider)?.let { sync.cloudConnectionAccount(it) } != null
+    }
+
     private suspend fun signIn(request: RemoteScreenRequest): RemoteScreenResult {
         val kind = RemoteStorageKind.fromWireValue(request.provider)?.takeIf { it.isCloudDrive } ?: return invalidRequest()
+        // Reuse the account from Settings → Sync instead of showing the provider's sign-in again.
+        sync.cloudConnectionAccount(kind)?.let { (connection, bundle) ->
+            val ref = Uuid.random().toString()
+            pendingMutex.withLock { pendingAccounts[ref] = kind to bundle }
+            return RemoteScreenResult(
+                status = "ok",
+                message = connection.accountLabel.takeIf(String::isNotBlank)?.let { "Signed in as $it" } ?: "Signed in",
+                accountRef = ref,
+                files = emptyList(),
+            )
+        }
         if (!cloudDriveSignIn.isSupported(kind)) {
             return RemoteScreenResult("error", "Sign-in for this storage is not set up in this build of Wingmate")
         }

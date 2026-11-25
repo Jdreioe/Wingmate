@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.domain
 
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
 import kotlin.jvm.JvmInline
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -202,6 +203,8 @@ data class Settings(
     val scanTopBarEnabled: Boolean = true,
     val scanPhraseGridOrder: String = "row-major",
     val scanDwellTimeSeconds: Float = 1.0f,
-    val scanAutoAdvanceSeconds: Float = 1.2f
+    val scanAutoAdvanceSeconds: Float = 1.2f,
+    // Persistent Sync connections managed in Settings → Sync (credentials stay in platform keystore/keychain).
+    val syncConnections: List<SyncConnection> = emptyList(),
 )
 

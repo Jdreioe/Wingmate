@@ -17,25 +17,27 @@ struct RemoteScreenSheet: View {
     let refresh: () async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var provider = "webdav"
+    @State private var provider = "icloud_share"
     @State private var location = ""
     @State private var displayName = ""
-    @State private var username = ""
-    @State private var secret = ""
-    @State private var branch = ""
-    @State private var filePath = ""
+    @State private var ownership = ""
+    @State private var ownerName = ""
     @State private var busy = false
     @State private var showFileImporter = false
     @State private var showFileExporter = false
     @State private var result: RemoteScreenResult?
     @State private var readOnly = false
     @State private var cloudProviders: [String] = []
+    /// Cloud drives already signed in through Settings → Sync; they never ask to sign in again.
+    @State private var connectedCloudDrives: [String] = []
     @State private var accountRef = ""
     @State private var accountMessage: String?
     @State private var cloudFiles: [RemoteFileChoice] = []
     @State private var listedCloudFiles = false
 
     private var isICloudLink: Bool { target?.remoteKind == "icloud_share" }
+    private var isOwnerLink: Bool { target?.remoteOwnership == "owner" }
+    private var isSharedLink: Bool { target?.remoteOwnership == "shared" }
     private var isCloudDrive: Bool { provider == "google_drive" || provider == "onedrive" }
     private var cloudProviderName: String {
         NSLocalizedString(provider == "google_drive" ? "remote_screen.provider.google_drive" : "remote_screen.provider.onedrive", comment: "")
@@ -45,12 +47,41 @@ struct RemoteScreenSheet: View {
         result?.status == "conflict" || result?.status == "read_only_conflict" || target?.remoteConflict == true
     }
 
+    private var ownershipSummary: String? {
+        if isOwnerLink {
+            return NSLocalizedString("remote_screen.owner.you", comment: "")
+        }
+        if isSharedLink {
+            if let owner = target?.remoteOwnerName, !owner.isEmpty {
+                return String(format: NSLocalizedString("remote_screen.owner.named", comment: ""), owner)
+            }
+            return NSLocalizedString("remote_screen.owner.shared", comment: "")
+        }
+        return nil
+    }
+
+    private var disconnectLabelKey: LocalizedStringKey {
+        if isICloudLink && isOwnerLink { return "remote_screen.icloud.stop_sharing" }
+        if isICloudLink && isSharedLink { return "remote_screen.icloud.leave_share" }
+        return "remote_screen.disconnect"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 if let remoteName = target?.remoteName {
                     Section("remote_screen.storage") {
                         Text(remoteName)
+                        if let ownershipSummary {
+                            Label(ownershipSummary, systemImage: isSharedLink ? "person.2.fill" : "person.crop.circle.badge.checkmark")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        if target?.remoteWritable == false {
+                            Text("remote_screen.icloud.view_only")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                         Text("remote_screen.auto_sync_note")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -66,7 +97,7 @@ struct RemoteScreenSheet: View {
                         if isICloudLink {
                             Button("remote_screen.icloud.manage") { manageICloudShare() }
                         }
-                        Button("remote_screen.disconnect") { submit("disconnect") }
+                        Button(disconnectLabelKey, role: isICloudLink ? .destructive : nil) { submit("disconnect") }
                         if isICloudLink {
                             Text("remote_screen.icloud.disconnect_note")
                                 .font(.caption)
@@ -76,10 +107,6 @@ struct RemoteScreenSheet: View {
                 } else if result?.status != "ok" {
                     Section {
                         Picker("remote_screen.provider.label", selection: $provider) {
-                            Text("remote_screen.provider.webdav").tag("webdav")
-                            Text("remote_screen.provider.github").tag("github")
-                            Text("remote_screen.provider.https").tag("https_url")
-                            Text("remote_screen.provider.linked_file").tag("linked_file")
                             Text("remote_screen.provider.icloud_share").tag("icloud_share")
                             if cloudProviders.contains("google_drive") {
                                 Text("remote_screen.provider.google_drive").tag("google_drive")
@@ -87,6 +114,7 @@ struct RemoteScreenSheet: View {
                             if cloudProviders.contains("onedrive") {
                                 Text("remote_screen.provider.onedrive").tag("onedrive")
                             }
+                            Text("remote_screen.provider.linked_file").tag("linked_file")
                         }
                         .onChange(of: provider) {
                             accountRef = ""
@@ -96,8 +124,10 @@ struct RemoteScreenSheet: View {
                             guard acceptedShare == nil || provider != "icloud_share" else { return }
                             location = ""
                             displayName = ""
-                            secret = ""
+                            ownership = ""
+                            ownerName = ""
                             readOnly = false
+                            if connectedCloudDrives.contains(provider) { signInToCloudDrive() }
                         }
                         if isCloudDrive {
                             cloudDriveRows
@@ -112,6 +142,14 @@ struct RemoteScreenSheet: View {
                                     format: NSLocalizedString("remote_screen.icloud.accepted", comment: ""),
                                     acceptedShare.title.isEmpty ? "iCloud" : acceptedShare.title
                                 ))
+                                if let owner = acceptedShare.ownerName, !owner.isEmpty {
+                                    Label(
+                                        String(format: NSLocalizedString("remote_screen.owner.named", comment: ""), owner),
+                                        systemImage: "person.2.fill"
+                                    )
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                }
                                 if acceptedShare.readOnly {
                                     Text("remote_screen.icloud.view_only")
                                         .font(.caption)
@@ -136,23 +174,6 @@ struct RemoteScreenSheet: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                        } else {
-                            TextField(
-                                LocalizedStringKey(provider == "github" ? "remote_screen.location.repo" : "remote_screen.location.url"),
-                                text: $location
-                            )
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            if provider == "webdav" {
-                                TextField("remote_screen.username", text: $username).textInputAutocapitalization(.never)
-                            }
-                            if provider == "github" {
-                                TextField("remote_screen.branch", text: $branch).textInputAutocapitalization(.never)
-                                TextField("remote_screen.file_path", text: $filePath).textInputAutocapitalization(.never)
-                            }
-                            SecureField("remote_screen.secret", text: $secret)
-                        }
-                        if provider != "icloud_share" && !isCloudDrive {
                             Button(LocalizedStringKey(target == nil ? "remote_screen.open_action" : "remote_screen.connect")) {
                                 submit(target == nil ? "open" : "connect")
                             }
@@ -193,6 +214,18 @@ struct RemoteScreenSheet: View {
                 provider = "icloud_share"
                 location = acceptedShare.location
                 readOnly = acceptedShare.readOnly
+                ownership = acceptedShare.isOwner ? "owner" : "shared"
+                ownerName = acceptedShare.ownerName ?? ""
+            }
+        }
+        .task {
+            // Start on the drive connected in Settings → Sync and use its account right away.
+            connectedCloudDrives = (try? await IosDiBridge().remoteScreenActions().connectedCloudDrives()) ?? []
+            guard target?.remoteName == nil, acceptedShare == nil, let connected = connectedCloudDrives.first else { return }
+            if provider == connected {
+                signInToCloudDrive()
+            } else {
+                provider = connected
             }
         }
     }
@@ -206,13 +239,14 @@ struct RemoteScreenSheet: View {
                 let prepared = try await CloudKitScreenShareService.shared.createShare(screenName: target.name)
                 let response = try await perform(RemoteScreenRequest(
                     action: "connect", screenId: target.id, provider: "icloud_share", location: prepared.location,
-                    displayName: "", username: "", secret: "", branch: "", filePath: "", readOnly: false,
-                    accountRef: ""
+                    displayName: "", readOnly: false, accountRef: "", ownership: "owner", ownerName: ""
                 ))
                 result = response
                 await refresh()
                 if response.status == "ok" {
-                    CloudSharingPresenter.present(share: prepared.share, title: target.name)
+                    CloudSharingPresenter.present(share: prepared.share, title: target.name) {
+                        submit("disconnect")
+                    }
                 } else {
                     try? await CloudKitScreenShareService.shared.release(location: prepared.location)
                 }
@@ -242,6 +276,8 @@ struct RemoteScreenSheet: View {
                     .foregroundColor(.secondary)
                 Button(String(format: NSLocalizedString("remote_screen.cloud.save_action", comment: ""), cloudProviderName)) {
                     location = ""
+                    ownership = "owner"
+                    ownerName = ""
                     submit("connect")
                 }
             } else if listedCloudFiles && cloudFiles.isEmpty {
@@ -253,9 +289,23 @@ struct RemoteScreenSheet: View {
                     Button {
                         location = file.location
                         displayName = file.name
+                        if let owned = file.ownedByMe?.boolValue {
+                            ownership = owned ? "owner" : "shared"
+                        } else {
+                            ownership = ""
+                        }
+                        ownerName = file.ownerName ?? ""
                         submit("open")
                     } label: {
-                        Label(file.name, systemImage: "doc")
+                        HStack {
+                            Label(file.name, systemImage: file.ownedByMe?.boolValue == false ? "person.2.fill" : "doc")
+                            Spacer()
+                            if file.ownedByMe?.boolValue == false {
+                                Text(file.ownerName ?? NSLocalizedString("remote_screen.badge.shared", comment: ""))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
@@ -270,8 +320,7 @@ struct RemoteScreenSheet: View {
             do {
                 let response = try await perform(RemoteScreenRequest(
                     action: "sign_in", screenId: nil, provider: chosenProvider, location: "",
-                    displayName: "", username: "", secret: "", branch: "", filePath: "", readOnly: false,
-                    accountRef: ""
+                    displayName: "", readOnly: false, accountRef: "", ownership: "", ownerName: ""
                 ))
                 guard response.status == "ok", let ref = response.accountRef, provider == chosenProvider else {
                     if response.status != "cancelled" { result = response }
@@ -282,8 +331,7 @@ struct RemoteScreenSheet: View {
                 if target == nil {
                     let listed = try await perform(RemoteScreenRequest(
                         action: "list_files", screenId: nil, provider: chosenProvider, location: "",
-                        displayName: "", username: "", secret: "", branch: "", filePath: "", readOnly: false,
-                        accountRef: ref
+                        displayName: "", readOnly: false, accountRef: ref, ownership: "", ownerName: ""
                     ))
                     if listed.status == "ok" {
                         cloudFiles = listed.files
@@ -305,7 +353,9 @@ struct RemoteScreenSheet: View {
             defer { busy = false }
             do {
                 let share = try await CloudKitScreenShareService.shared.shareForManaging(location: location, screenName: target.name)
-                CloudSharingPresenter.present(share: share, title: target.name)
+                CloudSharingPresenter.present(share: share, title: target.name) {
+                    submit("disconnect")
+                }
             } catch {
                 result = RemoteScreenResult(status: "error", message: CloudKitScreenShareService.map(error).message)
             }
@@ -335,15 +385,14 @@ struct RemoteScreenSheet: View {
         busy = true
         let request = RemoteScreenRequest(
             action: action, screenId: target?.id, provider: provider, location: location,
-            displayName: displayName, username: username, secret: secret, branch: branch, filePath: filePath,
-            readOnly: readOnly, accountRef: accountRef
+            displayName: displayName, readOnly: readOnly, accountRef: accountRef,
+            ownership: ownership, ownerName: ownerName
         )
         Task {
             defer { busy = false }
             do {
                 let response = try await perform(request)
                 result = response
-                if response.status != "error" && response.status != "locked" { secret = "" }
                 if action == "open", provider == "icloud_share", response.status == "ok" {
                     CloudKitScreenShareService.shared.pendingShare = nil
                 }

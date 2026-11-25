@@ -259,4 +259,33 @@ final class DuoLayoutTests: XCTestCase {
             isFullscreenMessage: true
         ))
     }
+
+    func testTopOcclusionClearanceIgnoresFullHeightAndInfiniteOcclusions() {
+        let iPadSize = CGSize(width: 1376, height: 1032)
+
+        // Small top camera cutout is respected.
+        XCTAssertEqual(
+            TopOcclusionClearance.from(
+                rects: [CGRect(x: 640, y: 8, width: 96, height: 36)],
+                in: iPadSize
+            ),
+            44,
+            accuracy: 0.01
+        )
+
+        // Full-height, tall, or infinite occlusion regions must never push edit UI off-screen.
+        XCTAssertEqual(
+            TopOcclusionClearance.from(
+                rects: [
+                    CGRect(x: 0, y: 0, width: 1376, height: 1032),
+                    CGRect(x: 0, y: 0, width: 64, height: 900),
+                    .infinite,
+                    .null,
+                ],
+                in: iPadSize
+            ),
+            0,
+            accuracy: 0.01
+        )
+    }
 }

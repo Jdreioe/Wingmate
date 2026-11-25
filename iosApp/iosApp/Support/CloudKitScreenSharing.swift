@@ -54,6 +54,8 @@ struct AcceptedCloudKitScreenShare: Equatable, Identifiable {
     let location: String
     let title: String
     let readOnly: Bool
+    let isOwner: Bool
+    let ownerName: String?
     var id: String { location }
 }
 
@@ -256,10 +258,17 @@ final class CloudKitScreenShareService: NSObject, ObservableObject, IosCloudKitS
             )
             : CloudKitScreenAddress(isOwner: false, recordID: rootID)
         let title = (metadata.share[CKShare.SystemFieldKey.title] as? String) ?? ""
+        let ownerName = metadata.ownerIdentity.nameComponents.flatMap { components -> String? in
+            let formatted = PersonNameComponentsFormatter.localizedString(from: components, style: .medium)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return formatted.isEmpty ? nil : formatted
+        }
         let accepted = AcceptedCloudKitScreenShare(
             location: address.location,
             title: title,
-            readOnly: !isOwner && metadata.participantPermission == .readOnly
+            readOnly: !isOwner && metadata.participantPermission == .readOnly,
+            isOwner: isOwner,
+            ownerName: isOwner ? nil : ownerName
         )
         await MainActor.run { pendingShare = accepted }
     }
@@ -331,7 +340,7 @@ final class CloudKitScreenShareService: NSObject, ObservableObject, IosCloudKitS
 enum CloudSharingPresenter {
     private static var activeDelegate: Delegate?
 
-    static func present(share: CKShare, title: String) {
+    static func present(share: CKShare, title: String, onStopSharing: (() -> Void)? = nil) {
         let windows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
@@ -340,7 +349,7 @@ enum CloudSharingPresenter {
 
         let controller = UICloudSharingController(share: share, container: CloudKitScreenShareService.shared.container)
         controller.availablePermissions = [.allowPrivate, .allowReadWrite, .allowReadOnly]
-        let delegate = Delegate(title: title)
+        let delegate = Delegate(title: title, onStopSharing: onStopSharing)
         activeDelegate = delegate
         controller.delegate = delegate
         if let popover = controller.popoverPresentationController {
@@ -353,10 +362,18 @@ enum CloudSharingPresenter {
 
     private final class Delegate: NSObject, UICloudSharingControllerDelegate {
         let title: String
-        init(title: String) { self.title = title }
+        let onStopSharing: (() -> Void)?
+        init(title: String, onStopSharing: (() -> Void)?) {
+            self.title = title
+            self.onStopSharing = onStopSharing
+        }
 
         func itemTitle(for csc: UICloudSharingController) -> String? { title }
 
         func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) {}
+
+        func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
+            DispatchQueue.main.async { self.onStopSharing?() }
+        }
     }
 }

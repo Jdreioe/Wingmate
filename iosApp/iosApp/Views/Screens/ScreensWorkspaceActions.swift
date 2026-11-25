@@ -469,10 +469,28 @@ extension SymbolBoardWorkspaceView {
         }
         if let deleteId = pendingDeleteBoardSetId {
             pendingDeleteBoardSetId = nil
-            await model.deleteBoardSet(id: deleteId)
+            await model.deleteBoardSet(id: deleteId, deleteRemote: pendingDeleteRemote)
+            pendingDeleteRemote = false
         } else if let id = pendingEditingBoardSetId {
             pendingEditingBoardSetId = nil
             route = .workspace(boardSetId: id, mode: .edit)
+        }
+    }
+
+    /// Deleting is protected by Editing access; [deleteRemote] also trashes the Screen's cloud file.
+    func confirmDeleteScreen(_ target: BoardSetInfo, deleteRemote: Bool) {
+        Task {
+            if await model.editingIsAuthorized() {
+                await model.deleteBoardSet(id: target.id, deleteRemote: deleteRemote)
+            } else {
+                pendingDeleteBoardSetId = target.id
+                pendingDeleteRemote = deleteRemote
+                pendingEditingBoardSetId = nil
+                pendingBoardLockId = nil
+                pinMode = .unlock
+                showEditingAccessSheet = true
+            }
+            deleteTargetSet = nil
         }
     }
 

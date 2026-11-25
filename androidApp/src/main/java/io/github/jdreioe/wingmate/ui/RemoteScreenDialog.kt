@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -16,11 +16,11 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,9 +28,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.application.RemoteScreenActions
@@ -50,27 +49,20 @@ internal fun RemoteScreenDialog(
     val scope = rememberCoroutineScope()
     val cloudDriveProviders = remember(actions) { actions.cloudDriveProviders }
     val providers = buildList {
-        add("webdav" to stringResource(R.string.remote_screen_provider_webdav))
-        add("github" to stringResource(R.string.remote_screen_provider_github))
-        add("https_url" to stringResource(R.string.remote_screen_provider_https))
-        if (actions.isLinkedFileSupported) {
-            add("linked_file" to stringResource(R.string.remote_screen_provider_linked_file))
-        }
         if ("google_drive" in cloudDriveProviders) {
             add("google_drive" to stringResource(R.string.remote_screen_provider_google_drive))
         }
         if ("onedrive" in cloudDriveProviders) {
             add("onedrive" to stringResource(R.string.remote_screen_provider_onedrive))
         }
+        if (actions.isLinkedFileSupported) {
+            add("linked_file" to stringResource(R.string.remote_screen_provider_linked_file))
+        }
     }
-    var provider by remember { mutableStateOf("webdav") }
+    var provider by remember(providers) { mutableStateOf(providers.firstOrNull()?.first ?: "linked_file") }
     var chooseProvider by remember { mutableStateOf(false) }
     var location by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var secret by remember { mutableStateOf("") }
-    var branch by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RemoteScreenResult?>(null) }
     // Track link & writability immediately after submit so UI doesn't flicker while RetryLoad runs.
@@ -89,7 +81,6 @@ internal fun RemoteScreenDialog(
     fun resetProviderInput() {
         location = ""
         displayName = ""
-        secret = ""
         accountRef = null
         signInMessage = null
         cloudFiles = null
@@ -130,10 +121,34 @@ internal fun RemoteScreenDialog(
         }
     }
 
+    // Drives connected in Settings → Sync reuse that account instead of asking to sign in again.
+    var connectedCloudDrives by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(actions) {
+        val connected = runCatching { actions.connectedCloudDrives() }.getOrDefault(emptyList())
+        connectedCloudDrives = connected
+        if (target?.remoteLink == null) connected.firstOrNull()?.let { provider = it }
+    }
+    LaunchedEffect(provider, connectedCloudDrives) {
+        if (target?.remoteLink == null && accountRef == null && !busy &&
+            connectedCloudDrives?.contains(provider) == true
+        ) {
+            signIn()
+        }
+    }
+
     fun submit(action: String) {
         busy = true
         val chosenFile = selectedCloudFile
         val request = if (isCloudDrive && (action == "open" || action == "connect")) {
+            val chosenOwnership = if (action == "connect") {
+                "owner"
+            } else {
+                when (chosenFile?.ownedByMe) {
+                    true -> "owner"
+                    false -> "shared"
+                    null -> ""
+                }
+            }
             RemoteScreenRequest(
                 action = action,
                 screenId = target?.id,
@@ -142,6 +157,8 @@ internal fun RemoteScreenDialog(
                 location = if (action == "open") chosenFile?.location.orEmpty() else "",
                 displayName = if (action == "open") chosenFile?.name.orEmpty() else "",
                 accountRef = accountRef.orEmpty(),
+                ownership = chosenOwnership,
+                ownerName = if (action == "open") chosenFile?.ownerName.orEmpty() else "",
             )
         } else {
             RemoteScreenRequest(
@@ -150,10 +167,6 @@ internal fun RemoteScreenDialog(
                 provider = provider,
                 location = location,
                 displayName = displayName,
-                username = username,
-                secret = secret,
-                branch = branch,
-                filePath = path,
             )
         }
         scope.launch {
@@ -163,11 +176,10 @@ internal fun RemoteScreenDialog(
                 if (action == "open" && response.status == "ok") opened = true
                 if (action == "connect" && response.status in listOf("ok", "conflict", "read_only_conflict")) {
                     connectedPendingRefresh = true
-                    connectedWritablePending = response.status != "read_only_conflict" && provider != "https_url"
+                    connectedWritablePending = response.status != "read_only_conflict"
                 } else if (action == "disconnect" && response.status == "ok") {
                     connectedPendingRefresh = false
                 }
-                if (response.status != "error" && response.status != "locked") secret = ""
                 onRefresh()
             } finally {
                 busy = false
@@ -214,6 +226,25 @@ internal fun RemoteScreenDialog(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isLinked) {
                     Text(link?.resolvedDisplayName() ?: displayName.ifBlank { location })
+                    val ownershipLine = when {
+                        link?.isOwnedByUser == true -> stringResource(R.string.remote_screen_owner_you)
+                        link?.isSharedFromOther == true -> {
+                            val owner = link.ownerName
+                            if (!owner.isNullOrBlank()) {
+                                stringResource(R.string.remote_screen_owner_named, owner)
+                            } else {
+                                stringResource(R.string.remote_screen_owner_shared)
+                            }
+                        }
+                        else -> null
+                    }
+                    ownershipLine?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
                         stringResource(R.string.remote_screen_auto_sync_note),
                         style = MaterialTheme.typography.bodySmall,
@@ -236,14 +267,16 @@ internal fun RemoteScreenDialog(
                         Text(stringResource(R.string.remote_screen_disconnect))
                     }
                 } else if (!opened) {
-                    TextButton(enabled = !busy, onClick = { chooseProvider = true }) { Text(providerLabel) }
-                    DropdownMenu(expanded = chooseProvider, onDismissRequest = { chooseProvider = false }) {
-                        providers.forEach { (kind, label) ->
-                            DropdownMenuItem(text = { Text(label) }, onClick = {
-                                provider = kind
-                                chooseProvider = false
-                                resetProviderInput()
-                            })
+                    if (providers.size > 1) {
+                        TextButton(enabled = !busy, onClick = { chooseProvider = true }) { Text(providerLabel) }
+                        DropdownMenu(expanded = chooseProvider, onDismissRequest = { chooseProvider = false }) {
+                            providers.forEach { (kind, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    provider = kind
+                                    chooseProvider = false
+                                    resetProviderInput()
+                                })
+                            }
                         }
                     }
                     if (isCloudDrive) {
@@ -279,7 +312,19 @@ internal fun RemoteScreenDialog(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             RadioButton(selected = selected, onClick = null)
-                                            Text(file.name, Modifier.padding(start = 12.dp))
+                                            Column(Modifier.padding(start = 12.dp)) {
+                                                Text(file.name)
+                                                if (file.ownedByMe == false) {
+                                                    val sharedLabel = file.ownerName?.takeIf { it.isNotBlank() }?.let {
+                                                        stringResource(R.string.remote_screen_owner_named, it)
+                                                    } ?: stringResource(R.string.remote_screen_badge_shared)
+                                                    Text(
+                                                        sharedLabel,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -297,54 +342,6 @@ internal fun RemoteScreenDialog(
                         if (displayName.isNotBlank()) {
                             Text(stringResource(R.string.remote_screen_selected_file, displayName))
                         }
-                    } else {
-                        OutlinedTextField(
-                            location,
-                            { location = it },
-                            label = {
-                                Text(
-                                    stringResource(
-                                        if (provider == "github") R.string.remote_screen_location_repo
-                                        else R.string.remote_screen_location_url,
-                                    ),
-                                )
-                            },
-                            enabled = !busy,
-                            singleLine = true,
-                        )
-                        if (provider == "webdav") {
-                            OutlinedTextField(
-                                username,
-                                { username = it },
-                                label = { Text(stringResource(R.string.remote_screen_username)) },
-                                enabled = !busy,
-                                singleLine = true,
-                            )
-                        }
-                        if (provider == "github") {
-                            OutlinedTextField(
-                                branch,
-                                { branch = it },
-                                label = { Text(stringResource(R.string.remote_screen_branch)) },
-                                enabled = !busy,
-                                singleLine = true,
-                            )
-                            OutlinedTextField(
-                                path,
-                                { path = it },
-                                label = { Text(stringResource(R.string.remote_screen_file_path)) },
-                                enabled = !busy,
-                                singleLine = true,
-                            )
-                        }
-                        OutlinedTextField(
-                            secret,
-                            { secret = it },
-                            label = { Text(stringResource(R.string.remote_screen_secret)) },
-                            enabled = !busy,
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                        )
                     }
                 }
                 result?.message?.takeIf { it.isNotBlank() }?.let { Text(it) }

@@ -1,25 +1,30 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
+import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.obf.CloudDriveFiles
 import io.github.jdreioe.wingmate.domain.obf.CloudShareScreenStorage
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.RemoteConflictResolution
+import io.github.jdreioe.wingmate.domain.obf.RemoteFileChoice
 import io.github.jdreioe.wingmate.domain.obf.RemoteFileContent
 import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
 import io.github.jdreioe.wingmate.domain.obf.RemoteScreenLink
+import io.github.jdreioe.wingmate.domain.obf.RemoteScreenOwnership
 import io.github.jdreioe.wingmate.domain.obf.RemoteScreenStorage
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageErrorCode
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageException
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
 import io.github.jdreioe.wingmate.domain.obf.RemoteSyncOutcome
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
 import io.github.jdreioe.wingmate.domain.obf.UnsupportedCloudShareScreenStorage
 import io.github.jdreioe.wingmate.domain.obf.UnsupportedLinkedRemoteFileStorage
 import io.github.jdreioe.wingmate.infrastructure.BoardImportErrorCode
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
+import io.github.jdreioe.wingmate.infrastructure.CloudDriveFileOperations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -41,31 +46,33 @@ internal class RemoteScreenLinkDraft(
     val kind: RemoteStorageKind,
     val location: String,
     val displayName: String = "",
-    val branch: String = "",
-    val filePath: String = "",
-    val username: String = "",
     val secret: String = "",
     val readOnly: Boolean = false,
+    val ownership: RemoteScreenOwnership? = null,
+    val ownerName: String? = null,
 ) {
     fun toLink() = RemoteScreenLink(
         kind = kind,
-        readOnly = readOnly || kind == RemoteStorageKind.HTTPS_URL || (kind == RemoteStorageKind.GITHUB && secret.isBlank()),
+        readOnly = readOnly,
         location = location.trim(),
         displayName = displayName.trim(),
-        branch = branch.trim().ifEmpty { null }.takeIf { kind == RemoteStorageKind.GITHUB },
-        filePath = filePath.trim().ifEmpty { null }.takeIf { kind == RemoteStorageKind.GITHUB },
-        username = username.trim().ifEmpty { null }.takeIf { kind == RemoteStorageKind.WEBDAV },
-        credentialId = if (secret.isEmpty() || kind == RemoteStorageKind.LINKED_FILE || kind == RemoteStorageKind.ICLOUD_SHARE) {
+        credentialId = if (secret.isEmpty() || !kind.isCloudDrive) {
             null
         } else {
             "remote-screen-${Uuid.random()}"
         },
+        ownership = ownership ?: when {
+            kind == RemoteStorageKind.ICLOUD_SHARE && location.trim().startsWith("icloud://private/") -> RemoteScreenOwnership.OWNER
+            kind == RemoteStorageKind.ICLOUD_SHARE && location.trim().startsWith("icloud://shared/") -> RemoteScreenOwnership.SHARED
+            else -> null
+        },
+        ownerName = ownerName?.trim()?.takeIf(String::isNotEmpty),
     )
 }
 
 /**
  * Exchanges linked Screens as `.obz` Vocabulary packages with user-provided storage
- * (WebDAV, GitHub, read-only HTTPS URL, OS/cloud-synced linked file, or an iCloud share).
+ * (Google Drive, OneDrive, iCloud sharing, or an OS/cloud-synced linked file).
  *
  * Supports automatic background pull/push with zero user input as well as explicit sync
  * and three-way conflict resolution.
@@ -81,11 +88,13 @@ class RemoteScreenSyncUseCase(
     private val backgroundScope: CoroutineScope? = null,
     private val cloudShareStorage: CloudShareScreenStorage = UnsupportedCloudShareScreenStorage,
     private val cloudDriveFiles: CloudDriveFiles? = null,
+    private val settingsRepository: SettingsRepository? = null,
 ) {
     private val mutex = Mutex()
     private val scheduleMutex = Mutex()
     private val pendingPushJobs = mutableMapOf<String, Job>()
     private val lastAutoSyncAttemptAt = mutableMapOf<String, Long>()
+    private var lastConnectionsSyncAt: Long = 0L
     private var periodicJob: Job? = null
 
     private val _syncVersion = MutableStateFlow(0L)
@@ -96,20 +105,78 @@ class RemoteScreenSyncUseCase(
         boardSetUseCase.setOnScreenMutatedListener { boardSetId ->
             scheduleAutoPush(boardSetId)
         }
+        boardSetUseCase.setOnScreenDeletingListener { set -> rememberDeletedOnlyHere(set) }
     }
 
-    /** Schedules a debounced automatic push after a local edit to a linked Screen. */
+    /** Guards Sync connection bookkeeping. Separate from [mutex]: deletes can run while a sync holds it. */
+    private val connectionsMutex = Mutex()
+    /** Screens whose remote file is already gone (deleted with it, or removed elsewhere). */
+    private val remoteAlreadyDeleted = mutableSetOf<String>()
+
+    /**
+     * A linked Screen deleted only on this device: remember its file on the owning Sync connection so
+     * automatic folder pull does not bring it back.
+     */
+    private suspend fun rememberDeletedOnlyHere(set: ObfBoardSet) {
+        scheduleMutex.withLock { pendingPushJobs.remove(set.id)?.cancel() }
+        val link = set.remoteLink ?: return
+        val repo = settingsRepository ?: return
+        connectionsMutex.withLock {
+            if (remoteAlreadyDeleted.remove(set.id)) return
+            val current = repo.get()
+            val owner = current.syncConnections.firstOrNull { it.owns(link) } ?: return
+            val updated = current.syncConnections.map { conn ->
+                if (conn.id != owner.id) conn
+                else conn.copy(ignoredLocations = (conn.ignoredLocations + link.location).distinct().takeLast(MAX_IGNORED_LOCATIONS))
+            }
+            repo.update(current.copy(syncConnections = updated))
+        }
+    }
+
+    private fun SyncConnection.owns(link: RemoteScreenLink): Boolean {
+        if (credentialId != null && link.credentialId == credentialId) return true
+        if (kind != RemoteStorageKind.LINKED_FILE || link.kind != RemoteStorageKind.LINKED_FILE) return false
+        val folderPrefix = folderLocation.removePrefix("ios-folder-bookmark://")
+        return link.location.startsWith("ios-folder-file://$folderPrefix/") || link.location.startsWith(folderLocation)
+    }
+
+    /**
+     * Deletes a Screen. With [deleteRemote], its Google Drive / OneDrive file goes to the provider's
+     * trash first; if that fails the local Screen is kept so nothing is lost.
+     */
+    internal suspend fun deleteScreen(boardSetId: String, deleteRemote: Boolean): RemoteSyncOutcome = guarded(boardSetId) {
+        val set = requireScreen(boardSetId)
+        val link = set.remoteLink
+        if (deleteRemote) {
+            if (link == null || !link.offersRemoteDelete) {
+                fail(RemoteStorageErrorCode.INVALID_CONFIGURATION, "This Screen's file cannot be deleted from Wingmate")
+            }
+            storage.delete(link, readCredential(link))
+            connectionsMutex.withLock { remoteAlreadyDeleted += boardSetId }
+        }
+        boardSetUseCase.deleteBoardSet(boardSetId)
+        bumpVersion()
+        RemoteSyncOutcome.Deleted(boardSetId, remoteDeleted = deleteRemote)
+    }
+
+    /** Schedules a debounced automatic push after a local edit to a linked or synced Screen. */
     fun scheduleAutoPush(boardSetId: String, delayMillis: Long = DEFAULT_AUTO_PUSH_DEBOUNCE_MS) {
         val scope = backgroundScope ?: return
         scope.launch {
             val set = runCatching { boardSetRepository.getBoardSet(boardSetId) }.getOrNull() ?: return@launch
-            val link = set.remoteLink ?: return@launch
-            if (!link.isWritable || link.hasConflict) return@launch
+            val link = set.remoteLink
+            val hasSyncConn = link == null && set.kind == ScreenKind.User && enabledConnections().isNotEmpty()
+            if (link == null && !hasSyncConn) return@launch
+            if (link != null && (!link.isWritable || link.hasConflict)) return@launch
             scheduleMutex.withLock {
                 pendingPushJobs.remove(boardSetId)?.cancel()
                 pendingPushJobs[boardSetId] = scope.launch {
                     delay(delayMillis)
-                    sync(boardSetId, automatic = true)
+                    if (link != null) {
+                        sync(boardSetId, automatic = true)
+                    } else {
+                        syncAllAutomatic(minIntervalMillis = 0L, force = true)
+                    }
                 }
             }
         }
@@ -137,11 +204,10 @@ class RemoteScreenSyncUseCase(
         minIntervalMillis: Long = DEFAULT_AUTO_SYNC_THROTTLE_MS,
         force: Boolean = false,
     ): List<RemoteSyncOutcome> {
+        val outcomes = mutableListOf<RemoteSyncOutcome>()
         val linked = runCatching {
             boardSetRepository.listBoardSets().filter { it.remoteLink != null }
         }.getOrDefault(emptyList())
-        if (linked.isEmpty()) return emptyList()
-        val outcomes = mutableListOf<RemoteSyncOutcome>()
         for (set in linked) {
             val nowMs = now()
             val lastAttempt = lastAutoSyncAttemptAt[set.id] ?: 0L
@@ -149,7 +215,259 @@ class RemoteScreenSyncUseCase(
             lastAutoSyncAttemptAt[set.id] = nowMs
             outcomes += sync(set.id, automatic = true)
         }
+        val connections = enabledConnections()
+        if (connections.isNotEmpty()) {
+            val nowMs = now()
+            if (force || nowMs - lastConnectionsSyncAt >= minIntervalMillis) {
+                lastConnectionsSyncAt = nowMs
+                outcomes += syncConfiguredConnections(connections)
+            }
+        }
         return outcomes
+    }
+
+    /** Returns all configured Sync connections stored in Settings. */
+    suspend fun listConnections(): List<SyncConnection> =
+        runCatching { settingsRepository?.get()?.syncConnections }.getOrNull().orEmpty()
+
+    /**
+     * The saved account of an enabled Settings → Sync connection for [kind], so other remote Screen
+     * actions can reuse it instead of asking the person to sign in again.
+     */
+    internal suspend fun cloudConnectionAccount(kind: RemoteStorageKind): Pair<SyncConnection, String>? {
+        val connection = listConnections().firstOrNull { it.enabled && it.kind == kind && it.credentialId != null }
+            ?: return null
+        val secret = runCatching { credentials.read(connection.credentialId!!) }.getOrNull() ?: return null
+        return connection to secret
+    }
+
+    /** Registers a Google Drive or OneDrive sync connection pointing at its `Wingmate` folder. */
+    internal suspend fun addCloudConnection(
+        kind: RemoteStorageKind,
+        secret: String,
+        accountLabel: String?,
+        folderLocation: String,
+        folderName: String,
+    ): SyncConnection {
+        require(kind.isCloudDrive) { "Expected a cloud drive kind" }
+        val repo = settingsRepository
+            ?: fail(RemoteStorageErrorCode.UNSUPPORTED_PLATFORM, "Settings storage is unavailable")
+        if (!credentials.isSupported) {
+            fail(RemoteStorageErrorCode.UNSUPPORTED_PLATFORM, "Secure credential storage is unavailable on this device")
+        }
+        val credId = "${SyncConnection.CREDENTIAL_PREFIX}${Uuid.random()}"
+        credentials.write(credId, secret)
+        val connection = SyncConnection(
+            id = Uuid.random().toString(),
+            kind = kind,
+            accountLabel = accountLabel?.trim().orEmpty(),
+            folderName = folderName.ifBlank { SyncConnection.WINGMATE_SYNC_FOLDER_NAME },
+            folderLocation = folderLocation.trim(),
+            credentialId = credId,
+            enabled = true,
+        )
+        try {
+            val current = repo.get()
+            val previousSameKind = current.syncConnections.filter { it.kind == kind }
+            val updatedList = current.syncConnections.filter { it.kind != kind } + connection
+            repo.update(current.copy(syncConnections = updatedList))
+            // Clean up replaced credentials of the same provider kind.
+            previousSameKind.forEach { old ->
+                old.credentialId?.let { runCatching { credentials.delete(it) } }
+            }
+        } catch (error: Exception) {
+            withContext(NonCancellable) { runCatching { credentials.delete(credId) } }
+            throw error
+        }
+        return connection
+    }
+
+    /** Registers an OS folder sync connection whose `Wingmate` subfolder auto-pulls/pushes Screens. */
+    internal suspend fun addFolderConnection(folderLocation: String, folderName: String): SyncConnection {
+        val repo = settingsRepository
+            ?: fail(RemoteStorageErrorCode.UNSUPPORTED_PLATFORM, "Settings storage is unavailable")
+        val cleanLocation = folderLocation.trim()
+        if (cleanLocation.isEmpty()) {
+            fail(RemoteStorageErrorCode.INVALID_CONFIGURATION, "Choose a folder first")
+        }
+        val cleanName = folderName.trim().ifBlank { SyncConnection.WINGMATE_SYNC_FOLDER_NAME }
+        val connection = SyncConnection(
+            id = Uuid.random().toString(),
+            kind = RemoteStorageKind.LINKED_FILE,
+            accountLabel = cleanName,
+            folderName = SyncConnection.WINGMATE_SYNC_FOLDER_NAME,
+            folderLocation = cleanLocation,
+            credentialId = null,
+            enabled = true,
+        )
+        val current = repo.get()
+        val updatedList = current.syncConnections.filterNot {
+            it.kind == RemoteStorageKind.LINKED_FILE && it.folderLocation == cleanLocation
+        } + connection
+        repo.update(current.copy(syncConnections = updatedList))
+        return connection
+    }
+
+    /** Removes a Sync connection from Settings, deletes its credential/bookmark, and unlinks its Screens. */
+    internal suspend fun removeConnection(connectionId: String) = mutex.withLock {
+        val repo = settingsRepository ?: return@withLock
+        val current = repo.get()
+        val target = current.syncConnections.firstOrNull { it.id == connectionId } ?: return@withLock
+        withContext(NonCancellable) {
+            repo.update(current.copy(syncConnections = current.syncConnections.filterNot { it.id == connectionId }))
+            // Unlink Screens owned by this connection (keep every local Screen copy intact).
+            val sets = runCatching { boardSetRepository.listBoardSets() }.getOrDefault(emptyList())
+            val folderPrefix = target.folderLocation.removePrefix("ios-folder-bookmark://")
+            for (set in sets) {
+                val link = set.remoteLink ?: continue
+                val matchesCredential = target.credentialId != null && link.credentialId == target.credentialId
+                val matchesFolder = target.kind == RemoteStorageKind.LINKED_FILE && link.kind == RemoteStorageKind.LINKED_FILE && (
+                    link.location.startsWith("ios-folder-file://$folderPrefix/") ||
+                        link.location.startsWith(target.folderLocation)
+                    )
+                if (matchesCredential || matchesFolder) {
+                    runCatching { boardSetRepository.saveBoardSet(set.copy(remoteLink = null)) }
+                }
+            }
+            target.credentialId?.let { runCatching { credentials.delete(it) } }
+            if (target.kind == RemoteStorageKind.LINKED_FILE) {
+                runCatching { linkedFileStorage.releaseAccess(target.folderLocation) }
+            }
+            bumpVersion()
+        }
+    }
+
+    private suspend fun enabledConnections(): List<SyncConnection> =
+        listConnections().filter { it.enabled }
+
+    /**
+     * Auto-pulls any unimported `.obz` Screens from each connected `Wingmate` folder and
+     * auto-pushes any unlinked local user Screens into the primary connected `Wingmate` folder.
+     */
+    private suspend fun syncConfiguredConnections(connections: List<SyncConnection>): List<RemoteSyncOutcome> {
+        val outcomes = mutableListOf<RemoteSyncOutcome>()
+        val knownNamesByConnection = mutableMapOf<String, MutableSet<String>>()
+
+        // 1. Auto-pull newly discovered .obz Screens from every connected folder.
+        for (conn in connections) {
+            val secret = conn.credentialId?.let { runCatching { credentials.read(it) }.getOrNull() }
+            if (conn.kind.isCloudDrive && secret == null) continue
+            val files = runCatching {
+                when {
+                    conn.kind.isCloudDrive -> cloudDriveFiles?.listScreenFiles(
+                        conn.kind,
+                        secret!!,
+                        conn.folderLocation.ifBlank { null },
+                    ).orEmpty()
+                    conn.kind == RemoteStorageKind.LINKED_FILE ->
+                        linkedFileStorage.listFolderScreenFiles(conn.folderLocation)
+                    else -> emptyList()
+                }
+            }.getOrNull() ?: continue
+
+            knownNamesByConnection[conn.id] = files.mapTo(mutableSetOf()) { it.name.lowercase() }
+            val existingLocations = runCatching {
+                boardSetRepository.listBoardSets().mapNotNull { it.remoteLink?.location }.toSet()
+            }.getOrDefault(emptySet())
+
+            for (choice in files) {
+                if (choice.location in existingLocations || choice.location in conn.ignoredLocations) continue
+                val outcome = pullNewFromConnection(conn, choice, secret)
+                if (outcome != null) outcomes += outcome
+            }
+        }
+
+        // 2. Auto-push unlinked local user Screens into the first connected folder.
+        val primary = connections.firstOrNull() ?: return outcomes
+        val primarySecret = primary.credentialId?.let { runCatching { credentials.read(it) }.getOrNull() }
+        if (primary.kind.isCloudDrive && primarySecret == null) return outcomes
+        val usedNames = knownNamesByConnection[primary.id] ?: mutableSetOf()
+        val unlinkedUserScreens = runCatching {
+            boardSetRepository.listBoardSets().filter { it.kind == ScreenKind.User && it.remoteLink == null }
+        }.getOrDefault(emptyList())
+        for (screen in unlinkedUserScreens) {
+            val outcome = pushUnlinkedToConnection(primary, screen, primarySecret, usedNames)
+            if (outcome != null) outcomes += outcome
+        }
+        return outcomes
+    }
+
+    private suspend fun pullNewFromConnection(
+        conn: SyncConnection,
+        choice: RemoteFileChoice,
+        secret: String?,
+    ): RemoteSyncOutcome? = guarded(null) {
+        val link = RemoteScreenLink(
+            kind = conn.kind,
+            location = choice.location,
+            displayName = choice.name,
+            credentialId = conn.credentialId,
+            ownership = if (choice.ownedByMe == false) RemoteScreenOwnership.SHARED else RemoteScreenOwnership.OWNER,
+            ownerName = choice.ownerName,
+        )
+        // Skip empty 0-byte placeholders that another device hasn't finished uploading yet.
+        val meta = storage.head(link, secret)
+        if (!meta.exists) return@guarded RemoteSyncOutcome.UpToDate(
+            ObfBoardSet(id = "", name = "", rootBoardId = "", createdAt = 0L, updatedAt = 0L),
+        )
+        val remote = storage.download(link, secret)
+        val result = import(remote.bytes, preserveBoardIds = true)
+        val updated = try {
+            saveBaseline(result.boardSet.id, link, remote.revision, remote.contentHash)
+        } catch (error: Exception) {
+            withContext(NonCancellable) {
+                runCatching { boardSetUseCase.deleteBoardSet(result.boardSet.id) }
+            }
+            throw error
+        }
+        cache(updated.id)
+        bumpVersion()
+        RemoteSyncOutcome.Pulled(updated, result.warnings.size)
+    }.takeUnless { it is RemoteSyncOutcome.UpToDate && it.boardSet.id.isEmpty() }
+
+    private suspend fun pushUnlinkedToConnection(
+        conn: SyncConnection,
+        screen: ObfBoardSet,
+        secret: String?,
+        usedNames: MutableSet<String>,
+    ): RemoteSyncOutcome? = guarded(screen.id) {
+        val latest = boardSetRepository.getBoardSet(screen.id) ?: return@guarded RemoteSyncOutcome.UpToDate(screen)
+        if (latest.remoteLink != null) return@guarded RemoteSyncOutcome.UpToDate(latest)
+        val fileName = uniqueObzFileName(latest.name, usedNames)
+        val created = when {
+            conn.kind.isCloudDrive -> {
+                val files = cloudDriveFiles
+                    ?: fail(RemoteStorageErrorCode.UNSUPPORTED_PLATFORM, "Cloud drives are not available")
+                files.createScreenFile(conn.kind, secret!!, fileName, conn.folderLocation.ifBlank { null })
+            }
+            conn.kind == RemoteStorageKind.LINKED_FILE ->
+                linkedFileStorage.createFolderScreenFile(conn.folderLocation, fileName)
+            else -> fail(RemoteStorageErrorCode.INVALID_CONFIGURATION, "Unsupported sync connection")
+        }
+        usedNames += created.name.lowercase()
+        val link = RemoteScreenLink(
+            kind = conn.kind,
+            location = created.location,
+            displayName = created.name,
+            credentialId = conn.credentialId,
+            ownership = RemoteScreenOwnership.OWNER,
+        )
+        val linked = saveLink(latest.id, link)
+        val outcome = push(linked, secret, revision = null)
+        bumpVersion()
+        outcome
+    }
+
+    private fun uniqueObzFileName(screenName: String, usedLowerNames: MutableSet<String>): String {
+        val baseFile = CloudDriveFileOperations.sanitizeFileName(screenName)
+        if (baseFile.lowercase() !in usedLowerNames) return baseFile
+        val stem = baseFile.removeSuffix(".obz")
+        var n = 2
+        while (true) {
+            val candidate = "$stem ($n).obz"
+            if (candidate.lowercase() !in usedLowerNames) return candidate
+            n++
+        }
     }
 
     internal suspend fun connect(boardSetId: String, draft: RemoteScreenLinkDraft): RemoteSyncOutcome = guarded(boardSetId) {
@@ -185,6 +503,8 @@ class RemoteScreenSyncUseCase(
             displayName = draft.displayName.ifBlank { created.name },
             secret = draft.secret,
             readOnly = draft.readOnly,
+            ownership = draft.ownership ?: RemoteScreenOwnership.OWNER,
+            ownerName = draft.ownerName,
         )
     }
 
@@ -213,7 +533,8 @@ class RemoteScreenSyncUseCase(
         val set = requireScreen(boardSetId)
         val link = set.remoteLink
         val updated = withContext(NonCancellable) {
-            link?.credentialId?.let { runCatching { credentials.delete(it) } }
+            val sharedCredIds = listConnections().mapNotNull { it.credentialId }.toSet()
+            link?.credentialId?.takeIf { it !in sharedCredIds }?.let { runCatching { credentials.delete(it) } }
             if (link?.kind == RemoteStorageKind.LINKED_FILE) {
                 runCatching { linkedFileStorage.releaseAccess(link.location) }
             }
@@ -236,6 +557,25 @@ class RemoteScreenSyncUseCase(
         if (!meta.exists) {
             if (link.isWritable && (link.lastSyncedAt == null || link.kind == RemoteStorageKind.LINKED_FILE)) {
                 return@guarded push(set, secret, revision = null)
+            }
+            if (link.kind.isCloudDrive && link.lastSyncedAt != null) {
+                // The file was deleted in Google Drive / OneDrive (or by another device). Follow the
+                // delete unless this copy has edits that were never uploaded; those are kept unlinked.
+                if (boardSetUseCase.screenFingerprint(boardSetId) == link.lastSyncedLocalHash) {
+                    connectionsMutex.withLock { remoteAlreadyDeleted += boardSetId }
+                    boardSetUseCase.deleteBoardSet(boardSetId)
+                    bumpVersion()
+                    return@guarded RemoteSyncOutcome.Deleted(boardSetId, remoteDeleted = true)
+                }
+                val disconnected = saveLink(boardSetId, null)
+                bumpVersion()
+                return@guarded RemoteSyncOutcome.Disconnected(disconnected)
+            }
+            if (link.kind == RemoteStorageKind.ICLOUD_SHARE && link.lastSyncedAt != null) {
+                // The owner stopped sharing (or removed this participant). Keep the local copy and drop the dead link.
+                val disconnected = saveLink(boardSetId, null)
+                bumpVersion()
+                return@guarded RemoteSyncOutcome.Disconnected(disconnected)
             }
             fail(RemoteStorageErrorCode.NOT_FOUND, "Remote file was not found")
         }
@@ -457,6 +797,7 @@ class RemoteScreenSyncUseCase(
     private fun now() = Clock.System.now().toEpochMilliseconds()
 
     companion object {
+        private const val MAX_IGNORED_LOCATIONS = 500
         const val DEFAULT_AUTO_PUSH_DEBOUNCE_MS = 1_500L
         const val DEFAULT_AUTO_SYNC_THROTTLE_MS = 15_000L
         const val DEFAULT_AUTO_SYNC_INTERVAL_MS = 45_000L

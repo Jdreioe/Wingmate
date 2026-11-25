@@ -69,6 +69,7 @@ import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.domain.obf.LinkedFileHandle
 import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
 import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.domain.obf.SyncFolderHandle
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -170,6 +171,10 @@ class IosDiBridge {
     fun registerLinkedRemoteFile(urlString: String, displayName: String? = null): LinkedFileHandle {
         val storage = KoinPlatform.getKoin().get<LinkedRemoteFileStorage>() as IosLinkedRemoteFileStorage
         return storage.registerUrl(urlString, displayName)
+    }
+    fun registerSyncFolder(urlString: String, displayName: String? = null): SyncFolderHandle {
+        val storage = KoinPlatform.getKoin().get<LinkedRemoteFileStorage>() as IosLinkedRemoteFileStorage
+        return storage.registerFolderUrl(urlString, displayName)
     }
     /** Registers the Swift CloudKit adapter used for iCloud shared Screens (iOS → iOS). */
     fun registerCloudKitScreenBridge(bridge: IosCloudKitScreenBridge) = IosCloudKitScreenShareStorage.register(bridge)

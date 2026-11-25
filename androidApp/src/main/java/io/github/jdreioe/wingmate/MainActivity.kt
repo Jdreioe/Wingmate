@@ -105,9 +105,13 @@ class MainActivity : ComponentActivity() {
                 val createLinkedLauncher = registerForActivityResult(
                     androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
                 ) { uri -> linkedStorage.onDocumentSelected(uri) }
+                val openFolderLauncher = registerForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+                ) { uri -> linkedStorage.onFolderSelected(uri) }
                 linkedStorage.registerLaunchers(
                     launchOpen = { openLinkedLauncher.launch(arrayOf("*/*")) },
                     launchCreate = { suggestedName -> createLinkedLauncher.launch(suggestedName) },
+                    launchFolder = { openFolderLauncher.launch(null) },
                 )
             }
         }

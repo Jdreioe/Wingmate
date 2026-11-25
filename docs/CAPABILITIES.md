@@ -97,9 +97,8 @@ See [the backup format](BACKUP_FORMAT.md) and
 
 OBF and OBZ provide explicit Screens vocabulary transfer. Android and iOS can
 link individual Screens to storage the Communicator or a Supporter already has
-(Google Drive, OneDrive, WebDAV, GitHub, a read-only HTTPS file, or an
-OS/cloud-synced linked file) for automatic zero-input sync across devices while
-keeping every local Screen usable offline. iOS can also share a Screen with other
+(Google Drive, OneDrive, or an OS/cloud-synced linked file) for automatic
+zero-input sync across devices while keeping every local Screen usable offline. iOS can also share a Screen with other
 iPhones and iPads through iCloud (CloudKit sharing), inviting people with edit or
 view-only access. Google Drive and OneDrive appear only in builds configured with
 their public OAuth client IDs. There is no browser editor yet for Supporters on a PC.

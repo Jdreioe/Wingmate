@@ -13,6 +13,8 @@ import io.github.jdreioe.wingmate.domain.obf.RemoteStorageErrorCode
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageException
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
 import io.github.jdreioe.wingmate.domain.obf.RemoteWriteResult
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
+import io.github.jdreioe.wingmate.domain.obf.SyncFolderHandle
 import io.github.jdreioe.wingmate.domain.obf.UnsupportedCloudDriveSignIn
 import io.github.jdreioe.wingmate.domain.obf.UnsupportedRemoteScreenCredentialStorage
 import io.ktor.client.HttpClient
@@ -399,9 +401,16 @@ class GoogleDriveRemoteScreenProvider(
         val headRevisionId: String? = null,
         val md5Checksum: String? = null,
         val trashed: Boolean = false,
+        val ownedByMe: Boolean? = null,
+        val owners: List<DriveUser> = emptyList(),
     ) {
         val hasContent: Boolean get() = (size?.toLongOrNull() ?: 0L) > 0L
         val revision: String? get() = headRevisionId ?: md5Checksum?.let { "md5:$it" }
+        val primaryOwnerName: String?
+            get() = owners.firstOrNull()?.let { user ->
+                user.displayName?.trim()?.takeIf(String::isNotEmpty)
+                    ?: user.emailAddress?.trim()?.takeIf(String::isNotEmpty)
+            }
     }
 
     @Serializable
@@ -411,7 +420,7 @@ class GoogleDriveRemoteScreenProvider(
     private class DriveAbout(val user: DriveUser? = null)
 
     @Serializable
-    private class DriveUser(val emailAddress: String? = null, val displayName: String? = null)
+    internal class DriveUser(val emailAddress: String? = null, val displayName: String? = null)
 
     override suspend fun head(link: RemoteScreenLink, secret: String?): RemoteFileMetadata {
         val file = metadata(link, secret) ?: return RemoteFileMetadata(revision = null, exists = false)
@@ -468,16 +477,95 @@ class GoogleDriveRemoteScreenProvider(
         return RemoteWriteResult(revision = saved.revision, contentHash = sha256Hex(bytes))
     }
 
-    suspend fun listScreenFiles(secret: String): List<RemoteFileChoice> {
+    suspend fun ensureWingmateFolder(secret: String): SyncFolderHandle {
         val link = accountLink()
+        val existingResponse = authorized(tokens, link, secret, { token ->
+            executeNetwork {
+                httpClient.request("${apiBaseUrl.trimEnd('/')}/files") {
+                    bearer(token)
+                    parameter(
+                        "q",
+                        "mimeType = '$FOLDER_MIME_TYPE' and name = '${SyncConnection.WINGMATE_SYNC_FOLDER_NAME}' and trashed = false",
+                    )
+                    parameter("fields", "files(id,name,ownedByMe)")
+                    parameter("orderBy", "modifiedTime desc")
+                    parameter("pageSize", "10")
+                    parameter("supportsAllDrives", "true")
+                    parameter("includeItemsFromAllDrives", "true")
+                }
+            }
+        }, { it.status == HttpStatusCode.Unauthorized })
+        if (existingResponse.status.isSuccess()) {
+            val found = runCatching {
+                cloudJson.decodeFromString(DriveFileList.serializer(), existingResponse.bodyAsText()).files
+            }.getOrDefault(emptyList())
+                .filter { DRIVE_ID.matches(it.id) }
+                .sortedByDescending { it.ownedByMe == true }
+                .firstOrNull()
+            if (found != null) {
+                return SyncFolderHandle(
+                    location = found.id,
+                    displayName = found.name.ifBlank { SyncConnection.WINGMATE_SYNC_FOLDER_NAME },
+                )
+            }
+        }
+        val createResponse = authorized(tokens, link, secret, { token ->
+            executeNetwork {
+                httpClient.request("${apiBaseUrl.trimEnd('/')}/files") {
+                    method = HttpMethod.Post
+                    bearer(token)
+                    parameter("fields", "id,name")
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """{"name":${cloudJson.encodeToString(String.serializer(), SyncConnection.WINGMATE_SYNC_FOLDER_NAME)},"mimeType":"$FOLDER_MIME_TYPE"}""",
+                    )
+                }
+            }
+        }, { it.status == HttpStatusCode.Unauthorized })
+        if (!createResponse.status.isSuccess()) createResponse.failure(PROVIDER, "folder creation")
+        val created = cloudJson.decodeFromString(DriveFile.serializer(), createResponse.bodyAsText())
+        return SyncFolderHandle(
+            location = created.id,
+            displayName = created.name.ifBlank { SyncConnection.WINGMATE_SYNC_FOLDER_NAME },
+        )
+    }
+
+    override suspend fun delete(link: RemoteScreenLink, secret: String?) {
+        if (link.readOnly) throw RemoteStorageException(RemoteStorageErrorCode.READ_ONLY, "This Google Drive link is read-only")
+        val url = "${apiBaseUrl.trimEnd('/')}/files/${fileId(link).encodeURLPathPart()}"
+        val response = authorized(tokens, link, secret, { token ->
+            executeNetwork {
+                httpClient.request(url) {
+                    method = HttpMethod.Patch
+                    bearer(token)
+                    parameter("supportsAllDrives", "true")
+                    parameter("fields", "id,trashed")
+                    contentType(ContentType.Application.Json)
+                    // Trash, not permanent delete: the owner can restore it from Google Drive for 30 days.
+                    setBody("""{"trashed":true}""")
+                }
+            }
+        }, { it.status == HttpStatusCode.Unauthorized })
+        if (response.status == HttpStatusCode.NotFound) return
+        if (!response.status.isSuccess()) response.failure(PROVIDER, "delete")
+    }
+
+    suspend fun listScreenFiles(secret: String, folderLocation: String? = null): List<RemoteFileChoice> {
+        val link = accountLink()
+        val folderId = folderLocation?.trim()?.takeIf { DRIVE_ID.matches(it) }
+        val query = if (folderId != null) {
+            "trashed = false and ('$folderId' in parents or not 'me' in owners)"
+        } else {
+            "trashed = false"
+        }
         val response = authorized(tokens, link, secret, { token ->
             executeNetwork {
                 httpClient.request("${apiBaseUrl.trimEnd('/')}/files") {
                     bearer(token)
                     // `drive.file` only exposes Wingmate's files; `name contains` matches word prefixes
                     // only, so filter by the .obz suffix below instead.
-                    parameter("q", "trashed = false")
-                    parameter("fields", "files(id,name)")
+                    parameter("q", query)
+                    parameter("fields", "files(id,name,ownedByMe,owners(displayName,emailAddress))")
                     parameter("orderBy", "modifiedTime desc")
                     parameter("pageSize", "100")
                     parameter("supportsAllDrives", "true")
@@ -488,11 +576,20 @@ class GoogleDriveRemoteScreenProvider(
         if (!response.status.isSuccess()) response.failure(PROVIDER, "listing")
         return cloudJson.decodeFromString(DriveFileList.serializer(), response.bodyAsText()).files
             .filter { it.name.endsWith(".obz", ignoreCase = true) && DRIVE_ID.matches(it.id) }
-            .map { RemoteFileChoice(location = it.id, name = it.name) }
+            .map {
+                RemoteFileChoice(
+                    location = it.id,
+                    name = it.name,
+                    ownedByMe = it.ownedByMe,
+                    ownerName = if (it.ownedByMe == false) it.primaryOwnerName else null,
+                )
+            }
     }
 
-    suspend fun createScreenFile(secret: String, fileName: String): RemoteFileChoice {
+    suspend fun createScreenFile(secret: String, fileName: String, folderLocation: String? = null): RemoteFileChoice {
         val link = accountLink()
+        val folderId = folderLocation?.trim()?.takeIf { DRIVE_ID.matches(it) }
+        val parentsField = folderId?.let { ""","parents":[${cloudJson.encodeToString(String.serializer(), it)}]""" }.orEmpty()
         val response = authorized(tokens, link, secret, { token ->
             executeNetwork {
                 httpClient.request("${apiBaseUrl.trimEnd('/')}/files") {
@@ -500,13 +597,13 @@ class GoogleDriveRemoteScreenProvider(
                     bearer(token)
                     parameter("fields", "id,name")
                     contentType(ContentType.Application.Json)
-                    setBody("""{"name":${cloudJson.encodeToString(String.serializer(), fileName)},"mimeType":"application/octet-stream"}""")
+                    setBody("""{"name":${cloudJson.encodeToString(String.serializer(), fileName)},"mimeType":"application/octet-stream"$parentsField}""")
                 }
             }
         }, { it.status == HttpStatusCode.Unauthorized })
         if (!response.status.isSuccess()) response.failure(PROVIDER, "file creation")
         val created = cloudJson.decodeFromString(DriveFile.serializer(), response.bodyAsText())
-        return RemoteFileChoice(location = created.id, name = created.name.ifBlank { fileName })
+        return RemoteFileChoice(location = created.id, name = created.name.ifBlank { fileName }, ownedByMe = true)
     }
 
     suspend fun accountLabel(secret: String): String? {
@@ -553,6 +650,7 @@ class GoogleDriveRemoteScreenProvider(
         const val DEFAULT_API_BASE_URL = "https://www.googleapis.com/drive/v3"
         const val DEFAULT_UPLOAD_BASE_URL = "https://www.googleapis.com/upload/drive/v3"
         private const val PROVIDER = "Google Drive"
+        private const val FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         private const val FILE_FIELDS = "id,name,size,headRevisionId,md5Checksum,trashed"
         private val DRIVE_ID = Regex("^[A-Za-z0-9_-]{10,200}$")
     }
@@ -581,7 +679,14 @@ class OneDriveRemoteScreenProvider(
         val eTag: String? = null,
         val parentReference: ParentReference? = null,
         val file: FileFacet? = null,
+        val remoteItem: RemoteItemFacet? = null,
     )
+
+    @Serializable
+    internal class RemoteItemFacet(val shared: SharedFacet? = null)
+
+    @Serializable
+    internal class SharedFacet(val owner: Owner? = null)
 
     @Serializable
     internal class ParentReference(val driveId: String? = null)
@@ -596,10 +701,10 @@ class OneDriveRemoteScreenProvider(
     private class Drive(val owner: Owner? = null)
 
     @Serializable
-    private class Owner(val user: Identity? = null)
+    internal class Owner(val user: Identity? = null)
 
     @Serializable
-    private class Identity(val displayName: String? = null)
+    internal class Identity(val displayName: String? = null)
 
     override suspend fun head(link: RemoteScreenLink, secret: String?): RemoteFileMetadata {
         val item = item(link, secret)
@@ -655,25 +760,109 @@ class OneDriveRemoteScreenProvider(
         return RemoteWriteResult(revision = saved.eTag, contentHash = sha256Hex(bytes))
     }
 
-    suspend fun listScreenFiles(secret: String): List<RemoteFileChoice> {
+    suspend fun ensureWingmateFolder(secret: String): SyncFolderHandle {
+        val folderName = SyncConnection.WINGMATE_SYNC_FOLDER_NAME
+        val check = authorized(tokens, accountLink(), secret, { token ->
+            executeNetwork {
+                httpClient.request("${graphBaseUrl.trimEnd('/')}/me/drive/root:/${folderName.encodeURLPathPart()}") {
+                    bearer(token)
+                    parameter("\$select", "id,name")
+                }
+            }
+        }, { it.status == HttpStatusCode.Unauthorized })
+        if (check.status.isSuccess()) {
+            return SyncFolderHandle(location = folderName, displayName = folderName)
+        }
+        val create = authorized(tokens, accountLink(), secret, { token ->
+            executeNetwork {
+                httpClient.request("${graphBaseUrl.trimEnd('/')}/me/drive/root/children") {
+                    method = HttpMethod.Post
+                    bearer(token)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"name":${cloudJson.encodeToString(String.serializer(), folderName)},"folder":{},"@microsoft.graph.conflictBehavior":"fail"}""")
+                }
+            }
+        }, { it.status == HttpStatusCode.Unauthorized })
+        if (!create.status.isSuccess() && create.status != HttpStatusCode.Conflict) {
+            create.failure(PROVIDER, "folder creation")
+        }
+        return SyncFolderHandle(location = folderName, displayName = folderName)
+    }
+
+    override suspend fun delete(link: RemoteScreenLink, secret: String?) {
+        if (link.readOnly) throw RemoteStorageException(RemoteStorageErrorCode.READ_ONLY, "This OneDrive link is read-only")
+        // Graph moves the item to the OneDrive recycle bin, where it can be restored.
+        val response = authorized(tokens, link, secret, { token ->
+            executeNetwork {
+                httpClient.request(itemUrl(link)) {
+                    method = HttpMethod.Delete
+                    bearer(token)
+                }
+            }
+        }, { it.status == HttpStatusCode.Unauthorized })
+        if (response.status == HttpStatusCode.NotFound) return
+        if (!response.status.isSuccess()) response.failure(PROVIDER, "delete")
+    }
+
+    suspend fun listScreenFiles(secret: String, folderLocation: String? = null): List<RemoteFileChoice> {
+        val results = linkedMapOf<String, RemoteFileChoice>()
+        val folder = folderLocation?.trim()?.trim('/')?.ifBlank { null }
+        if (folder != null) {
+            val encoded = folder.split('/').joinToString("/") { it.encodeURLPathPart() }
+            val folderResponse = authorized(tokens, accountLink(), secret, { token ->
+                executeNetwork {
+                    httpClient.request("${graphBaseUrl.trimEnd('/')}/me/drive/root:/$encoded:/children") {
+                        bearer(token)
+                        parameter("\$select", "id,name,size,file,parentReference,remoteItem")
+                        parameter("\$top", "100")
+                    }
+                }
+            }, { it.status == HttpStatusCode.Unauthorized })
+            if (folderResponse.status.isSuccess()) {
+                parseDriveItems(folderResponse.bodyAsText()).forEach { results[it.location] = it }
+            }
+        }
         val response = authorized(tokens, accountLink(), secret, { token ->
             executeNetwork {
                 httpClient.request("${graphBaseUrl.trimEnd('/')}/me/drive/root/search(q='obz')") {
                     bearer(token)
-                    parameter("\$select", "id,name,size,file,parentReference")
+                    parameter("\$select", "id,name,size,file,parentReference,remoteItem")
                     parameter("\$top", "100")
                 }
             }
         }, { it.status == HttpStatusCode.Unauthorized })
-        if (!response.status.isSuccess()) response.failure(PROVIDER, "listing")
-        return cloudJson.decodeFromString(DriveItemList.serializer(), response.bodyAsText()).value
-            .filter { it.file != null && it.name.endsWith(".obz", ignoreCase = true) }
-            .mapNotNull { item -> item.parentReference?.driveId?.let { RemoteFileChoice("$it/${item.id}", item.name) } }
-            .filter { LOCATION.matches(it.location) }
+        if (!response.status.isSuccess()) {
+            if (results.isNotEmpty()) return results.values.toList()
+            response.failure(PROVIDER, "listing")
+        }
+        parseDriveItems(response.bodyAsText()).forEach { choice ->
+            if ((folder == null || choice.ownedByMe == false) && choice.location !in results) {
+                results[choice.location] = choice
+            }
+        }
+        return results.values.toList()
     }
 
-    suspend fun createScreenFile(secret: String, fileName: String): RemoteFileChoice {
-        val path = "Wingmate/$fileName".split('/').joinToString("/") { it.encodeURLPathPart() }
+    private fun parseDriveItems(body: String): List<RemoteFileChoice> =
+        cloudJson.decodeFromString(DriveItemList.serializer(), body).value
+            .filter { it.file != null && it.name.endsWith(".obz", ignoreCase = true) }
+            .mapNotNull { item ->
+                item.parentReference?.driveId?.let { driveId ->
+                    val isOwned = item.remoteItem == null
+                    val owner = item.remoteItem?.shared?.owner?.user?.displayName?.trim()?.takeIf(String::isNotEmpty)
+                    RemoteFileChoice(
+                        location = "$driveId/${item.id}",
+                        name = item.name,
+                        ownedByMe = isOwned,
+                        ownerName = if (isOwned) null else owner,
+                    )
+                }
+            }
+            .filter { LOCATION.matches(it.location) }
+
+    suspend fun createScreenFile(secret: String, fileName: String, folderLocation: String? = null): RemoteFileChoice {
+        val folder = folderLocation?.trim()?.trim('/')?.ifBlank { null } ?: SyncConnection.WINGMATE_SYNC_FOLDER_NAME
+        val path = "$folder/$fileName".split('/').joinToString("/") { it.encodeURLPathPart() }
         val response = authorized(tokens, accountLink(), secret, { token ->
             executeNetwork {
                 httpClient.request("${graphBaseUrl.trimEnd('/')}/me/drive/root:/$path:/content") {
@@ -689,7 +878,7 @@ class OneDriveRemoteScreenProvider(
         val created = cloudJson.decodeFromString(DriveItem.serializer(), response.bodyAsText())
         val driveId = created.parentReference?.driveId
             ?: throw RemoteStorageException(RemoteStorageErrorCode.IO_ERROR, "OneDrive did not return the new file's drive")
-        return RemoteFileChoice(location = "$driveId/${created.id}", name = created.name.ifBlank { fileName })
+        return RemoteFileChoice(location = "$driveId/${created.id}", name = created.name.ifBlank { fileName }, ownedByMe = true)
     }
 
     suspend fun accountLabel(secret: String): String? {
@@ -744,17 +933,38 @@ class CloudDriveFileOperations(
     private val googleDrive: GoogleDriveRemoteScreenProvider,
     private val oneDrive: OneDriveRemoteScreenProvider,
 ) : CloudDriveFiles {
-    override suspend fun listScreenFiles(kind: RemoteStorageKind, secret: String): List<RemoteFileChoice> = when (kind) {
-        RemoteStorageKind.GOOGLE_DRIVE -> googleDrive.listScreenFiles(secret)
-        RemoteStorageKind.ONEDRIVE -> oneDrive.listScreenFiles(secret)
+    override suspend fun ensureWingmateFolder(kind: RemoteStorageKind, secret: String): SyncFolderHandle = when (kind) {
+        RemoteStorageKind.GOOGLE_DRIVE -> googleDrive.ensureWingmateFolder(secret)
+        RemoteStorageKind.ONEDRIVE -> oneDrive.ensureWingmateFolder(secret)
         else -> throw notCloudDrive()
     }
 
-    override suspend fun createScreenFile(kind: RemoteStorageKind, secret: String, fileName: String): RemoteFileChoice {
+    override suspend fun listScreenFiles(kind: RemoteStorageKind, secret: String): List<RemoteFileChoice> =
+        listScreenFiles(kind, secret, null)
+
+    override suspend fun listScreenFiles(
+        kind: RemoteStorageKind,
+        secret: String,
+        folderLocation: String?,
+    ): List<RemoteFileChoice> = when (kind) {
+        RemoteStorageKind.GOOGLE_DRIVE -> googleDrive.listScreenFiles(secret, folderLocation)
+        RemoteStorageKind.ONEDRIVE -> oneDrive.listScreenFiles(secret, folderLocation)
+        else -> throw notCloudDrive()
+    }
+
+    override suspend fun createScreenFile(kind: RemoteStorageKind, secret: String, fileName: String): RemoteFileChoice =
+        createScreenFile(kind, secret, fileName, null)
+
+    override suspend fun createScreenFile(
+        kind: RemoteStorageKind,
+        secret: String,
+        fileName: String,
+        folderLocation: String?,
+    ): RemoteFileChoice {
         val safeName = sanitizeFileName(fileName)
         return when (kind) {
-            RemoteStorageKind.GOOGLE_DRIVE -> googleDrive.createScreenFile(secret, safeName)
-            RemoteStorageKind.ONEDRIVE -> oneDrive.createScreenFile(secret, safeName)
+            RemoteStorageKind.GOOGLE_DRIVE -> googleDrive.createScreenFile(secret, safeName, folderLocation)
+            RemoteStorageKind.ONEDRIVE -> oneDrive.createScreenFile(secret, safeName, folderLocation)
             else -> throw notCloudDrive()
         }
     }

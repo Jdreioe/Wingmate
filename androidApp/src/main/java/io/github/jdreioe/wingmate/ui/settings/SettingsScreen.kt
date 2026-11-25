@@ -17,14 +17,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -36,8 +42,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
+import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -626,6 +637,9 @@ private fun CategoryContent(
                     onAction(SettingsAction.PointerEmphasisScaleChangeFinished)
                 }
             )
+            SettingsTab.Sync -> SyncSettingsSection(
+                onRequestUnlock = { onAction(SettingsAction.EditingAccessUnlockClicked) },
+            )
             SettingsTab.Privacy -> PrivacySection(
                 historyVisible = settings.historyVisible,
                 onHistoryVisibleChange = { checked ->
@@ -686,6 +700,146 @@ internal fun settingsCategoryTitle(tab: SettingsTab): String = when (tab) {
     SettingsTab.Speech -> stringResource(R.string.ui_settings_speech_title)
     SettingsTab.Display -> stringResource(R.string.ui_settings_display_title)
     SettingsTab.Accessibility -> stringResource(R.string.ui_settings_accessibility_title)
+    SettingsTab.Sync -> stringResource(R.string.ui_settings_sync_title)
     SettingsTab.Privacy -> stringResource(R.string.ui_settings_privacy_title)
     SettingsTab.General -> stringResource(R.string.ui_settings_general_title)
+}
+
+@Composable
+private fun SyncSettingsSection(
+    onRequestUnlock: () -> Unit,
+) {
+    val koin = getKoin()
+    val actions = remember(koin) { koin.getOrNull<RemoteScreenActions>() }
+    val scope = rememberCoroutineScope()
+    var connections by remember { mutableStateOf<List<SyncConnection>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    val cloudProviders = remember(actions) { actions?.cloudDriveProviders.orEmpty() }
+
+    suspend fun reload() {
+        connections = actions?.listSyncConnections().orEmpty()
+    }
+
+    LaunchedEffect(actions) { reload() }
+
+    fun runAction(block: suspend RemoteScreenActions.() -> io.github.jdreioe.wingmate.application.RemoteScreenResult) {
+        val current = actions ?: return
+        busy = true
+        status = null
+        scope.launch {
+            try {
+                val res = current.block()
+                if (res.status == "locked") {
+                    onRequestUnlock()
+                }
+                status = res.message
+                reload()
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            stringResource(R.string.settings_sync_folder_footer),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (connections.isEmpty()) {
+            Text(
+                stringResource(R.string.settings_sync_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            connections.forEach { conn ->
+                val title = when (conn.kind) {
+                    RemoteStorageKind.GOOGLE_DRIVE -> stringResource(R.string.remote_screen_provider_google_drive)
+                    RemoteStorageKind.ONEDRIVE -> stringResource(R.string.remote_screen_provider_onedrive)
+                    RemoteStorageKind.LINKED_FILE -> conn.accountLabel.ifBlank { stringResource(R.string.settings_sync_folder_label) }
+                    else -> conn.folderName
+                }
+                val folderText = stringResource(R.string.settings_sync_wingmate_folder, conn.folderName)
+                val subtitle = if (conn.kind != RemoteStorageKind.LINKED_FILE && conn.accountLabel.isNotBlank()) {
+                    "${conn.accountLabel} · $folderText"
+                } else {
+                    folderText
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            if (conn.kind == RemoteStorageKind.LINKED_FILE) Icons.Filled.Folder else Icons.Filled.Cloud,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(title, style = MaterialTheme.typography.titleSmall)
+                            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(
+                            enabled = !busy,
+                            onClick = { runAction { disconnectSyncConnection(conn.id) } },
+                        ) {
+                            Text(stringResource(R.string.remote_screen_disconnect))
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if ("google_drive" in cloudProviders && connections.none { it.kind == RemoteStorageKind.GOOGLE_DRIVE }) {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = { runAction { connectCloudSync("google_drive") } },
+                ) {
+                    Text(stringResource(R.string.remote_screen_provider_google_drive))
+                }
+            }
+            if ("onedrive" in cloudProviders && connections.none { it.kind == RemoteStorageKind.ONEDRIVE }) {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = { runAction { connectCloudSync("onedrive") } },
+                ) {
+                    Text(stringResource(R.string.remote_screen_provider_onedrive))
+                }
+            }
+            if (actions?.isLinkedFileSupported == true) {
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = { runAction { connectFolderSync() } },
+                ) {
+                    Text(stringResource(R.string.settings_sync_add_folder))
+                }
+            }
+        }
+
+        Button(
+            enabled = !busy,
+            onClick = { runAction { syncNowAll() } },
+        ) {
+            if (busy) {
+                CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+            } else {
+                Icon(Icons.Filled.Sync, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(stringResource(R.string.remote_screen_sync_now))
+        }
+
+        status?.takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }

@@ -739,16 +739,7 @@
     <string name="board_page_start">Start page</string>
     <string name="remote_screen_open">Open remote Screen</string>
     <string name="remote_screen_title_for">Remote storage for %1$s</string>
-    <string name="remote_screen_provider_webdav">WebDAV</string>
-    <string name="remote_screen_provider_github">GitHub</string>
-    <string name="remote_screen_provider_https">HTTPS subscription</string>
     <string name="remote_screen_provider_linked_file">Linked file (Drive / folder)</string>
-    <string name="remote_screen_location_repo">Repository (owner/name)</string>
-    <string name="remote_screen_location_url">HTTPS file URL</string>
-    <string name="remote_screen_username">Username</string>
-    <string name="remote_screen_branch">Branch (defaults to main)</string>
-    <string name="remote_screen_file_path">File path</string>
-    <string name="remote_screen_secret">Password or token</string>
     <string name="remote_screen_choose_file">Choose .obz file</string>
     <string name="remote_screen_create_file">Create linked .obz file</string>
     <string name="remote_screen_selected_file">File: %1$s</string>
@@ -768,4 +759,20 @@
     <string name="remote_screen_sign_in">Sign in</string>
     <string name="remote_screen_save_to_cloud">Save to %1$s</string>
     <string name="remote_screen_choose_cloud_file">Choose a Screen file</string>
+    <string name="remote_screen_badge_shared">Shared</string>
+    <string name="remote_screen_owned_by_you_badge">Owned by you · %1$s</string>
+    <string name="remote_screen_shared_with_you_badge">Shared with you · %1$s</string>
+    <string name="remote_screen_shared_by_badge">Shared by %1$s · %2$s</string>
+    <string name="remote_screen_owner_you">Owner: You</string>
+    <string name="remote_screen_owner_named">Shared by %1$s</string>
+    <string name="remote_screen_owner_shared">Shared with you</string>
+    <string name="ui_settings_sync_title">Sync</string>
+    <string name="ui_settings_sync_desc">Sync Screens with Google Drive, OneDrive, or a folder</string>
+    <string name="settings_sync_empty">No sync connections yet.</string>
+    <string name="settings_sync_add_folder">Choose sync folder</string>
+    <string name="settings_sync_folder_label">Sync folder</string>
+    <string name="settings_sync_wingmate_folder">%1$s folder</string>
+    <string name="settings_sync_folder_footer">Wingmate automatically pulls and pushes Screens from a Wingmate folder inside each connected drive or folder while keeping every Screen usable offline.</string>
+    <string name="board_sets_delete_with_remote">Delete here and in %1$s</string>
+    <string name="board_sets_delete_here_only">Delete only on this device</string>
 </resources>

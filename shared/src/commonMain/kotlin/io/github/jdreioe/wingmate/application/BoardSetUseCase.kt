@@ -20,6 +20,7 @@ import io.github.jdreioe.wingmate.domain.obf.CloudShareScreenStorage
 import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
 import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
 import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -47,6 +48,13 @@ class BoardSetUseCase(
     /** Lets remote Screen sync schedule an automatic push after any local Screen edit. */
     fun setOnScreenMutatedListener(listener: ((String) -> Unit)?) {
         onScreenMutated = listener
+    }
+
+    private var onScreenDeleting: (suspend (ObfBoardSet) -> Unit)? = null
+
+    /** Lets remote Screen sync react before a linked Screen is deleted (for example so folder sync does not re-import it). */
+    fun setOnScreenDeletingListener(listener: (suspend (ObfBoardSet) -> Unit)?) {
+        onScreenDeleting = listener
     }
 
     private fun notifyScreenMutated(boardSetId: String) {
@@ -117,11 +125,15 @@ class BoardSetUseCase(
     suspend fun deleteBoardSet(boardSetId: String) {
         val graph = loadBoardSetGraph(boardSetId) ?: return
         if (graph.boardSet.kind != ScreenKind.User) return
+        if (graph.boardSet.remoteLink != null) {
+            onScreenDeleting?.let { listener -> runCatching { listener(graph.boardSet) } }
+        }
         graph.boards.forEach { boardRepository.deleteBoard(it.id) }
         boardSetRepository.deleteBoardSet(boardSetId)
         withContext(NonCancellable) {
             graph.boardSet.remoteLink?.let { link ->
-                link.credentialId?.let { id ->
+                // A Settings → Sync connection's sign-in is shared by every Screen it pulled; keep it.
+                link.credentialId?.takeUnless { it.startsWith(SyncConnection.CREDENTIAL_PREFIX) }?.let { id ->
                     runCatching { remoteCredentials?.delete(id) }
                 }
                 if (link.kind == RemoteStorageKind.LINKED_FILE) {

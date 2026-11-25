@@ -272,6 +272,7 @@ internal val screensModule: Module = module {
             backgroundScope = get(),
             cloudShareStorage = getOrNull() ?: UnsupportedCloudShareScreenStorage,
             cloudDriveFiles = get(),
+            settingsRepository = getOrNull(),
         )
     }
     single {

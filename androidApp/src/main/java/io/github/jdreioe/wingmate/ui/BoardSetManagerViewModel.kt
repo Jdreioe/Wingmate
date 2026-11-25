@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.application.BoardSetSpeechCacheUseCase
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.KeyboardPreset
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
@@ -138,6 +139,8 @@ internal sealed interface BoardSetManagerAction {
     data class DeleteClicked(val boardSetId: String) : BoardSetManagerAction
     data object DeleteDismissed : BoardSetManagerAction
     data object DeleteConfirmed : BoardSetManagerAction
+    /** Delete here and also move the Screen's Google Drive / OneDrive file to the trash. */
+    data object DeleteWithRemoteConfirmed : BoardSetManagerAction
     data object DeleteAccessDismissed : BoardSetManagerAction
     data object DeleteAccessGranted : BoardSetManagerAction
     data object WorkspaceExited : BoardSetManagerAction
@@ -166,6 +169,8 @@ internal interface BoardSetManagerOperations {
     suspend fun duplicateBoardSet(id: String)
     suspend fun toggleLocked(id: String)
     suspend fun deleteBoardSet(id: String)
+    /** Deletes the Screen and moves its Google Drive / OneDrive file to that provider's trash. */
+    suspend fun deleteBoardSetAndRemoteFile(id: String) = deleteBoardSet(id)
     suspend fun cacheAll()
     suspend fun cacheBoardSet(id: String)
     suspend fun requiresDeleteUnlock(): Boolean
@@ -181,6 +186,7 @@ internal class DefaultBoardSetManagerOperations(
     private val speechCache: BoardSetSpeechCacheUseCase,
     private val importService: BoardImportService?,
     private val editingAccessController: EditingAccessController?,
+    private val remoteScreenActions: RemoteScreenActions? = null,
 ) : BoardSetManagerOperations {
     override suspend fun listBoardSets() = useCase.listBoardSets()
     override suspend fun getBoardSet(id: String) = useCase.getBoardSet(id)
@@ -193,6 +199,11 @@ internal class DefaultBoardSetManagerOperations(
     }
 
     override suspend fun deleteBoardSet(id: String) = useCase.deleteBoardSet(id)
+    override suspend fun deleteBoardSetAndRemoteFile(id: String) {
+        val actions = remoteScreenActions ?: return deleteBoardSet(id)
+        val result = actions.deleteScreen(id, deleteRemote = true)
+        check(result.status == "ok") { result.message }
+    }
     override suspend fun cacheAll() = speechCache.cacheAll()
     override suspend fun cacheBoardSet(id: String) = speechCache.cacheBoardSet(id)
     override suspend fun requiresDeleteUnlock() = editingAccessController?.requiresUnlock() == true
@@ -318,7 +329,8 @@ internal class BoardSetManagerViewModel(
             is BoardSetManagerAction.ToggleLockClicked -> toggleLock(action.boardSetId)
             is BoardSetManagerAction.DeleteClicked -> setDeleteTarget(action.boardSetId)
             BoardSetManagerAction.DeleteDismissed -> setDeleteTarget(null)
-            BoardSetManagerAction.DeleteConfirmed -> confirmDelete()
+            BoardSetManagerAction.DeleteConfirmed -> confirmDelete(deleteRemote = false)
+            BoardSetManagerAction.DeleteWithRemoteConfirmed -> confirmDelete(deleteRemote = true)
             BoardSetManagerAction.DeleteAccessDismissed -> clearProtectedDelete()
             BoardSetManagerAction.DeleteAccessGranted -> deletePendingProtectedBoardSet()
             BoardSetManagerAction.WorkspaceExited -> {
@@ -426,12 +438,13 @@ internal class BoardSetManagerViewModel(
         }
     }
 
-    private fun confirmDelete() {
+    private fun confirmDelete(deleteRemote: Boolean) {
         val targetId = _state.value.deleteTargetId ?: return
         setDeleteTarget(null)
         viewModelScope.launch {
             if (operations.requiresDeleteUnlock()) {
                 savedStateHandle[PENDING_DELETE_ID] = targetId
+                savedStateHandle[PENDING_DELETE_REMOTE] = deleteRemote
                 savedStateHandle[SHOW_DELETE_ACCESS_DIALOG] = true
                 _state.update {
                     it.copy(
@@ -440,25 +453,32 @@ internal class BoardSetManagerViewModel(
                     )
                 }
             } else {
-                deleteBoardSet(targetId)
+                deleteBoardSet(targetId, deleteRemote)
             }
         }
     }
 
     private fun deletePendingProtectedBoardSet() {
         val targetId = _state.value.pendingProtectedDeleteId ?: return
+        val deleteRemote = savedStateHandle.get<Boolean>(PENDING_DELETE_REMOTE) == true
         clearProtectedDelete()
-        deleteBoardSet(targetId)
+        deleteBoardSet(targetId, deleteRemote)
     }
 
-    private fun deleteBoardSet(id: String) {
+    private fun deleteBoardSet(id: String, deleteRemote: Boolean = false) {
         viewModelScope.launch {
-            runCatching { operations.deleteBoardSet(id) }
+            runCatching {
+                if (deleteRemote) operations.deleteBoardSetAndRemoteFile(id) else operations.deleteBoardSet(id)
+            }
                 .onSuccess {
                     setStatus(BoardSetManagerMessage.Resource(R.string.board_sets_deleted))
                     refreshBoardSets()
                 }
-                .onFailure { fail(BoardSetManagerMessage.Resource(R.string.board_sets_delete_error)) }
+                .onFailure { error ->
+                    // A failed cloud delete keeps the Screen; say why (for example offline).
+                    val detail = error.message?.takeIf { deleteRemote && it.isNotBlank() }
+                    fail(detail?.let(BoardSetManagerMessage::Dynamic) ?: BoardSetManagerMessage.Resource(R.string.board_sets_delete_error))
+                }
         }
     }
 
@@ -552,6 +572,7 @@ internal class BoardSetManagerViewModel(
 
     private fun clearProtectedDelete() {
         savedStateHandle[PENDING_DELETE_ID] = null
+        savedStateHandle[PENDING_DELETE_REMOTE] = null
         savedStateHandle[SHOW_DELETE_ACCESS_DIALOG] = false
         _state.update {
             it.copy(
@@ -589,6 +610,7 @@ internal class BoardSetManagerViewModel(
         const val SHOW_SETTINGS = "board_set_manager.dialog.settings"
         const val DELETE_TARGET_ID = "board_set_manager.dialog.delete_target_id"
         const val PENDING_DELETE_ID = "board_set_manager.dialog.pending_delete_id"
+        const val PENDING_DELETE_REMOTE = "board_set_manager.dialog.pending_delete_remote"
         const val SHOW_DELETE_ACCESS_DIALOG = "board_set_manager.dialog.delete_access"
     }
 }

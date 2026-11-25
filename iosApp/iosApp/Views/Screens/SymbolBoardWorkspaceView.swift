@@ -50,6 +50,7 @@ struct SymbolBoardWorkspaceView: View {
     @State var addBoardKeyboardLayout: String = "qwerty"
 
     @State var deleteTargetSet: BoardSetInfo? = nil
+    @State var pendingDeleteRemote = false
     @State var exportTargetSetId: String? = nil
     @State var showEditCellSheet: Bool = false
     @State var managementSheet: BoardManagementSheet? = nil
@@ -323,20 +324,20 @@ struct SymbolBoardWorkspaceView: View {
                 set: { if !$0 { deleteTargetSet = nil } }
             )
         ) {
-            Button(NSLocalizedString("common.delete", comment: ""), role: .destructive) {
-                if let target = deleteTargetSet {
-                    Task {
-                        if await model.editingIsAuthorized() {
-                            await model.deleteBoardSet(id: target.id)
-                        } else {
-                            pendingDeleteBoardSetId = target.id
-                            pendingEditingBoardSetId = nil
-                            pendingBoardLockId = nil
-                            pinMode = .unlock
-                            showEditingAccessSheet = true
-                        }
-                        deleteTargetSet = nil
-                    }
+            if let target = deleteTargetSet, target.remoteOffersDelete {
+                Button(
+                    String(
+                        format: NSLocalizedString("board_sets.library.delete_with_remote", comment: ""),
+                        NSLocalizedString(target.remoteKind == "onedrive" ? "remote_screen.provider.onedrive" : "remote_screen.provider.google_drive", comment: "")
+                    ),
+                    role: .destructive
+                ) { confirmDeleteScreen(target, deleteRemote: true) }
+                Button(NSLocalizedString("board_sets.library.delete_here_only", comment: ""), role: .destructive) {
+                    confirmDeleteScreen(target, deleteRemote: false)
+                }
+            } else {
+                Button(NSLocalizedString("common.delete", comment: ""), role: .destructive) {
+                    if let target = deleteTargetSet { confirmDeleteScreen(target, deleteRemote: false) }
                 }
             }
             Button(NSLocalizedString("common.cancel", comment: ""), role: .cancel) {

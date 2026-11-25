@@ -53,9 +53,11 @@ struct FoldDivision: Equatable {
 
     /// Resolves the primary active fold division intersecting `containerSize`, if any.
     static func from(rects: [CGRect], in containerSize: CGSize) -> FoldDivision? {
-        guard containerSize.width > 0, containerSize.height > 0 else { return nil }
+        guard containerSize.width.isFinite, containerSize.height.isFinite,
+              containerSize.width > 0, containerSize.height > 0 else { return nil }
         let bounds = CGRect(origin: .zero, size: containerSize)
         guard let candidate = rects
+            .filter({ !$0.isNull && !$0.isInfinite && $0.origin.x.isFinite && $0.origin.y.isFinite && $0.width.isFinite && $0.height.isFinite })
             .map({ $0.intersection(bounds) })
             .first(where: { !$0.isNull && ($0.width > 0.5 || $0.height > 0.5) })
         else { return nil }
@@ -201,6 +203,27 @@ struct BoardFoldLayout: Equatable {
     }
 }
 
+/// Computes vertical top clearance for a small top hardware cutout (such as a camera hole or
+/// Dynamic Island) while ignoring full-height, infinite, or large system overlay occlusions
+/// (such as iPadOS window chrome or floating accessibility controls) that would push content off-screen.
+enum TopOcclusionClearance {
+    static let maxClearance: CGFloat = 120
+
+    static func from(rects: [CGRect], in containerSize: CGSize) -> CGFloat {
+        guard containerSize.width.isFinite, containerSize.height.isFinite,
+              containerSize.width > 0, containerSize.height > 0 else { return 0 }
+        let bounds = CGRect(origin: .zero, size: containerSize)
+        let limit = min(containerSize.height * 0.2, maxClearance)
+        let clearance = rects
+            .filter { !$0.isNull && !$0.isInfinite && $0.minY.isFinite && $0.maxY.isFinite && $0.height.isFinite }
+            .map { $0.intersection(bounds) }
+            .filter { !$0.isNull && !$0.isEmpty && $0.minY < limit && $0.maxY <= limit }
+            .map(\.maxY)
+            .max() ?? 0
+        return min(max(0, clearance), limit)
+    }
+}
+
 extension GeometryProxy {
     /// Active hardware fold division in this geometry proxy's coordinate space (iOS 27.1+ on iPhone Duo).
     var activeFoldDivision: FoldDivision? {
@@ -220,9 +243,10 @@ extension GeometryProxy {
     var topOcclusionClearance: CGFloat {
         #if compiler(>=6.4.1)
         if #available(iOS 27.1, *) {
-            let topOcclusions = reservedRegions(kind: .occlusion)
-                .filter { $0.isActive && $0.frame.minY < size.height * 0.25 }
-            return topOcclusions.map(\.frame.maxY).max() ?? 0
+            let activeRects = reservedRegions(kind: .occlusion)
+                .filter(\.isActive)
+                .map(\.frame)
+            return TopOcclusionClearance.from(rects: activeRects, in: size)
         }
         #endif
         return 0

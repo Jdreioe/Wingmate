@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -137,6 +138,15 @@ internal fun SettingsHomePage(
                 stringResource(R.string.ui_settings_auditory_fishing_desc),
                 "hold", "dwell", "hover", "sound", "whisper"
             )
+        ),
+        SettingsCategoryItem(
+            tab = SettingsTab.Sync,
+            title = stringResource(R.string.ui_settings_sync_title),
+            subtitle = stringResource(R.string.ui_settings_sync_desc),
+            icon = Icons.Filled.Sync,
+            iconContainerColor = Color(0xFF90CAF9),
+            iconColor = Color(0xFF0D47A1),
+            keywords = listOf("sync", "google drive", "onedrive", "folder", "cloud", "wingmate", "screens")
         ),
         SettingsCategoryItem(
             tab = SettingsTab.Privacy,
