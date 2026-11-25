@@ -6,6 +6,12 @@
 	<true/>
 	<key>APTABASE_APP_KEY</key>
 	<string>$(APTABASE_APP_KEY)</string>
+	<key>WINGMATE_GOOGLE_IOS_CLIENT_ID</key>
+	<string>$(WINGMATE_GOOGLE_IOS_CLIENT_ID)</string>
+	<key>WINGMATE_MICROSOFT_CLIENT_ID</key>
+	<string>$(WINGMATE_MICROSOFT_CLIENT_ID)</string>
+	<key>CKSharingSupported</key>
+	<true/>
 	<key>OPEN_SYMBOLS_PROXY_URL</key>
 	<string>$(OPEN_SYMBOLS_PROXY_URL)</string>
 </dict>

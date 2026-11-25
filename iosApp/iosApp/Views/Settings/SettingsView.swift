@@ -6,6 +6,7 @@ enum SettingsDestination: String, CaseIterable, Identifiable {
     case speech
     case display
     case accessibility
+    case sync
     case privacy
     case general
     case pronunciation
@@ -17,6 +18,7 @@ enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: "settings.category.speech"
         case .display: "settings.category.display"
         case .accessibility: "settings.category.accessibility"
+        case .sync: "settings.category.sync"
         case .privacy: "settings.category.privacy"
         case .general: "settings.category.general"
         case .pronunciation: "pronunciation.title"
@@ -32,6 +34,7 @@ enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: "settings.category.speech.subtitle"
         case .display: "settings.category.display.subtitle"
         case .accessibility: "settings.category.accessibility.subtitle"
+        case .sync: "settings.category.sync.subtitle"
         case .privacy: "settings.category.privacy.subtitle"
         case .general: "settings.category.general.subtitle"
         case .pronunciation: "settings.category.pronunciation.subtitle"
@@ -43,6 +46,7 @@ enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: "waveform.and.mic"
         case .display: "textformat.size"
         case .accessibility: "accessibility"
+        case .sync: "arrow.triangle.2.circlepath.icloud"
         case .privacy: "hand.raised.fill"
         case .general: "gearshape"
         case .pronunciation: "character.book.closed"
@@ -54,6 +58,7 @@ enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: .cyan
         case .display: .orange
         case .accessibility: .pink
+        case .sync: .blue
         case .privacy: .indigo
         case .general: .green
         case .pronunciation: .purple
@@ -68,6 +73,7 @@ enum SettingsDestination: String, CaseIterable, Identifiable {
         case .speech: keywords = "speech voice language tts azure system pronunciation audio playback"
         case .display: keywords = "display layout symbols labels grid columns size scaling contrast"
         case .accessibility: keywords = "accessibility scanning dwell hold feedback sound logging"
+        case .sync: keywords = "sync icloud google drive onedrive folder remote screens backup cloud"
         case .privacy: keywords = "privacy history cache analytics reporting logging data"
         case .general: keywords = "general startup screens keyboard setup"
         case .pronunciation: keywords = "pronunciation dictionary phoneme ipa words"
@@ -177,6 +183,8 @@ struct SettingsView: View {
             )
         case .accessibility:
             AccessibilitySettingsView(model: model)
+        case .sync:
+            SyncSettingsView(model: model)
         case .privacy:
             PrivacySettingsView(model: model)
         case .general:

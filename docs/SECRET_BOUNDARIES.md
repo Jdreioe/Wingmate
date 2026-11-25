@@ -11,6 +11,8 @@ artifacts: values compiled into them can be extracted.
 | Aptabase app key | Public client identifier | Android BuildConfig or iOS Info.plist build setting (Xcode Cloud `WINGMATE_APTABASE_APP_KEY`) |
 | Azure Speech subscription key | User-owned secret | Android Keystore or iOS Keychain |
 | Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore or iOS Keychain |
+| Google Drive / OneDrive OAuth client IDs | Public client identifiers | Android BuildConfig or iOS Info.plist build setting (Xcode Cloud `WINGMATE_GOOGLE_IOS_CLIENT_ID`, `WINGMATE_MICROSOFT_CLIENT_ID`) |
+| Remote Screen password, token, or cloud drive sign-in | User-owned secret | Android Keystore or iOS Keychain. Cloud drive tokens stay in shared Kotlin; native UI only holds an opaque account reference. Screen exports and backups omit remote links and credentials. |
 | Android keystore and passwords | Build secret | Android release CI process only |
 | Play service-account JSON | Deployment secret | Android release CI process only |
 | App Store Connect API key (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`) | Deployment secret | iOS Xcode Cloud trigger CI workflow only |

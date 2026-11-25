@@ -8,6 +8,15 @@ struct BoardSetInfo: Codable, Identifiable, Equatable {
     var isLocked: Bool
     var cacheWholeSentences: Bool
     var updatedAt: TimeInterval
+    var remoteName: String? = nil
+    var remoteWritable: Bool = false
+    var remoteConflict: Bool = false
+    var remoteKind: String? = nil
+    var remoteLocation: String? = nil
+    var remoteOwnership: String? = nil
+    var remoteOwnerName: String? = nil
+    /// Deleting may also delete the Google Drive / OneDrive file (asked each time).
+    var remoteOffersDelete: Bool = false
 }
 
 struct ScreenPreviewCell: Identifiable, Equatable {

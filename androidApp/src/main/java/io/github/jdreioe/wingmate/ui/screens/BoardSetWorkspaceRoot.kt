@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.CommunicationAction
@@ -85,6 +86,7 @@ internal fun BoardSetWorkspaceRoot(
     hideStatusBar: Boolean = true,
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val remoteActions = koinInject<RemoteScreenActions>()
     val communicationSession = koinInject<CommunicationSession>()
     val communicationState by communicationSession.state.collectAsStateWithLifecycle()
     val voiceUseCase = koinInject<VoiceUseCase>()
@@ -198,6 +200,28 @@ internal fun BoardSetWorkspaceRoot(
             throw failure
         } catch (_: Exception) {
             workspaceViewModel.onAction(BoardWorkspaceAction.LoadFailed(loadErrorMessage))
+        }
+    }
+
+    // A remote sync replaces the Screen in Run mode. The Message lives in CommunicationSession,
+    // so it is kept; edit mode is never interrupted (RefreshGraph ignores it).
+    LaunchedEffect(boardSetId, remoteActions) {
+        var first = true
+        remoteActions.syncVersion.collect {
+            if (first) {
+                first = false
+            } else if (workspaceViewModel.state.value.mode == BoardWorkspaceMode.Run) {
+                val refreshed = runCatching {
+                    withContext(Dispatchers.Default) {
+                        useCase.loadBoardSetGraph(boardSetId)
+                            ?.takeIf { it.boardSet.kind == ScreenKind.User }
+                            ?.withHomeFieldsBottomLeft()
+                    }
+                }.getOrNull()
+                if (refreshed != null) {
+                    workspaceViewModel.onAction(BoardWorkspaceAction.RefreshGraph(refreshed))
+                }
+            }
         }
     }
 

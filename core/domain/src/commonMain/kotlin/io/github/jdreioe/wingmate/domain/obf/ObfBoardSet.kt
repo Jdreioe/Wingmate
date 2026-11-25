@@ -25,6 +25,8 @@ data class ObfBoardSet(
     val screenSettings: BoardSettingsOverrides = BoardSettingsOverrides(),
     /** Distinguishes user vocabulary from built-in system Screens. */
     val kind: ScreenKind = ScreenKind.User,
+    /** Optional link to user-provided storage for automatic remote Screen sync. */
+    val remoteLink: RemoteScreenLink? = null,
     val createdAt: Long,
     val updatedAt: Long
 )

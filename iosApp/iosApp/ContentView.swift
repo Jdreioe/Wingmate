@@ -6,6 +6,7 @@ import UIKit
 struct ContentView: View {
     @StateObject private var model = IosViewModel()
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var cloudShares = CloudKitScreenShareService.shared
     @State private var showVoiceSheet = false
     @State private var showLanguageSheet = false
     @State private var showSecondaryLanguageSheet = false
@@ -222,6 +223,10 @@ struct ContentView: View {
             .onKeyPress(phases: [.down, .up]) { press -> KeyPress.Result in
                 guard !shouldShowWelcomeFlow else { return .ignored }
                 return model.accessKey(press.characters, isDown: press.phase == .down) ? .handled : .ignored
+            }
+            .onChange(of: cloudShares.pendingShare) { _, share in
+                // An accepted iCloud share link opens in the Screens workspace.
+                if share != nil { model.boardModeEnabled = true }
             }
             .task {
                 while !Task.isCancelled {

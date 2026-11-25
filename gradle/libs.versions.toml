@@ -1,4 +1,6 @@
 [versions]
+androidx-browser = "1.10.0"
+play-services-auth = "21.5.1"
 agp = "9.5.2"
 android-compileSdk = "37"
 android-minSdk = "24"
@@ -27,6 +29,8 @@ okio = "3.18.2"
 xmlutil = "1.0.2.1"
 
 [libraries]
+androidx-browser = { module = "androidx.browser:browser", version.ref = "androidx-browser" }
+play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "play-services-auth" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-logging = { module = "io.github.oshai:kotlin-logging", version.ref = "kotlin-logging" }
 junit = { module = "junit:junit", version.ref = "junit" }

@@ -15,7 +15,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_NAME_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.decodeBoardSettings
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import io.github.jdreioe.wingmate.platform.ArchiveEntry
 import io.github.jdreioe.wingmate.platform.ArchiveReadError
 import io.github.jdreioe.wingmate.platform.ArchiveReadException
@@ -87,8 +90,12 @@ class BoardImportService(
         }
     }
 
-    /** Imports an OBZ downloaded by an in-app preset provider. */
-    suspend fun importBoardSetFromBytesResult(content: ByteArray): BoardImportResult {
+    /** Imports an OBZ downloaded by an in-app preset provider or remote Screen link. */
+    suspend fun importBoardSetFromBytesResult(
+        content: ByteArray,
+        preserveBoardIds: Boolean = false,
+        remotePackage: Boolean = false,
+    ): BoardImportResult {
         val warnings = mutableListOf<BoardImportWarning>()
         val storedPaths = mutableListOf<String>()
         val savedBoardIds = mutableListOf<String>()
@@ -96,7 +103,10 @@ class BoardImportService(
         return try {
             val archive = filePicker.openArchiveBytes(content)
                 ?: throw ImportFailure(BoardImportErrorCode.FILE_UNREADABLE, "Could not open downloaded board archive")
-            val graph = importObzGraph(archive, warnings, storedPaths).canonicalizeBoardLinks()
+            val reserved = if (preserveBoardIds) boardRepository.listBoards().map { it.id }.toSet() else null
+            val graph = importObzGraph(
+                archive, warnings, storedPaths, reservedBoardIds = reserved, remotePackage = remotePackage,
+            ).canonicalizeBoardLinks()
             savedBoardIds += graph.boards.map { it.id }
             boardRepository.saveBoards(graph.boards)
             savedSetId = graph.boardSet.id
@@ -120,6 +130,116 @@ class BoardImportService(
             rollback(savedSetId, savedBoardIds, storedPaths)
             failure(BoardImportErrorCode.PERSISTENCE_FAILED, error.message ?: "Import could not be saved", warnings)
         }
+    }
+
+    /**
+     * Replaces Pages from an OBZ while preserving device-local Screen settings.
+     * The caller rechecks whether the Screen can be replaced before the repository writes.
+     */
+    suspend fun replaceBoardSetFromBytesResult(
+        targetBoardSetId: String,
+        content: ByteArray,
+        allowLocked: Boolean = false,
+        canReplace: suspend () -> Boolean,
+    ): BoardImportResult {
+        val existingSet = boardSetRepository.getBoardSet(targetBoardSetId)
+            ?: return failure(BoardImportErrorCode.INVALID_GRAPH, "Screen '$targetBoardSetId' was not found")
+        val previousBoards = existingSet.boardIds.mapNotNull { boardRepository.getBoard(it) }
+        val warnings = mutableListOf<BoardImportWarning>()
+        val storedPaths = mutableListOf<String>()
+        val newBoardIds = mutableListOf<String>()
+        return try {
+            val archive = filePicker.openArchiveBytes(content)
+                ?: throw ImportFailure(BoardImportErrorCode.FILE_UNREADABLE, "Could not open remote board archive")
+            // Keep the package's Page IDs when they do not collide with another Screen, so
+            // repeated round trips between devices keep stable Page identities.
+            val ownIds = existingSet.boardIds.toSet()
+            val foreignIds = boardRepository.listBoards().map { it.id }.filterNot { it in ownIds }.toSet()
+            val importedGraph = importObzGraph(
+                archive = archive,
+                warnings = warnings,
+                storedPaths = storedPaths,
+                mediaNamespace = "${targetBoardSetId}/${newId("rev")}",
+                reservedBoardIds = foreignIds,
+                fallbackName = existingSet.name,
+                remotePackage = true,
+            ).canonicalizeBoardLinks()
+
+            if (!canReplace()) {
+                rollback(null, emptyList(), storedPaths)
+                return failure(BoardImportErrorCode.SCREEN_CHANGED, "Screen changed while importing", warnings)
+            }
+            val latest = boardSetRepository.getBoardSet(targetBoardSetId)
+            if (latest == null || (!allowLocked && latest.isLocked)) {
+                rollback(null, emptyList(), storedPaths)
+                return failure(BoardImportErrorCode.SCREEN_CHANGED, "Screen is unavailable or locked", warnings)
+            }
+            val mergedSet = latest.copy(
+                name = importedGraph.boardSet.name.ifBlank { existingSet.name },
+                rootBoardId = importedGraph.boardSet.rootBoardId,
+                boardIds = importedGraph.boardSet.boardIds,
+                screenSettings = importedGraph.boardSet.screenSettings,
+                updatedAt = Clock.System.now().toEpochMilliseconds(),
+            )
+            newBoardIds += importedGraph.boards.map { it.id }
+            boardRepository.saveBoards(importedGraph.boards)
+            boardSetRepository.saveBoardSet(mergedSet)
+
+            val retainedIds = newBoardIds.toSet()
+            previousBoards
+                .filterNot { it.id in retainedIds }
+                .forEach { oldBoard -> runCatching { boardRepository.deleteBoard(oldBoard.id) } }
+
+            // Duplicated Screens can share media with the original.
+            fileStorage?.let { storage ->
+                runCatching {
+                    val usedPaths = boardRepository.listBoards().flatMap(::mediaPaths).toSet()
+                    previousBoards.flatMap(::mediaPaths).distinct()
+                        .filter { path ->
+                            path.startsWith("boardsets/$targetBoardSetId/") &&
+                                ".." !in path.split('/') && path !in usedPaths
+                        }
+                        .forEach { storage.delete(it) }
+                }
+            }
+
+            BoardImportResult.Success(mergedSet, warnings)
+        } catch (_: CancellationException) {
+            rollbackReplace(existingSet, previousBoards, newBoardIds, storedPaths)
+            BoardImportResult.Cancelled
+        } catch (error: ImportFailure) {
+            rollbackReplace(existingSet, previousBoards, newBoardIds, storedPaths)
+            failure(error.code, error.message ?: error.code.name, warnings)
+        } catch (error: ArchiveReadException) {
+            rollbackReplace(existingSet, previousBoards, newBoardIds, storedPaths)
+            val code = if (error.error == ArchiveReadError.ENTRY_TOO_LARGE) {
+                BoardImportErrorCode.MEDIA_ENTRY_TOO_LARGE
+            } else {
+                BoardImportErrorCode.MALFORMED_ARCHIVE
+            }
+            failure(code, error.message ?: code.name, warnings)
+        } catch (error: Throwable) {
+            rollbackReplace(existingSet, previousBoards, newBoardIds, storedPaths)
+            failure(BoardImportErrorCode.PERSISTENCE_FAILED, error.message ?: "Remote update could not be saved", warnings)
+        }
+    }
+
+    private suspend fun rollbackReplace(
+        previousSet: ObfBoardSet,
+        previousBoards: List<ObfBoard>,
+        newBoardIds: List<String>,
+        storedPaths: List<String>,
+    ) = withContext(NonCancellable) {
+        val previousIds = previousBoards.map { it.id }.toSet()
+        if (newBoardIds.isNotEmpty()) {
+            runCatching { boardRepository.saveBoards(previousBoards) }
+            runCatching { boardSetRepository.saveBoardSet(previousSet) }
+        }
+        newBoardIds.filterNot { it in previousIds }.asReversed().forEach {
+            runCatching { boardRepository.deleteBoard(it) }
+        }
+        val storage = fileStorage
+        if (storage != null) storedPaths.asReversed().forEach { runCatching { storage.delete(it) } }
     }
 
     private suspend fun rollback(setId: String?, boardIds: List<String>, paths: List<String>) =
@@ -165,7 +285,11 @@ class BoardImportService(
     private suspend fun importObzGraph(
         archive: ArchiveReader,
         warnings: MutableList<BoardImportWarning>,
-        storedPaths: MutableList<String>
+        storedPaths: MutableList<String>,
+        mediaNamespace: String? = null,
+        reservedBoardIds: Set<String>? = null,
+        fallbackName: String? = null,
+        remotePackage: Boolean = false,
     ): BoardSetGraph {
         try {
             val entries = archive.entries()
@@ -199,7 +323,13 @@ class BoardImportService(
                 screenSettings = decodeBoardSettings(manifest.extensions[OBF_SCREEN_SETTINGS_EXTENSION])
                     ?: BoardSettingsOverrides(),
                 warnings = warnings,
-                storedPaths = storedPaths
+                storedPaths = storedPaths,
+                mediaNamespace = mediaNamespace,
+                reservedBoardIds = reservedBoardIds,
+                screenName = (manifest.extensions[OBF_SCREEN_NAME_EXTENSION] as? JsonPrimitive)
+                    ?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)?.take(200)
+                    ?: fallbackName,
+                remotePackage = remotePackage,
             )
         } finally {
             archive.close()
@@ -314,11 +444,27 @@ class BoardImportService(
         archiveNames: Set<String>,
         screenSettings: BoardSettingsOverrides,
         warnings: MutableList<BoardImportWarning>,
-        storedPaths: MutableList<String>
+        storedPaths: MutableList<String>,
+        mediaNamespace: String? = null,
+        reservedBoardIds: Set<String>? = null,
+        screenName: String? = null,
+        remotePackage: Boolean = false,
     ): BoardSetGraph {
         val now = Clock.System.now().toEpochMilliseconds()
         val setId = newId("set")
-        val boardIdMap = boards.associate { it.board.id to newId("board") }
+        val mediaRoot = mediaNamespace ?: setId
+        val usedIds = mutableSetOf<String>()
+        val boardIdMap = boards.associate { parsed ->
+            val original = parsed.board.id
+            val keep = reservedBoardIds != null &&
+                SAFE_BOARD_ID.matches(original) &&
+                original != "." && original != ".." &&
+                original !in reservedBoardIds &&
+                original !in usedIds
+            val id = if (keep) original else newId("board")
+            usedIds += id
+            original to id
+        }
         val pathIdMap = boards.mapNotNull { parsed -> parsed.path?.let { it to parsed.board.id } }.toMap()
         val rootNewId = boardIdMap[rootOriginalId]
             ?: throw ImportFailure(BoardImportErrorCode.INVALID_GRAPH, "Root board ID is missing")
@@ -326,10 +472,22 @@ class BoardImportService(
         val rewrittenBoards = boards.map { parsed ->
             val board = parsed.board
             val images = board.images.map { image ->
-                persistImage(image, setId, archive, archiveNames, warnings, storedPaths)
+                val source = if (remotePackage) {
+                    image.copy(
+                        url = remoteMediaUrl(image.url, warnings),
+                        dataUrl = remoteMediaUrl(image.dataUrl, warnings),
+                    )
+                } else image
+                persistImage(source, mediaRoot, archive, archiveNames, warnings, storedPaths, remotePackage)
             }
             val sounds = board.sounds.map { sound ->
-                persistSound(sound, setId, archive, archiveNames, warnings, storedPaths)
+                val source = if (remotePackage) {
+                    sound.copy(
+                        url = remoteMediaUrl(sound.url, warnings),
+                        dataUrl = remoteMediaUrl(sound.dataUrl, warnings),
+                    )
+                } else sound
+                persistSound(source, mediaRoot, archive, archiveNames, warnings, storedPaths, remotePackage)
             }
             board.copy(
                 id = boardIdMap.getValue(board.id),
@@ -341,7 +499,7 @@ class BoardImportService(
         val root = rewrittenBoards.first { it.id == rootNewId }
         val boardSet = ObfBoardSet(
             id = setId,
-            name = root.name ?: "Imported board set",
+            name = screenName ?: root.name ?: "Imported board set",
             rootBoardId = rootNewId,
             boardIds = rewrittenBoards.map { it.id },
             isLocked = false,
@@ -378,13 +536,14 @@ class BoardImportService(
         archive: ArchiveReader?,
         archiveNames: Set<String>,
         warnings: MutableList<BoardImportWarning>,
-        storedPaths: MutableList<String>
+        storedPaths: MutableList<String>,
+        remotePackage: Boolean,
     ): ObfImage {
         val storage = fileStorage
         val storedPath = "boardsets/$setId/images/${safeId(image.id)}.${extensionFor(image.contentType, image.path, "bin")}"
         val stored = storage != null && persistResolvedMedia(
             image.id, image.data, image.dataUrl, image.path, image.url,
-            archive, archiveNames, warnings, storage, storedPath, storedPaths
+            archive, archiveNames, warnings, storage, storedPath, storedPaths, remotePackage
         )
         if (!stored) {
             if (!image.path.isNullOrBlank() && image.data.isNullOrBlank() && image.dataUrl.isNullOrBlank() && image.url.isNullOrBlank()) {
@@ -401,13 +560,14 @@ class BoardImportService(
         archive: ArchiveReader?,
         archiveNames: Set<String>,
         warnings: MutableList<BoardImportWarning>,
-        storedPaths: MutableList<String>
+        storedPaths: MutableList<String>,
+        remotePackage: Boolean,
     ): ObfSound {
         val storage = fileStorage
         val storedPath = "boardsets/$setId/sounds/${safeId(sound.id)}.${extensionFor(sound.contentType, sound.path, "mp3")}"
         val stored = storage != null && persistResolvedMedia(
             sound.id, sound.data, sound.dataUrl, sound.path, sound.url,
-            archive, archiveNames, warnings, storage, storedPath, storedPaths
+            archive, archiveNames, warnings, storage, storedPath, storedPaths, remotePackage
         )
         if (!stored) {
             if (!sound.path.isNullOrBlank() && sound.data.isNullOrBlank() && sound.dataUrl.isNullOrBlank() && sound.url.isNullOrBlank()) {
@@ -430,7 +590,8 @@ class BoardImportService(
         warnings: MutableList<BoardImportWarning>,
         storage: FileStorage,
         destination: String,
-        storedPaths: MutableList<String>
+        storedPaths: MutableList<String>,
+        remotePackage: Boolean,
     ): Boolean {
         if (!data.isNullOrBlank()) {
             val payload = data.substringAfter("base64,", data)
@@ -468,6 +629,8 @@ class BoardImportService(
                 }
             }
         }
+        // Remote packages may refer to external media, but syncing them only fetches the OBZ.
+        if (remotePackage) return false
         if (!dataUrl.isNullOrBlank()) {
             runCatching { urlLoader.load(dataUrl) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let {
                 if (destination !in storedPaths) storedPaths += destination
@@ -486,6 +649,19 @@ class BoardImportService(
             warnings += BoardImportWarning("deferred_url", "Media '$id' will use its remote URL")
         }
         return false
+    }
+
+    private fun mediaPaths(board: ObfBoard): List<String> =
+        board.images.mapNotNull { it.path } + board.sounds.mapNotNull { it.path }
+
+    private fun remoteMediaUrl(url: String?, warnings: MutableList<BoardImportWarning>): String? {
+        if (url.isNullOrBlank()) return null
+        val parsed = runCatching { io.ktor.http.Url(url.trim()) }.getOrNull()
+        if (parsed?.protocol == io.ktor.http.URLProtocol.HTTPS && parsed.host.isNotBlank() &&
+            parsed.user == null && parsed.password == null
+        ) return url.trim()
+        warnings += BoardImportWarning("unsafe_media_url", "Remote Screen media requires an HTTPS URL")
+        return null
     }
 
     private fun extensionFor(contentType: String?, path: String?, default: String): String = when (contentType?.lowercase()) {
@@ -515,4 +691,8 @@ class BoardImportService(
     ) = BoardImportResult.Failure(code, context, warnings.toList())
 
     private class ImportFailure(val code: BoardImportErrorCode, message: String) : Exception(message)
+
+    private companion object {
+        val SAFE_BOARD_ID = Regex("^[A-Za-z0-9._-]{1,128}$")
+    }
 }

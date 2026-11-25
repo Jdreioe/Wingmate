@@ -76,6 +76,10 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
+                // Remote Screens cloud drives: Custom Tabs for OneDrive sign-in,
+                // Google Identity Services authorization for Google Drive.
+                implementation(libs.androidx.browser)
+                implementation(libs.play.services.auth)
                 implementation(libs.aptabase.kotlin.get().toString()) {
                     // Aptabase does not reference Material Components, but declares it as a
                     // runtime dependency. Its retained dialogs call Android 15-deprecated

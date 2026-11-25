@@ -45,6 +45,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -55,6 +57,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -81,8 +84,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -131,6 +132,8 @@ import io.github.jdreioe.wingmate.application.FeatureUsageEvents
 import io.github.jdreioe.wingmate.application.reportEvent
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.application.EditingAccessController
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
+import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
 import io.github.jdreioe.wingmate.domain.Base64Decoder
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationSession
@@ -223,6 +226,7 @@ fun BoardSetManagerRoot(
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
     val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
+    val remoteActions = koinInject<RemoteScreenActions>()
     val loadPreview: suspend (String) -> ObfBoard? = remember(boardRepository) {
         { rootBoardId ->
             withContext(Dispatchers.Default) {
@@ -235,12 +239,14 @@ fun BoardSetManagerRoot(
         boardSetSpeechCache,
         boardImportService,
         editingAccessController,
+        remoteActions,
     ) {
         DefaultBoardSetManagerOperations(
             useCase = useCase,
             speechCache = boardSetSpeechCache,
             importService = boardImportService,
             editingAccessController = editingAccessController,
+            remoteScreenActions = remoteActions,
         )
     }
     val factory = remember(operations) {
@@ -273,11 +279,59 @@ fun BoardSetManagerRoot(
         }
     }
 
+    // Remote Screens: sync when the Screens workspace opens, and reload the library after any sync.
+    val remoteScope = rememberCoroutineScope()
+    LaunchedEffect(remoteActions) {
+        remoteActions.startAutoSync()
+        withContext(Dispatchers.IO) { remoteActions.syncAllAutomatic() }
+    }
+    LaunchedEffect(remoteActions, viewModel) {
+        var first = true
+        remoteActions.syncVersion.collect {
+            if (first) {
+                first = false
+            } else {
+                viewModel.onAction(BoardSetManagerAction.RetryLoad)
+            }
+        }
+    }
+    var showRemote by remember { mutableStateOf(false) }
+    var remoteTargetId by remember { mutableStateOf<String?>(null) }
+    var unlockRemote by remember { mutableStateOf(false) }
+    // Remote storage changes vocabulary, so it needs Editing access like other Screen edits.
+    fun manageRemote(target: ObfBoardSet?) {
+        remoteTargetId = target?.id
+        remoteScope.launch {
+            if (editingAccessController?.requiresUnlock() == true) unlockRemote = true
+            else showRemote = true
+        }
+    }
+    if (unlockRemote && editingAccessController != null) {
+        EditingAccessDialog(
+            controller = editingAccessController,
+            mode = EditingAccessDialogMode.Unlock,
+            onDismiss = { unlockRemote = false },
+            onSuccess = {
+                unlockRemote = false
+                showRemote = true
+            },
+        )
+    }
+    if (showRemote) {
+        RemoteScreenDialog(
+            target = state.boardSets.firstOrNull { it.id == remoteTargetId },
+            actions = remoteActions,
+            onRefresh = { viewModel.onAction(BoardSetManagerAction.RetryLoad) },
+            onDismiss = { showRemote = false },
+        )
+    }
+
     when (val route = state.route) {
         BoardSetManagerRoute.Library -> BoardSetManagerScreen(
             state = state,
             status = state.status,
             importAvailable = boardImportService != null,
+            onManageRemote = ::manageRemote,
             loadPreview = loadPreview,
             onAction = viewModel::onAction,
         )
@@ -331,9 +385,26 @@ fun BoardSetManagerRoot(
             title = { Text(stringResource(R.string.board_sets_delete_title)) },
             text = { Text(stringResource(R.string.board_sets_delete_body, boardSet.name)) },
             confirmButton = {
-                TextButton(
-                    onClick = { viewModel.onAction(BoardSetManagerAction.DeleteConfirmed) }
-                ) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
+                val remoteLink = boardSet.remoteLink
+                if (remoteLink?.offersRemoteDelete == true) {
+                    // Ask each time whether the Google Drive / OneDrive file goes too.
+                    val provider = stringResource(
+                        if (remoteLink.kind == RemoteStorageKind.ONEDRIVE) R.string.remote_screen_provider_onedrive
+                        else R.string.remote_screen_provider_google_drive
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        TextButton(onClick = { viewModel.onAction(BoardSetManagerAction.DeleteWithRemoteConfirmed) }) {
+                            Text(stringResource(R.string.board_sets_delete_with_remote, provider), color = MaterialTheme.colorScheme.error)
+                        }
+                        TextButton(onClick = { viewModel.onAction(BoardSetManagerAction.DeleteConfirmed) }) {
+                            Text(stringResource(R.string.board_sets_delete_here_only), color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                } else {
+                    TextButton(
+                        onClick = { viewModel.onAction(BoardSetManagerAction.DeleteConfirmed) }
+                    ) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.onAction(BoardSetManagerAction.DeleteDismissed) }) {
@@ -374,6 +445,7 @@ internal fun BoardSetManagerScreen(
     state: BoardSetManagerState,
     status: LibraryStatus?,
     importAvailable: Boolean,
+    onManageRemote: ((ObfBoardSet?) -> Unit)? = null,
     onAction: (BoardSetManagerAction) -> Unit,
     loadPreview: suspend (String) -> ObfBoard? = { null },
 ) {
@@ -393,6 +465,7 @@ internal fun BoardSetManagerScreen(
         } else {
             null
         },
+        onManageRemote = onManageRemote,
         onOpen = { onAction(BoardSetManagerAction.OpenClicked(it.id)) },
         onEdit = { onAction(BoardSetManagerAction.EditClicked(it.id)) },
         onDuplicate = { onAction(BoardSetManagerAction.DuplicateClicked(it.id)) },
@@ -448,6 +521,7 @@ internal fun BoardSetLibraryScreen(
     onImportSpeech: () -> Unit,
     onRetry: () -> Unit,
     onImport: (() -> Unit)?,
+    onManageRemote: ((ObfBoardSet?) -> Unit)?,
     onOpen: (ObfBoardSet) -> Unit,
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
@@ -477,6 +551,14 @@ internal fun BoardSetLibraryScreen(
                             Icons.Default.Settings,
                             contentDescription = stringResource(R.string.phrase_screen_app_settings)
                         )
+                    }
+                    if (onManageRemote != null) {
+                        IconButton(onClick = { onManageRemote(null) }) {
+                            Icon(
+                                Icons.Default.CloudDownload,
+                                contentDescription = stringResource(R.string.remote_screen_open),
+                            )
+                        }
                     }
                     if (onImport != null) {
                         IconButton(onClick = onImport) {
@@ -575,6 +657,7 @@ internal fun BoardSetLibraryScreen(
                         items(boardSets, key = { it.id }) { boardSet ->
                             BoardSetLibraryCard(
                                 boardSet = boardSet,
+                                onManageRemote = onManageRemote?.let { manage -> { manage(boardSet) } },
                                 loadPreview = loadPreview,
                                 onOpen = { onOpen(boardSet) },
                                 onEdit = { onEdit(boardSet) },
@@ -633,6 +716,7 @@ internal val BoardSetLibraryMaxWidth = 1120.dp
 @Composable
 internal fun BoardSetLibraryCard(
     boardSet: ObfBoardSet,
+    onManageRemote: (() -> Unit)?,
     loadPreview: suspend (String) -> ObfBoard? = { null },
     onOpen: () -> Unit,
     onEdit: () -> Unit,
@@ -678,12 +762,15 @@ internal fun BoardSetLibraryCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                val count = pluralStringResource(
+                    R.plurals.board_sets_board_count,
+                    boardSet.boardIds.size,
+                    boardSet.boardIds.size,
+                )
+                val conflict = boardSet.remoteLink?.takeIf { it.hasConflict }
+                    ?.let { stringResource(R.string.remote_screen_conflict_badge) }
                 Text(
-                    text = pluralStringResource(
-                        R.plurals.board_sets_board_count,
-                        boardSet.boardIds.size,
-                        boardSet.boardIds.size,
-                    ),
+                    text = if (conflict != null) "$count · $conflict" else count,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -694,12 +781,42 @@ internal fun BoardSetLibraryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (onManageRemote != null) {
+                    IconButton(onClick = onManageRemote) {
+                        val isShared = boardSet.remoteLink?.isSharedFromOther == true
+                        Icon(
+                            if (isShared) Icons.Default.Group else Icons.Default.Cloud,
+                            contentDescription = if (isShared) {
+                                stringResource(R.string.remote_screen_badge_shared)
+                            } else {
+                                stringResource(R.string.remote_screen_title_for, boardSet.name)
+                            },
+                            tint = if (boardSet.remoteLink?.hasConflict == true) {
+                                MaterialTheme.colorScheme.error
+                            } else if (boardSet.remoteLink != null) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
                 OutlinedButton(
                     onClick = onEdit,
                     enabled = !boardSet.isLocked,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = null)
+                    val link = boardSet.remoteLink
+                    val ownership = link?.let {
+                        when {
+                            it.isSharedFromOther -> it.ownerName?.takeIf(String::isNotBlank)
+                                ?.let { owner -> stringResource(R.string.remote_screen_shared_by_badge, owner, it.resolvedDisplayName()) }
+                                ?: stringResource(R.string.remote_screen_shared_with_you_badge, it.resolvedDisplayName())
+                            it.isOwnedByUser -> stringResource(R.string.remote_screen_owned_by_you_badge, it.resolvedDisplayName())
+                            else -> stringResource(R.string.remote_screen_linked_badge, it.resolvedDisplayName())
+                        }
+                    }
+                    Icon(Icons.Default.Edit, contentDescription = ownership)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.board_sets_edit))
                 }

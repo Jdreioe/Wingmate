@@ -13,13 +13,14 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 class AndroidSecureEditingCredentialStorage(
-    private val context: Context
+    private val context: Context,
+    private val credentialKey: String = CREDENTIAL
 ) : SecureEditingCredentialStorage {
     private val preferences by lazy { context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE) }
     override val isSupported: Boolean = true
 
     override suspend fun read(): String? {
-        val encoded = preferences.getString(CREDENTIAL, null) ?: return null
+        val encoded = preferences.getString(credentialKey, null) ?: return null
         return runCatching {
             val payload = Base64.decode(encoded, Base64.NO_WRAP)
             require(payload.isNotEmpty()) { "Stored editing credential is empty" }
@@ -40,11 +41,11 @@ class AndroidSecureEditingCredentialStorage(
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(value.encodeToByteArray())
         val payload = byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + encrypted
-        check(preferences.edit().putString(CREDENTIAL, Base64.encodeToString(payload, Base64.NO_WRAP)).commit())
+        check(preferences.edit().putString(credentialKey, Base64.encodeToString(payload, Base64.NO_WRAP)).commit())
     }
 
     override suspend fun delete() {
-        preferences.edit().remove(CREDENTIAL).commit()
+        preferences.edit().remove(credentialKey).commit()
     }
 
     override fun secureRandomBytes(size: Int): ByteArray = ByteArray(size).also(SecureRandom()::nextBytes)

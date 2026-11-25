@@ -260,6 +260,7 @@ extension SymbolBoardWorkspaceView {
             }
             .padding(.horizontal, 8)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// The Screen's 1–4 buttons beside the message bar. They always fill the same

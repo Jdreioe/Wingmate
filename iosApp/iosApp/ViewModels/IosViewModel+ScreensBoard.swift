@@ -462,9 +462,18 @@ extension IosViewModel {
         }
     }
 
-    func deleteBoardSet(id: String) async {
+    /// Deletes a Screen; with `deleteRemote` its Google Drive / OneDrive file goes to that trash too.
+    func deleteBoardSet(id: String, deleteRemote: Bool = false) async {
         do {
-            try await boardsFacade.deleteBoardSet(id: id)
+            if deleteRemote {
+                let result = try await IosDiBridge().remoteScreenActions().deleteScreen(screenId: id, deleteRemote: true)
+                guard result.status == "ok" else {
+                    boardStatusMessage = result.message
+                    return
+                }
+            } else {
+                try await boardsFacade.deleteBoardSet(id: id)
+            }
             await loadBoardSets()
             if selectedBoardSetId == id {
                 selectedBoardSetId = boardSets.first?.id

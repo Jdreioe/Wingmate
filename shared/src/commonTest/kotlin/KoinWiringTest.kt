@@ -12,6 +12,8 @@ import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.PhraseUseCase
 import io.github.jdreioe.wingmate.application.PredictionFacade
 import io.github.jdreioe.wingmate.application.PronunciationFacade
+import io.github.jdreioe.wingmate.application.RemoteScreenActions
+import io.github.jdreioe.wingmate.application.RemoteScreenSyncUseCase
 import io.github.jdreioe.wingmate.application.SettingsFacade
 import io.github.jdreioe.wingmate.application.SettingsStateManager
 import io.github.jdreioe.wingmate.application.SettingsUseCase
@@ -117,6 +119,8 @@ class KoinWiringTest {
             assertNotNull(koin.get<TextPredictionService>())
             assertNotNull(koin.get<CommunicationSession>())
             assertNotNull(koin.get<BoardSetUseCase>())
+            assertNotNull(koin.get<RemoteScreenSyncUseCase>())
+            assertNotNull(koin.get<RemoteScreenActions>())
             assertNotNull(koin.get<BoardSpeechCache>())
             assertNotNull(koin.get<BoardSetSpeechCacheUseCase>())
             assertNotNull(koin.get<BoardImportService>())

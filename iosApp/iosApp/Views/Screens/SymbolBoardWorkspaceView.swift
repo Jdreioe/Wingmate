@@ -50,6 +50,7 @@ struct SymbolBoardWorkspaceView: View {
     @State var addBoardKeyboardLayout: String = "qwerty"
 
     @State var deleteTargetSet: BoardSetInfo? = nil
+    @State var pendingDeleteRemote = false
     @State var exportTargetSetId: String? = nil
     @State var showEditCellSheet: Bool = false
     @State var managementSheet: BoardManagementSheet? = nil
@@ -112,6 +113,12 @@ struct SymbolBoardWorkspaceView: View {
     @State var pendingDeleteBoardSetId: String? = nil
     @State var pendingBoardLockId: String? = nil
     @State var pendingBoardLockUnlocks = false
+    @State var showRemoteScreen = false
+    @State var remoteScreenId: String?
+    @State var pendingRemoteScreen = false
+    @State var openRemoteAfterUnlock = false
+    @ObservedObject var cloudShares = CloudKitScreenShareService.shared
+    @Environment(\.scenePhase) var scenePhase
 
     struct ActiveSentenceAnimation: Equatable {
         let sourceCellId: String
@@ -203,6 +210,34 @@ struct SymbolBoardWorkspaceView: View {
                 }
             }
         }
+        .task {
+            // Linked Screens sync with no input: on open, then every 45 s outside edit mode.
+            await model.syncRemoteScreensAutomatic(force: true)
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 45_000_000_000)
+                guard !Task.isCancelled else { break }
+                if case .workspace(_, .edit) = route { continue }
+                await model.syncRemoteScreensAutomatic(force: false)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await model.syncRemoteScreensAutomatic(force: false) }
+            }
+        }
+        .sheet(isPresented: $showRemoteScreen, onDismiss: { cloudShares.pendingShare = nil }) {
+            RemoteScreenSheet(
+                target: model.boardSets.first { $0.id == remoteScreenId },
+                acceptedShare: remoteScreenId == nil ? cloudShares.pendingShare : nil,
+                refresh: { await model.loadBoardSets() }
+            )
+        }
+        .onChange(of: cloudShares.pendingShare) { _, share in
+            if let share { openAcceptedShare(share) }
+        }
+        .onAppear {
+            if let share = cloudShares.pendingShare { openAcceptedShare(share) }
+        }
         .sheet(isPresented: $showSpeechImport) {
             speechImportSheet
         }
@@ -244,7 +279,12 @@ struct SymbolBoardWorkspaceView: View {
         .sheet(item: $managementSheet) { sheet in
             boardManagementSheet(sheet)
         }
-        .sheet(isPresented: $showEditingAccessSheet) {
+        .sheet(isPresented: $showEditingAccessSheet, onDismiss: {
+            if openRemoteAfterUnlock {
+                openRemoteAfterUnlock = false
+                showRemoteScreen = true
+            }
+        }) {
             EditingAccessPinSheet(model: model, mode: pinMode, onSuccess: {
                 showEditingAccessSheet = false
                 Task { await finishEditingAccessSuccess() }
@@ -253,6 +293,7 @@ struct SymbolBoardWorkspaceView: View {
                 pendingEditingBoardSetId = nil
                 pendingDeleteBoardSetId = nil
                 pendingBoardLockId = nil
+                pendingRemoteScreen = false
             })
         }
         .onChange(of: editingSelectedPhotoItem) { _, newItem in
@@ -283,20 +324,20 @@ struct SymbolBoardWorkspaceView: View {
                 set: { if !$0 { deleteTargetSet = nil } }
             )
         ) {
-            Button(NSLocalizedString("common.delete", comment: ""), role: .destructive) {
-                if let target = deleteTargetSet {
-                    Task {
-                        if await model.editingIsAuthorized() {
-                            await model.deleteBoardSet(id: target.id)
-                        } else {
-                            pendingDeleteBoardSetId = target.id
-                            pendingEditingBoardSetId = nil
-                            pendingBoardLockId = nil
-                            pinMode = .unlock
-                            showEditingAccessSheet = true
-                        }
-                        deleteTargetSet = nil
-                    }
+            if let target = deleteTargetSet, target.remoteOffersDelete {
+                Button(
+                    String(
+                        format: NSLocalizedString("board_sets.library.delete_with_remote", comment: ""),
+                        NSLocalizedString(target.remoteKind == "onedrive" ? "remote_screen.provider.onedrive" : "remote_screen.provider.google_drive", comment: "")
+                    ),
+                    role: .destructive
+                ) { confirmDeleteScreen(target, deleteRemote: true) }
+                Button(NSLocalizedString("board_sets.library.delete_here_only", comment: ""), role: .destructive) {
+                    confirmDeleteScreen(target, deleteRemote: false)
+                }
+            } else {
+                Button(NSLocalizedString("common.delete", comment: ""), role: .destructive) {
+                    if let target = deleteTargetSet { confirmDeleteScreen(target, deleteRemote: false) }
                 }
             }
             Button(NSLocalizedString("common.cancel", comment: ""), role: .cancel) {

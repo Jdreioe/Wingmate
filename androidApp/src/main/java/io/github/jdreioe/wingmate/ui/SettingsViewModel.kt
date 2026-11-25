@@ -46,7 +46,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 
-internal enum class SettingsTab { Speech, Display, Accessibility, Privacy, General }
+internal enum class SettingsTab { Speech, Display, Accessibility, Sync, Privacy, General }
 
 /** One settings destination; replaces the previous three nullable navigation flags. */
 internal sealed interface SettingsRoute {

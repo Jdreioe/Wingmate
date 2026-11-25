@@ -14,8 +14,20 @@ import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.requireValid
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_NAME_EXTENSION
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.CloudShareScreenStorage
+import io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage
+import io.github.jdreioe.wingmate.domain.obf.RemoteScreenCredentialStorage
+import io.github.jdreioe.wingmate.domain.obf.RemoteStorageKind
+import io.github.jdreioe.wingmate.domain.obf.SyncConnection
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import okio.ByteString.Companion.encodeUtf8
 import kotlin.random.Random
 import kotlin.time.Clock
 
@@ -27,7 +39,33 @@ class BoardSetUseCase(
     private val fileStorage: FileStorage? = null,
     private val speechCache: BoardSetSpeechCacheUseCase? = null,
     private val gridsetExporter: GridsetExporter = GridsetExporter(),
+    private val remoteCredentials: RemoteScreenCredentialStorage? = null,
+    private val linkedFileStorage: LinkedRemoteFileStorage? = null,
+    private val cloudShareStorage: CloudShareScreenStorage? = null,
 ) {
+    private var onScreenMutated: ((String) -> Unit)? = null
+
+    /** Lets remote Screen sync schedule an automatic push after any local Screen edit. */
+    fun setOnScreenMutatedListener(listener: ((String) -> Unit)?) {
+        onScreenMutated = listener
+    }
+
+    private var onScreenDeleting: (suspend (ObfBoardSet) -> Unit)? = null
+
+    /** Lets remote Screen sync react before a linked Screen is deleted (for example so folder sync does not re-import it). */
+    fun setOnScreenDeletingListener(listener: (suspend (ObfBoardSet) -> Unit)?) {
+        onScreenDeleting = listener
+    }
+
+    private fun notifyScreenMutated(boardSetId: String) {
+        onScreenMutated?.invoke(boardSetId)
+    }
+
+    private val fingerprintJson = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+    }
+
     /** User-created Screens only. System Screens have dedicated entry points. */
     suspend fun listBoardSets(): List<ObfBoardSet> =
         boardSetRepository.listBoardSets().filter { it.kind == ScreenKind.User }
@@ -51,8 +89,13 @@ class BoardSetUseCase(
         val canonicalGraph = graph.canonicalizeBoardLinks()
         canonicalGraph.requireValid()
         val now = Clock.System.now().toEpochMilliseconds()
-        val updatedSet = canonicalGraph.boardSet.copy(updatedAt = now)
         val previousSet = boardSetRepository.getBoardSet(canonicalGraph.boardSet.id)
+        // Remote sync metadata is owned by RemoteScreenSyncUseCase; an editor draft may hold
+        // a stale copy, so always keep the currently persisted link.
+        val updatedSet = canonicalGraph.boardSet.copy(
+            updatedAt = now,
+            remoteLink = previousSet?.remoteLink,
+        )
         val previousBoards = previousSet?.boardIds
             ?.mapNotNull { boardRepository.getBoard(it) }
             .orEmpty()
@@ -70,6 +113,7 @@ class BoardSetUseCase(
                 .forEach { boardRepository.deleteBoard(it) }
             throw error
         }
+        notifyScreenMutated(updatedSet.id)
         canonicalGraph.copy(boardSet = updatedSet)
     }
 
@@ -81,8 +125,25 @@ class BoardSetUseCase(
     suspend fun deleteBoardSet(boardSetId: String) {
         val graph = loadBoardSetGraph(boardSetId) ?: return
         if (graph.boardSet.kind != ScreenKind.User) return
+        if (graph.boardSet.remoteLink != null) {
+            onScreenDeleting?.let { listener -> runCatching { listener(graph.boardSet) } }
+        }
         graph.boards.forEach { boardRepository.deleteBoard(it.id) }
         boardSetRepository.deleteBoardSet(boardSetId)
+        withContext(NonCancellable) {
+            graph.boardSet.remoteLink?.let { link ->
+                // A Settings → Sync connection's sign-in is shared by every Screen it pulled; keep it.
+                link.credentialId?.takeUnless { it.startsWith(SyncConnection.CREDENTIAL_PREFIX) }?.let { id ->
+                    runCatching { remoteCredentials?.delete(id) }
+                }
+                if (link.kind == RemoteStorageKind.LINKED_FILE) {
+                    runCatching { linkedFileStorage?.releaseAccess(link.location) }
+                }
+                if (link.kind == RemoteStorageKind.ICLOUD_SHARE) {
+                    runCatching { cloudShareStorage?.release(link.location) }
+                }
+            }
+        }
     }
 
     suspend fun duplicateBoardSet(boardSetId: String): ObfBoardSet? {
@@ -112,6 +173,7 @@ class BoardSetUseCase(
             rootBoardId = idMap.getValue(source.boardSet.rootBoardId),
             boardIds = source.boardSet.boardIds.mapNotNull(idMap::get),
             isLocked = false,
+            remoteLink = null,
             createdAt = now,
             updatedAt = now
         )
@@ -256,6 +318,7 @@ class BoardSetUseCase(
         val boardSet = boardSetRepository.getBoardSet(boardSetId) ?: return null
         val updated = boardSet.copy(updatedAt = Clock.System.now().toEpochMilliseconds())
         boardSetRepository.saveBoardSet(updated)
+        notifyScreenMutated(boardSetId)
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.BOARDSET_TOUCHED,
             "board_count" to updated.boardIds.size.toString()
@@ -301,6 +364,7 @@ class BoardSetUseCase(
                 updatedAt = Clock.System.now().toEpochMilliseconds()
             )
         )
+        notifyScreenMutated(boardSetId)
         featureUsageReporter.reportEvent(
             FeatureUsageEvents.BOARD_CREATED,
             "rows" to normalizedRows.toString(),
@@ -315,6 +379,7 @@ class BoardSetUseCase(
         val normalized = name.trim().ifBlank { return null }
         val updated = boardSet.copy(name = normalized, updatedAt = Clock.System.now().toEpochMilliseconds())
         boardSetRepository.saveBoardSet(updated)
+        notifyScreenMutated(boardSetId)
         return updated
     }
 
@@ -357,6 +422,7 @@ class BoardSetUseCase(
         if (boardSet.isLocked || boardId !in boardSet.boardIds) return null
         val updated = boardSet.copy(rootBoardId = boardId, updatedAt = Clock.System.now().toEpochMilliseconds())
         boardSetRepository.saveBoardSet(updated)
+        notifyScreenMutated(boardSetId)
         return updated
     }
 
@@ -386,9 +452,13 @@ class BoardSetUseCase(
             )
         }
         val allBoards = boardRepository.listBoards()
-        val graph = BoardSetGraph(boardSet, allBoards.filter { it.id in boardSet.boardIds })
+        return exportScreenGraph(BoardSetGraph(boardSet, allBoards.filter { it.id in boardSet.boardIds }))
+    }
+
+    internal suspend fun exportScreenGraph(graph: BoardSetGraph): ObzExportResult {
+        val boardSet = graph.boardSet
         if (graph.boards.isEmpty()) {
-            return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Board set '$boardSetId' has no boards")
+            return ObzExportResult.Failure(ObzExportErrorCode.ROOT_NOT_FOUND, "Board set '${boardSet.id}' has no boards")
         }
         // Packaging media into the ZIP is heavy; keep it off the caller's (often main) thread.
         return withContext(Dispatchers.Default) {
@@ -396,13 +466,32 @@ class BoardSetUseCase(
                 boards = graph.boards,
                 rootBoardId = boardSet.rootBoardId,
                 loadMedia = { path -> fileStorage?.loadBytes(path) },
-                manifestExtensions = if (boardSet.screenSettings.isEmpty) {
-                    emptyMap()
-                } else {
-                    mapOf(OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(boardSet.screenSettings))
+                manifestExtensions = buildMap {
+                    // The Screen name travels with remote packages so renames sync.
+                    put(OBF_SCREEN_NAME_EXTENSION, JsonPrimitive(boardSet.name))
+                    if (!boardSet.screenSettings.isEmpty) {
+                        put(OBF_SCREEN_SETTINGS_EXTENSION, encodeBoardSettings(boardSet.screenSettings))
+                    }
                 }
             )
         }
+    }
+
+    /**
+     * Stable fingerprint of a Screen's exported content (name, settings, and ordered Pages).
+     * Excludes timestamps, lock state, and remote metadata so only vocabulary edits change it.
+     */
+    internal suspend fun screenFingerprint(boardSetId: String): String? =
+        loadBoardSetGraph(boardSetId)?.let(::screenFingerprint)
+
+    internal fun screenFingerprint(graph: BoardSetGraph): String {
+        val canonical = buildString {
+            append(graph.boardSet.name).append('\u0000')
+            append(graph.boardSet.rootBoardId).append('\u0000')
+            append(fingerprintJson.encodeToString(BoardSettingsOverrides.serializer(), graph.boardSet.screenSettings)).append('\u0000')
+            append(fingerprintJson.encodeToString(ListSerializer(ObfBoard.serializer()), graph.boards))
+        }
+        return canonical.encodeUtf8().sha256().hex()
     }
 
     suspend fun exportBoardSetAsGridsetResult(

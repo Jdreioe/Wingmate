@@ -14,6 +14,12 @@ extension SymbolBoardWorkspaceView {
                 // already shows the "Screens" title.
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    Button(action: { manageRemoteScreen(id: nil) }) {
+                        Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
                     Button(action: { showSpeechImport = true }) {
                         Label("speech_import.title", systemImage: "text.badge.plus")
                             .font(.subheadline.weight(.semibold))
@@ -61,6 +67,7 @@ extension SymbolBoardWorkspaceView {
                                     exportTargetSetId = set.id
                                 },
                                 onPrint: { printScreen(id: set.id) },
+                                onRemote: { manageRemoteScreen(id: set.id) },
                                 onDelete: {
                                     deleteTargetSet = set
                                 }
@@ -114,6 +121,12 @@ extension SymbolBoardWorkspaceView {
                     .font(.headline)
                     .frame(minHeight: 48)
                     .buttonStyle(.bordered)
+                Button(action: { manageRemoteScreen(id: nil) }) {
+                    Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
+                        .font(.headline)
+                        .frame(minHeight: 48)
+                }
+                .buttonStyle(.bordered)
                 Spacer(minLength: 16)
             }
             .frame(maxWidth: 520)
@@ -132,6 +145,7 @@ struct BoardSetLibraryCard: View {
     let onToggleLock: () -> Void
     let onExport: () -> Void
     let onPrint: () -> Void
+    let onRemote: () -> Void
     let onDelete: () -> Void
 
     @State private var preview: ScreenPreview?
@@ -141,7 +155,12 @@ struct BoardSetLibraryCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 10) {
-                    ScreenLibraryPreview(preview: preview, isLoaded: previewLoaded, isLocked: set.isLocked)
+                    ScreenLibraryPreview(
+                        preview: preview,
+                        isLoaded: previewLoaded,
+                        isLocked: set.isLocked,
+                        remoteBadge: nil
+                    )
                         .aspectRatio(4 / 3, contentMode: .fit)
                         .accessibilityHidden(true)
                     Text(set.name)
@@ -155,6 +174,11 @@ struct BoardSetLibraryCard: View {
                     Text(updatedSummary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    if set.remoteConflict, let remoteSummary {
+                        Label(remoteSummary, systemImage: remoteSummaryIcon)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.red)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -177,6 +201,18 @@ struct BoardSetLibraryCard: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(set.isLocked)
+                .overlay(alignment: .topTrailing) {
+                    // Who owns a synced Screen, as an icon only; the text is in the VoiceOver label.
+                    if set.remoteName != nil {
+                        Image(systemName: remoteSummaryIcon)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(set.remoteConflict ? Color.red : Color.accentColor)
+                            .padding(5)
+                            .background(Circle().fill(Color(.systemBackground)))
+                            .offset(x: 6, y: -6)
+                            .accessibilityHidden(true)
+                    }
+                }
 
                 Menu {
                     Button(action: onDuplicate) {
@@ -196,6 +232,9 @@ struct BoardSetLibraryCard: View {
                     }
                     Button(action: onPrint) {
                         Label("boardset.print_pdf", systemImage: "printer")
+                    }
+                    Button(action: onRemote) {
+                        Label("remote_screen.storage", systemImage: "icloud")
                     }
                     Divider()
                     Button(role: .destructive, action: onDelete) {
@@ -232,12 +271,42 @@ struct BoardSetLibraryCard: View {
         return String(format: NSLocalizedString("board_sets.library.updated", comment: ""), relative)
     }
 
-    private var openAccessibilityLabel: String {
-        if set.isLocked {
-            return "\(set.name), \(pageSummary), \(NSLocalizedString("board_sets.library.locked", comment: ""))"
+    private var remoteSummaryIcon: String {
+        if set.remoteConflict { return "exclamationmark.icloud" }
+        if set.remoteOwnership == "shared" { return "person.2.fill" }
+        if set.remoteOwnership == "owner" {
+            return set.remoteKind == "icloud_share" ? "person.2" : "person.crop.circle.badge.checkmark"
         }
-        return "\(set.name), \(pageSummary)"
+        return "icloud"
     }
+
+    private var remoteSummary: String? {
+        guard let remoteName = set.remoteName else { return nil }
+        if set.remoteConflict { return NSLocalizedString("remote_screen.conflict_badge", comment: "") }
+        if set.remoteOwnership == "shared" {
+            if let owner = set.remoteOwnerName, !owner.isEmpty {
+                return String(format: NSLocalizedString("remote_screen.shared_by_badge", comment: ""), owner, remoteName)
+            }
+            return String(format: NSLocalizedString("remote_screen.shared_with_you_badge", comment: ""), remoteName)
+        }
+        if set.remoteOwnership == "owner" {
+            return String(format: NSLocalizedString("remote_screen.owned_by_you_badge", comment: ""), remoteName)
+        }
+        return String(format: NSLocalizedString("remote_screen.linked_badge", comment: ""), remoteName)
+    }
+
+    private var openAccessibilityLabel: String {
+        let parts = [set.name, pageSummary]
+            + (set.isLocked ? [NSLocalizedString("board_sets.library.locked", comment: "")] : [])
+            + [remoteSummary].compactMap { $0 }
+        return parts.joined(separator: ", ")
+    }
+}
+
+private struct ScreenRemotePreviewBadge {
+    let title: String
+    let systemImage: String
+    let isAlert: Bool
 }
 
 /// A miniature of a screen's home page. Empty cells stay blank, matching use mode.
@@ -245,6 +314,7 @@ private struct ScreenLibraryPreview: View {
     var preview: ScreenPreview?
     var isLoaded: Bool
     var isLocked: Bool
+    var remoteBadge: ScreenRemotePreviewBadge? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -274,6 +344,21 @@ private struct ScreenLibraryPreview: View {
         .background(libraryPreviewColor(preview?.backgroundHex, fallback: Color(.tertiarySystemBackground)))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator), lineWidth: 1))
+        .overlay(alignment: .topLeading) {
+            if let badge = remoteBadge {
+                Label(badge.title, systemImage: badge.systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(badge.isAlert ? Color.white : Color.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        badge.isAlert ? AnyShapeStyle(Color.red) : AnyShapeStyle(.regularMaterial),
+                        in: Capsule()
+                    )
+                    .padding(8)
+                    .accessibilityHidden(true)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if isLocked {
                 Image(systemName: "lock.fill")

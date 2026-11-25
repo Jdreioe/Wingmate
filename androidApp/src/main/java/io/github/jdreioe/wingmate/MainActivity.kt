@@ -94,6 +94,43 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Initialize SAF launchers for Draw.io-style linked remote Screen files
+        runCatching {
+            val linkedStorage = GlobalContext.get().get<io.github.jdreioe.wingmate.domain.obf.LinkedRemoteFileStorage>()
+                as? io.github.jdreioe.wingmate.infrastructure.AndroidLinkedRemoteFileStorage
+            if (linkedStorage != null) {
+                val openLinkedLauncher = registerForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+                ) { uri -> linkedStorage.onDocumentSelected(uri) }
+                val createLinkedLauncher = registerForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")
+                ) { uri -> linkedStorage.onDocumentSelected(uri) }
+                val openFolderLauncher = registerForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+                ) { uri -> linkedStorage.onFolderSelected(uri) }
+                linkedStorage.registerLaunchers(
+                    launchOpen = { openLinkedLauncher.launch(arrayOf("*/*")) },
+                    launchCreate = { suggestedName -> createLinkedLauncher.launch(suggestedName) },
+                    launchFolder = { openFolderLauncher.launch(null) },
+                )
+            }
+        }
+
+        // Cloud drive sign-in for remote Screens: Custom Tabs (OneDrive) open from this activity,
+        // and Google Drive consent (Play services) returns through this launcher.
+        io.github.jdreioe.wingmate.infrastructure.AndroidCustomTabsOAuthBrowser.attachHost(this)
+        runCatching {
+            val googleSignIn = GlobalContext.get().get<io.github.jdreioe.wingmate.infrastructure.AndroidGoogleDriveSignIn>()
+            val resolutionLauncher = registerForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()
+            ) { result -> googleSignIn.onResolutionResult(result.resultCode, result.data) }
+            googleSignIn.registerResolutionLauncher { pendingIntent ->
+                resolutionLauncher.launch(
+                    androidx.activity.result.IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+                )
+            }
+        }
+
         // Initialize Window Area Controller for rear display
         if (Build.VERSION.SDK_INT >= 34) {
             displayExecutor = ContextCompat.getMainExecutor(this)
@@ -193,6 +230,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        io.github.jdreioe.wingmate.infrastructure.AndroidCustomTabsOAuthBrowser.onHostResumed()
+        // Remote Screens: sync when the app comes back (throttled in shared code).
+        val remoteActions = runCatching {
+            GlobalContext.get().get<io.github.jdreioe.wingmate.application.RemoteScreenActions>()
+        }.getOrNull()
+        if (remoteActions != null) {
+            lifecycleScope.launch(Dispatchers.IO) { runCatching { remoteActions.syncAllAutomatic() } }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        io.github.jdreioe.wingmate.infrastructure.AndroidCustomTabsOAuthBrowser.onHostPaused()
     }
 
     override fun onStop() {

@@ -10,5 +10,10 @@ MARKETING_VERSION=1.9.1
 // Xcode Cloud fills it from WINGMATE_APTABASE_APP_KEY in ci_post_clone.sh.
 APTABASE_APP_KEY =
 
+// Public OAuth client IDs for Google Drive (iOS client) and OneDrive (Microsoft Entra app).
+// Empty hides that storage option. Xcode Cloud fills them in ci_post_clone.sh.
+WINGMATE_GOOGLE_IOS_CLIENT_ID =
+WINGMATE_MICROSOFT_CLIENT_ID =
+
 // Public endpoint only. The OpenSymbols secret is stored in the Worker.
 OPEN_SYMBOLS_PROXY_URL = https:/$()/wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev
