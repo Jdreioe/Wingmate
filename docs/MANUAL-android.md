@@ -71,39 +71,42 @@ Første gang du åbner Wingmate, viser den en kort opsætning. Du kan ændre all
 Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede på den første side. Tryk **Gendan en sikkerhedskopi**. Se [Sikkerhedskopi](#sikkerhedskopi).
 
 1. Tryk **Opsæt Wingmate**.
-2. Vælg, hvad der skal tale for dig, og tryk **Fortsæt**. Se [Stemmer](#stemmer).
+2. Vælg, hvad der skal tale for dig. Vælg **Denne enhed**, hvis du vil bruge telefonens egen stemme. Tryk **Fortsæt**. Vælger du en stemme på nettet, kan Wingmate bede om en nøgle, før du kommer videre. Se [Stemmer](#stemmer).
 
    <!-- SCREENSHOT: Android welcome step “Hvad skal tale for dig?” with the four engine options visible: Denne enhed, Microsoft Azure, Google Cloud, ElevenLabs. -->
-   ![Valg af, hvad der skal tale, i den første opsætning](images/welcome-stemmemotor.png)
+   <img src="images/welcome-stemmemotor.png" alt="Valg af, hvad der skal tale, i den første opsætning" width="300">
 
 3. Vælg en stemme.
 4. Tryk **Afspil** for at høre stemmen. Her kan du også ændre **Hastighed**. Vises **Skift sprog**, kan du vælge et andet sprog. Tryk **Fortsæt**.
 5. Vælg, hvordan du vil tale: **Skrivning** («Skriv beskeder, og tryk på gemte fraser») eller **Skærme** («Tryk på symboler på sider. Opret eller importér en skærm for at starte»). Tryk **Fortsæt**.
 
    <!-- SCREENSHOT: Android welcome step “Hvordan vil du kommunikere?” showing the two cards Skrivning and Skærme. -->
-   ![Valg mellem Skrivning og Skærme](images/welcome-arbejdsomraade.png)
+   <img src="images/welcome-arbejdsomraade.png" alt="Valg mellem Skrivning og Skærme" width="300">
 
 6. Vælg, om talehistorik skal vises, og om du vil slå **Del anonym analysedata** til. Analysedata er slukket fra start. De indeholder ikke dine ord eller nøgler. Tryk **Fortsæt**.
-7. Tryk **Begynd at kommunikere**.
+7. På siden **Klar til at kommunikere** kan du se dine valg. Tryk **Begynd at kommunikere**.
 
 ## De to arbejdsområder
 
 Når opsætningen er færdig, åbner Wingmate det sted, du valgte. Du kan skifte, når du vil:
 
 - Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **Skift til skærme**.
-- Fra Skærme: tryk på tastatur-ikonet øverst (**Skift til tastatur og fraser**).
 
-Du kan også vælge, hvor appen skal starte. Gå til **Indstillinger**, og vælg under **Åbn ved opstart**: **Tastatur** eller **Skærme**. Vælger du Skærme, kan du også vælge en bestemt skærm eller **Skærmoversigt**.
+  <!-- SCREENSHOT: Typing workspace in communication use: message bar with some text, phrase grid or Typing Screen visible, and the control to switch to Screens visible in the toolbar or menu. -->
+  <img src="images/skrivning-oversigt.png" alt="Skrivning med beskedlinje og fraser" width="300">
 
-<!-- SCREENSHOT: Typing workspace in communication use: message bar with some text, phrase grid or Typing Screen visible, and the control to switch to Screens visible in the toolbar or menu. -->
-![Skrivning med beskedlinje og fraser](images/skrivning-oversigt.png)
+- Fra oversigten **Skærme**: tryk på tastatur-ikonet øverst (**Skift til tastatur og fraser**).
 
-<!-- SCREENSHOT: Screens library (Skærme) with the title “Skærme”, at least one screen card, and actions such as Ny skærm / Opret skærm and Importer skærm / Importér tale visible. -->
-![Oversigten Skærme](images/skaerme-bibliotek.png)
+  <!-- SCREENSHOT: Screens library (Skærme) with the title “Skærme”, at least one screen card, and actions such as Ny skærm / Opret skærm and Importer skærm / Importér tale visible. -->
+  <img src="images/skaerme-bibliotek.png" alt="Oversigten Skærme" width="300">
+
+- Fra en åben skærm på en telefon: tryk på de tre prikker øverst til højre, og vælg **Skift til tastatur og fraser**. På en bred skærm er der et tastatur-ikon øverst.
+
+Du kan også vælge, hvor appen skal starte. Gå til **Indstillinger → System og data**, og vælg under **Åbn ved opstart**: **Tastatur** eller **Skærme**. Vælger du Skærme, kan du også vælge en bestemt skærm eller **Skærmoversigt**.
 
 ## Skrivning
 
-I Skrivning skriver du en besked. Du kan også trykke på fraser, du har gemt.
+I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et ord eller en besked, du har gemt, fx «Tak».
 
 ### Skriv og læs op
 
@@ -122,7 +125,7 @@ Skriveskærmen bygger selv sine sider ud fra dine fraser og kategorier. Du kan i
 
 ### Gem en frase
 
-Tryk **Tilføj ny frase** på skriveskærmen. Her kan du sætte:
+Tryk på knappen **Tilføj ny frase**. Den står sidst blandt dine fraser, så rul ned, hvis du ikke kan se den. Her kan du sætte:
 
 - **Ny frasetekst** – teksten, der står på knappen. Den skal udfyldes.
 - **Vokalisering (det der skal siges)** – kun hvis Wingmate skal sige noget andet end teksten.
@@ -134,12 +137,12 @@ Tryk **Tilføj ny frase** på skriveskærmen. Her kan du sætte:
 Du kan også markere frasen som **Skjult**, så den ikke vises blandt knapperne. Tryk **Gem**, når du er færdig.
 
 <!-- SCREENSHOT: Phrase editor dialog open (Tilføj ny frase or Rediger frase) showing fields for text, vocalization, image (Foto / Symbol), color, and category. -->
-![Redigering af en frase](images/skrivning-frase-rediger.png)
+<img src="images/skrivning-frase-rediger.png" alt="Redigering af en frase" width="300">
 
 ### Ordn dine fraser
 
 - Hold fingeren på en frase for at rette den, eller træk den for at flytte den.
-- Læg fraser i kategorier med **Tilføj kategori**. En kategori kan ikke ligge inde i en anden kategori.
+- Tryk på **+** ved siden af **Alle** for at lave en kategori (**Tilføj kategori**). En kategori kan ikke ligge inde i en anden kategori.
 
 ### Læg en besked til side
 
@@ -160,7 +163,7 @@ Sådan laver du en ny skærm:
 5. Tryk **Opret**.
 
 <!-- SCREENSHOT: New screen dialog on Android, showing template choices Tom, Lommeregner and Tastatur, plus name and grid size fields for a blank screen. -->
-![Dialog til ny skærm med skabeloner](images/ny-skaerm-skabelon.png)
+<img src="images/ny-skaerm-skabelon.png" alt="Dialog til ny skærm med skabeloner" width="300">
 
 Har du en tavlefil fra en anden ASK-app, kan du hente den ind. Tryk på pilene ↑↓ øverst til højre i oversigten (**Importer skærm**), og vælg filen. Filen ender på `.obf` (én side) eller `.obz` (flere sider og billeder). Filer med adgangskode kan ikke hentes ind. Gem dem først uden adgangskode.
 
@@ -176,9 +179,9 @@ Du kan også lave en skærm ud fra en tale eller en anden tekst:
 Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele afsnittet op med det samme. Teksten lægges ikke i beskedlinjen.
 
 <!-- SCREENSHOT: Importér tale sheet with sample pasted text, paragraph-per-page control, and a preview of generated pages. -->
-![Importér tale med forhåndsvisning](images/importer-tale.png)
+<img src="images/importer-tale.png" alt="Importér tale med forhåndsvisning" width="300">
 
-Tryk på en skærms navn i oversigten for at åbne den. Ikonerne til højre på kortet er: blyant (**Rediger**), to ark (**Dupliker**), hængelås (**Lås** / **Lås op**) og skraldespand (slet).
+Tryk på en skærms navn i oversigten for at åbne den. Ikonerne til højre på kortet er: blyant (**Rediger**), to ark (**Dupliker**), hængelås (**Lås** / **Lås op**) og skraldespand (**Slet**).
 
 > [!WARNING]
 > En slettet skærm kan ikke hentes tilbage.
@@ -202,20 +205,20 @@ Er **Stryg mellem sider** tændt under **Tilgængelighed**, kan du også stryge 
 Vil du se de skjulte knapper et øjeblik, så tryk på de tre prikker øverst til højre, og vælg **Vis skjulte knapper midlertidigt**.
 
 <!-- SCREENSHOT: An open Screen in communication (not editing) mode: a grid of symbol buttons, message bar with a short composed message, and page navigation (Forrige side / Startside) visible. -->
-![En skærm i brug med beskedlinje og symbolknapper](images/skaerm-kommunikation.png)
+<img src="images/skaerm-kommunikation.png" alt="En skærm i brug med beskedlinje og symbolknapper" width="300">
 
 ### Rediger sider og knapper
 
 > [!TIP]
 > Er du bange for at ødelægge noget? Tryk **Dupliker** i oversigten først. Så har du en kopi af skærmen, som den var.
 
-Tryk **Rediger** eller **Rediger skærm**. Er skærmen låst, skal du låse den op først («Lås skærmen op før redigering»). Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
+Tryk på blyanten (**Rediger**) i oversigten **Skærme**. Har du skærmen åben, så tryk på de tre prikker øverst til højre, og vælg **Rediger skærm**. Er skærmen låst, skal du låse den op først («Lås skærmen op før redigering»). Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
 
 Mens du redigerer:
 
 - Tryk på et tomt felt for at lave en ny knap.
-- Hold fingeren på en knap, og vælg **Rediger**, **Tilpas størrelse** eller **Fjern**. Du kan også trække knappen til et andet felt.
-- Tryk på de tre prikker øverst til højre for at se flere valg: **Tilføj side**, **Brug som startside**, **Tilpas sidens størrelse**, **Skærmindstillinger** og **Sideindstillinger**. På en tablet står nogle af dem som ikoner øverst.
+- Tryk på en knap for at vælge den, og tryk **Rediger** eller **Fjern** øverst. Du kan også holde fingeren på knappen og vælge **Rediger**, **Tilpas størrelse** eller **Fjern**, eller trække knappen til et andet felt.
+- Tryk på de tre prikker øverst til højre for at se flere valg: **Tilføj side**, **Brug som startside**, **Tilpas sidens størrelse**, **Slet side**, **Skærmindstillinger** og **Sideindstillinger**. På en tablet står nogle af dem som ikoner øverst.
 - **Tilpas sidens størrelse** ændrer antal rækker og kolonner. Skal siden gøres mindre, skal de knapper, der ikke kan være der, først flyttes.
 - Den buede pil øverst (**Fortryd**) tager det sidste trin tilbage.
 - Skjulte knapper vises, mens du redigerer.
@@ -223,7 +226,7 @@ Mens du redigerer:
 Når du er færdig, trykker du **Afslut redigering**. Vælg **Gem ændringer**, **Kassér** eller **Fortsæt redigering**.
 
 <!-- SCREENSHOT: A Screen in edit mode (banner or title “Redigerer: …”). One button is selected or a context menu shows Rediger, Tilpas størrelse and Fjern. Empty cells and the finish-editing action are visible. -->
-![Skærm i redigeringstilstand](images/skaerm-redigering.png)
+<img src="images/skaerm-redigering.png" alt="Skærm i redigeringstilstand" width="300">
 
 ### Symboler, billeder, farver og størrelse
 
@@ -232,19 +235,19 @@ Når du redigerer et felt, kan du blandt andet sætte:
 - **Etiket** – teksten, der står på knappen.
 - **Udtale (valgfri)** – det, der skal siges, hvis det skal være noget andet end etiketten.
 - Et billede. Søg efter et symbol, eller vælg et foto fra enheden. Søgeskærmen hedder **Søg efter symboler**, og du skriver i feltet **Søg efter piktogram...**. Symbolerne kommer fra OpenSymbols. Det er en samling af billeder, blandt andet fra ARASAAC og Mulberry.
-- **Feltfarve**, **Knapform** (**Rundet**, **Firkantet**, **Pille**, **Taleboble**, **Tankeboble**) og **Ordtype**. Ordtype kan være automatisk, eller du vælger selv: stedord, udsagnsord, beskrivende ord, navneord, socialt ord, andet.
+- **Feltfarve**, **Knapform** (**Rundet**, **Firkantet**, **Pille**, **Taleboble**, **Tankeboble**) og **Ordtype**. Ordtype kan være **Automatisk**, eller du vælger selv: **Stedord**, **Udsagnsord**, **Beskrivende ord**, **Navneord**, **Socialt ord** eller **Andet**.
 - **Skjult i brugstilstand** – knappen er der stadig, når du redigerer, men den vises ikke, når du bruger skærmen.
 - **Sprog** for den enkelte knap, hvis den skal siges på et andet sprog end det normale.
 
-Du kan hente hele ARASAAC-biblioteket ned under **Indstillinger → System og data → Offline-symboler**. Tryk **Download symboler**. Så symbolsøgningen virker uden net. Det fylder omkring 300 MB. Brug gerne wi-fi.
+Du kan hente hele ARASAAC-biblioteket ned under **Indstillinger → System og data → Offline-symboler**. Tryk **Download symboler**. Så virker symbolsøgningen også uden net. Det fylder omkring 300 MB. Brug gerne wi-fi.
 
 **Ordtypefarver** er Fitzgerald-farver. Hver ordtype får sin egen farve, så det er lettere at se, hvad ordet er. De er slukket fra start. Tænd dem under **Indstillinger → Skærm og layout**. Sætter du selv en farve på knappen, er det den farve, der bruges.
 
 <!-- SCREENSHOT: Edit-cell dialog (Rediger felt) with label, vocalization, an image or symbol on the button, color control, and shape or word-type options visible. -->
-![Redigering af et felt](images/rediger-felt.png)
+<img src="images/rediger-felt.png" alt="Redigering af et felt" width="300">
 
 <!-- SCREENSHOT: Symbol search screen “Søg efter symboler” with a search query entered and a grid of matching pictograms from OpenSymbols. -->
-![Søgning efter symboler](images/soeg-symboler.png)
+<img src="images/soeg-symboler.png" alt="Søgning efter symboler" width="300">
 
 ### Sider og navigation
 
@@ -279,7 +282,7 @@ Gå i gang med at redigere. Tryk på de tre prikker øverst til højre, og vælg
 En side kan følge skærmen eller appen. Vælg **Brug skærmindstilling** (som resten af skærmen) eller **Brug appstandard** (som under **Indstillinger**). **Nulstil skærmindstillinger** og **Nulstil sidetilpasninger** fjerner dine egne valg.
 
 <!-- SCREENSHOT: Screen settings page (Skærmindstillinger) showing appearance and communication options such as Vis etiketter, Vis symboler, Beskedlinje and Aktivering af knap. -->
-![Skærmindstillinger](images/skaerm-indstillinger.png)
+<img src="images/skaerm-indstillinger.png" alt="Skærmindstillinger" width="300">
 
 ## Låsning af redigering
 
@@ -290,7 +293,8 @@ Der er to låse. Begge stopper kun redigering. Du kan altid tale.
 **Redigeringsadgang** er en valgfri kode til hele appen. Du finder den under **Indstillinger → System og data**.
 
 1. Tryk **Kræv en redigeringskode**.
-2. Skriv en kode på 4 til 8 cifre. Der står: «Indtast 4 til 8 cifre. Koden blokerer aldrig kommunikation.»
+2. Skriv en kode på 4 til 8 cifre under **Redigeringskode**. Der står: «Indtast 4 til 8 cifre. Koden blokerer aldrig kommunikation.»
+3. Skriv den samme kode igen under **Bekræft kode**, og tryk **OK**.
 
 Bagefter kan du trykke **Skift redigeringskode**, **Deaktivér redigeringskode** eller **Lås redigering nu**.
 
@@ -302,14 +306,14 @@ Bagefter kan du trykke **Skift redigeringskode**, **Deaktivér redigeringskode**
 > Wingmate kan ikke nulstille en glemt redigeringskode. Skriv koden ned, og gem den et sikkert sted.
 
 <!-- SCREENSHOT: Settings section Redigeringsadgang, with the description “Kræv eventuelt en kode til redigering. Kommunikation er altid tilgængelig.” and the action Kræv en redigeringskode (or the enabled state with Skift / Deaktivér). -->
-![Indstillingen Redigeringsadgang](images/redigeringsadgang.png)
+<img src="images/redigeringsadgang.png" alt="Indstillingen Redigeringsadgang" width="300">
 
 ### Lås på en enkelt skærm
 
 **Lås** fryser sider og knapper på en skærm. De kan ikke ændres, før du trykker **Lås op**. Er redigeringskoden tændt, skal den tastes for at låse eller låse op. En låst skærm har en lukket hængelås foran navnet i oversigten. TalkBack læser den som **Låst**. Du kan stadig åbne den og tale.
 
 <!-- SCREENSHOT: Screens library showing a screen marked Låst, with the unlock action (Lås op) visible and the Edit action disabled or unavailable. -->
-![En låst skærm i oversigten](images/laast-skaerm.png)
+<img src="images/laast-skaerm.png" alt="En låst skærm i oversigten" width="300">
 
 ## Stemmer
 
@@ -326,13 +330,14 @@ En stemme på enheden kræver ingen nøgle. Stemmerne på nettet kræver en nøg
 
 Sådan sætter du en stemme på nettet op:
 
-1. Vælg Microsoft, Google eller ElevenLabs.
-2. Sæt nøglen ind.
-3. Tryk **Gem**.
+1. Gå til **Indstillinger → Tale og sprog**. Tryk **Azure**, **Google** eller **ElevenLabs** under **Talemotor**.
+2. Tryk **Opsæt Azure**, **Opsæt Google Cloud TTS** eller **Opsæt ElevenLabs**, og følg trinene på skærmen.
+3. Sæt nøglen ind. Til Azure skal du også udfylde **Placering/Region**.
+4. Tryk **Gem**.
 
 Virker nøglen ikke, beholder Wingmate den gamle opsætning.
 
-Derefter vælger du en stemme i **Vælg stemme**, et **Hovedsprog** og eventuelt et **Andet sprog**. Du kan også sætte hastighed og tonehøjde, hvis stemmen kan det.
+Derefter vælger du en stemme i **Vælg stemme**. Under **Sprog** vælger du et **Hovedsprog** og eventuelt et **Andet sprog**. Bruger du en stemme på nettet, kan du trykke **Indstillinger** ud for stemmen i **Vælg stemme** og ændre hastighed og tonehøjde, hvis stemmen kan det.
 
 ElevenLabs kan ikke ændre tonehøjde her, og hastigheden kan blive ignoreret. Vil du have ElevenLabs til at tale langsommere, så skriv et engelsk ord i firkantede klammer foran teksten, for eksempel `[slowly]`.
 
@@ -343,10 +348,10 @@ Under **Udtaleordbog** kan du lære Wingmate, hvordan navne og ord skal siges. O
 Vil du vide mere om nøgler og stemmer, så se [elevenlabs-tts.md](elevenlabs-tts.md) og [google-cloud-tts.md](google-cloud-tts.md) (på engelsk).
 
 <!-- SCREENSHOT: Settings → Tale og sprog, with the speech engine options (System, Azure, Google, ElevenLabs) and a selected voice visible. -->
-![Indstillinger for tale og sprog](images/indstillinger-tale.png)
+<img src="images/indstillinger-tale.png" alt="Indstillinger for tale og sprog" width="300">
 
 <!-- SCREENSHOT: Voice picker (Vælg stemme) filtered to a language, with at least one voice selected and the preview/play control visible. -->
-![Stemmelisten Vælg stemme](images/vaelg-stemme.png)
+<img src="images/vaelg-stemme.png" alt="Stemmelisten Vælg stemme" width="300">
 
 ## Import og eksport
 
@@ -367,6 +372,9 @@ Fra oversigten **Skærme**:
    - **Open Board (.obz)** – skærmen i en fil, som andre ASK-apps også kan læse.
    - **Eksportér til Grid** – en fil til Smartbox Grid 3. I Grid Explorer vælger du **Add Grid Set → Grid set file**. Se [Smartbox’ vejledning til Grid Explorer](https://hub.smartboxaac.com/knowledgebase/grid-explorer-in-grid-3/) (på engelsk).
 
+   <!-- SCREENSHOT: The Eksportér dialog, showing Open Board (.obz) and Eksportér til Grid. -->
+   <img src="images/eksport-menu.png" alt="Dialogen Eksportér med Open Board (.obz) og Eksportér til Grid" width="300">
+
 Vil du udskrive skærmen, laver du en PDF. Tryk **Udskriv (PDF)**. Den ligger i samme menu som **Importer/eksporter data**. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
 
 ### Hvad følger med til Grid
@@ -377,9 +385,6 @@ Det her følger ikke med til Grid: ordforslag i Wingmate, ekstra elementer på s
 
 Skriveskærmen kan ikke sendes ud. Det er kun dine egne skærme.
 
-<!-- SCREENSHOT: The Eksportér dialog, showing Open Board (.obz) and Eksportér til Grid. -->
-![Dialogen Eksportér](images/eksport-menu.png)
-
 ## Sikkerhedskopi
 
 En sikkerhedskopi gemmer dine skærme, fraser, indstillinger og meget mere fra *denne* enhed i én fil. Brug den til at flytte til en ny enhed eller til at passe på dine ting. Vil du dele en enkelt skærm med andre, så brug [Import og eksport](#import-og-eksport) i stedet.
@@ -389,7 +394,7 @@ Du finder **Sikkerhedskopiér Wingmate** under **Indstillinger → System og dat
 - **Opret sikkerhedskopi** gemmer eller deler en fil. Den ender på `.wingmate-backup`.
 - **Gendan sikkerhedskopi**: vælg filen, og tryk **Validér og erstat**. Wingmate tjekker filen og erstatter så de data, der ligger på enheden nu. Tryk **Annuller**, hvis du vil beholde dine nuværende data.
 
-Kopien kan indeholde skærme, sider, fraser, kategorier, billeder, optagelser, indstillinger, talehistorik, stemmevalg og udtaleordbog. Dit valg af stemme kommer med, også hvis du bruger Azure. Selve nøglen til stemmen på nettet kommer ikke med. Det gør redigeringskoden og midlertidige lydfiler heller ikke. Efter en gendannelse skal du sætte nøglen og en eventuel redigeringskode op igen.
+Kopien kan indeholde skærme, sider, fraser, kategorier, billeder, optagelser, indstillinger, talehistorik, stemmevalg og udtaleordbog. Dit valg af stemme kommer med. Bruger du Azure, kommer regionen også med, men ikke selve nøglen. Det gør redigeringskoden og midlertidige lydfiler heller ikke. Efter en gendannelse skal du sætte nøglen og en eventuel redigeringskode op igen.
 
 > [!WARNING]
 > Filen er ikke låst med en kode, og den kan indeholde dine beskeder. Gem den et sikkert sted.
@@ -397,7 +402,7 @@ Kopien kan indeholde skærme, sider, fraser, kategorier, billeder, optagelser, i
 Vil du se, hvordan filen er bygget op, så læs [BACKUP_FORMAT.md](BACKUP_FORMAT.md) (på engelsk).
 
 <!-- SCREENSHOT: The Sikkerhedskopiér Wingmate settings group, showing the description and the buttons Opret sikkerhedskopi and Gendan sikkerhedskopi. -->
-![Sikkerhedskopi i Indstillinger](images/sikkerhedskopi.png)
+<img src="images/sikkerhedskopi.png" alt="Sikkerhedskopi i Indstillinger" width="300">
 
 ## Indstillinger
 
@@ -420,7 +425,7 @@ Andre valg, der er gode at kende:
 - **Velkomstskærm** under **System og data** kører den første opsætning igen.
 
 <!-- SCREENSHOT: The Settings home/overview, showing the category list: Tale og sprog, Skærm og layout, Tilgængelighed, Privatliv, and System og data. -->
-![Oversigten Indstillinger](images/indstillinger-oversigt.png)
+<img src="images/indstillinger-oversigt.png" alt="Oversigten Indstillinger" width="300">
 
 ## Tilgængelighed og betjening
 
@@ -436,19 +441,19 @@ Tider står i millisekunder (ms). 1000 ms er 1 sekund.
 - **Markeringsfremhævning (ms)** og **Markeringslyd** – en kort ramme og en lyd, når en knap er valgt.
 - **Auditiv bekræftelse** – Wingmate hvisker knappens tekst, når du rører knappen eller holder markøren over den.
 - **Valgtast** – vælg en tast: **Space**, **Enter**, **F8** eller **F9**. Når du trykker på den, vælges den knap, markøren eller tastaturet står på.
-- **Tast til hviletilstand** – sætter **Dwell-valg** og **Valgtast** på pause. Knappen sidder i bunden af skærmen: **Hviletilstand** / **Genoptag input**. Almindelige tryk virker stadig, mens der hviles. Hold valgtasten nede i 2 sekunder for at starte igen.
+- **Tast til hviletilstand** – vælg en tast, der sætter **Dwell-valg** og **Valgtast** på pause. Nederst på skærmen er der også en knap, der skifter mellem **Hviletilstand** og **Genoptag input**. Almindelige tryk virker stadig, mens der hviles. Hold valgtasten nede i 2 sekunder for at starte igen.
 - **Fremhævelse af markør** – behold den almindelige markør, eller læg en tydelig ring eller et omrids ovenpå. Under **Markørtype** er valgene **System**, **Ring** og **Outline**.
 
 Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør, systemet stiller til rådighed. Det gælder også øjen- og hovedstyring, når systemet giver en markør. Se [HEAD_EYE_TRACKING.md](HEAD_EYE_TRACKING.md) (på engelsk).
 
 <!-- SCREENSHOT: Settings → Tilgængelighed, showing Hold for at vælge, Dwell-valg, Vælg ved berøring and Stryg mellem sider. -->
-![Tilgængelighedsindstillinger](images/indstillinger-tilgaengelighed.png)
+<img src="images/indstillinger-tilgaengelighed.png" alt="Tilgængelighedsindstillinger" width="300">
 
 ## Fejlfinding
 
 **Stemmen på nettet virker ikke.** Tjek, at du har internet, og at nøglen stadig virker. Wingmate bruger enhedens stemme i stedet og beholder beskeden. Er nøglen blevet ændret, så sæt den nye ind under **Indstillinger → Tale og sprog**. Er du i den første opsætning, kan du trykke **Indtast nøglen igen**.
 
-**Stemmerne på enheden mangler eller lyder forkert.** Stemmerne styres af enhedens egne indstillinger for oplæsning.
+**Stemmerne på enheden mangler eller lyder forkert.** Stemmerne styres i telefonens egen app **Indstillinger**, typisk under **Tekst-til-tale-output**. Navnet og stedet kan være lidt anderledes på din telefon.
 
 **En tavlefil kan ikke hentes ind.** Appen siger selv, hvad der er galt: filen kan ikke åbnes, er ikke en tavle Wingmate kan læse, er gået i stykker, er for stor, mangler billeder eller lyde, eller er låst med en adgangskode.
 
@@ -456,7 +461,7 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 **Jeg har glemt redigeringskoden.** Koden ligger kun på enheden og kommer ikke med i en sikkerhedskopi. Wingmate kan ikke nulstille den for dig. Sidder du fast, så skriv til udvikleren. Se [Giv feedback](#giv-feedback).
 
-**Historik eller «Sandsynligt næste» vises ikke.** Tænd **Vis talehistorik**. Tænd derefter **Sandsynlige næste beskeder (eksperimentel)**. Forslagene vises kun, mens historikken er synlig. Rækken over tastaturet vises kun, mens tastaturet er fremme.
+**Historik eller «Sandsynligt næste» vises ikke.** Gå til **Indstillinger → Privatliv**. Tænd **Vis talehistorik**, og tænd derefter **Sandsynlige næste beskeder (eksperimentel)**. Forslagene vises kun, når talehistorikken er tændt. Når tastaturet er fremme, vises forslagene også i en række over tastaturet.
 
 **Søgningen finder ingen symboler, eller den er langsom.** Søgningen kræver net, medmindre symbolerne allerede ligger på enheden. Har du søgt mange gange lige efter hinanden, beder appen dig vente og prøve igen. Hent ARASAAC ned under **Indstillinger → System og data → Offline-symboler**, så virker det uden net.
 
