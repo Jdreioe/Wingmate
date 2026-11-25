@@ -46,15 +46,15 @@ class PhraseListStoreFactory(
     }
 
     private inner class ExecutorImpl : CoroutineExecutor<PhraseListStore.Intent, Unit, PhraseListStore.State, Msg, Nothing>() {
-        override fun executeAction(action: Unit, getState: () -> PhraseListStore.State) {
+        override fun executeAction(action: Unit) {
             loadPhrasesAndCategories()
         }
 
-        override fun executeIntent(intent: PhraseListStore.Intent, getState: () -> PhraseListStore.State) {
+        override fun executeIntent(intent: PhraseListStore.Intent) {
             when (intent) {
                 PhraseListStore.Intent.Refresh -> loadPhrasesAndCategories()
-                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent, getState().selectedCategoryId)
-                is PhraseListStore.Intent.AddCategory -> addCategory(intent.name, getState().selectedCategoryId)
+                is PhraseListStore.Intent.AddPhrase -> addPhrase(intent, state().selectedCategoryId)
+                is PhraseListStore.Intent.AddCategory -> addCategory(intent.name, state().selectedCategoryId)
                 is PhraseListStore.Intent.SelectCategory -> dispatch(Msg.CategorySelected(intent.categoryId))
                 is PhraseListStore.Intent.DeletePhrase -> deletePhrase(intent.phraseId)
                 is PhraseListStore.Intent.DeleteCategory -> deleteCategory(intent.categoryId)
