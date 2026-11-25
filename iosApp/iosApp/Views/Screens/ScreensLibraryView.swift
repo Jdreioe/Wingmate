@@ -7,78 +7,35 @@ extension SymbolBoardWorkspaceView {
     var libraryView: some View {
         ZStack {
             VStack(spacing: 16) {
-            // Header bar: stack buttons below the title on narrow widths (such as iPhone Duo's outer display)
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("board_sets.library.title", comment: ""))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        Text(NSLocalizedString("board_sets.library.subtitle", comment: ""))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-
+            if model.boardSets.isEmpty {
+                emptyLibraryState
+            } else {
+                // Keep library actions in one row above the grid; the navigation bar
+                // already shows the "Screens" title.
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
                     Button(action: { manageRemoteScreen(id: nil) }) {
                         Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
-                            .font(.headline)
-                            .frame(minHeight: 48)
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                     Button(action: { showSpeechImport = true }) {
                         Label("speech_import.title", systemImage: "text.badge.plus")
-                            .font(.headline)
-                            .frame(minHeight: 48)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: 44)
                     }
                     .buttonStyle(.bordered)
                     Button(action: { showCreateBoardsetSheet = true }) {
                         Label("boardset.create", systemImage: "plus")
-                            .font(.headline)
-                            .frame(minHeight: 48)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
                 }
+                .padding(.horizontal)
+                .padding(.top, 8)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString("board_sets.library.title", comment: ""))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        Text(NSLocalizedString("board_sets.library.subtitle", comment: ""))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack(spacing: 8) {
-                        Button(action: { manageRemoteScreen(id: nil) }) {
-                            Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
-                                .labelStyle(.iconOnly)
-                                .font(.subheadline.weight(.semibold))
-                                .frame(minWidth: 44, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        Button(action: { showSpeechImport = true }) {
-                            Label("speech_import.title", systemImage: "text.badge.plus")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        Button(action: { showCreateBoardsetSheet = true }) {
-                            Label("boardset.create", systemImage: "plus")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.top, 12)
-
-            if model.boardSets.isEmpty {
-                emptyLibraryState
-            } else {
                 ScrollView {
                     LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: 280, maximum: 460), spacing: 16)],
@@ -149,13 +106,6 @@ extension SymbolBoardWorkspaceView {
                 Text(NSLocalizedString("board_sets.library.empty_body", comment: ""))
                     .font(.body)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal)
-
-                Text("board_sets.library.empty_guidance")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal)
@@ -171,6 +121,12 @@ extension SymbolBoardWorkspaceView {
                     .font(.headline)
                     .frame(minHeight: 48)
                     .buttonStyle(.bordered)
+                Button(action: { manageRemoteScreen(id: nil) }) {
+                    Label("remote_screen.open", systemImage: "icloud.and.arrow.down")
+                        .font(.headline)
+                        .frame(minHeight: 48)
+                }
+                .buttonStyle(.bordered)
                 Spacer(minLength: 16)
             }
             .frame(maxWidth: 520)

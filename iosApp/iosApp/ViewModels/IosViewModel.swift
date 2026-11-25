@@ -5,22 +5,8 @@ import Network
 
 @MainActor
 final class IosViewModel: ObservableObject {
-    private final class StoreObserver: NSObject, Shared.RxObserver {
-        private let onNextState: (Shared.PhraseListStoreState) -> Void
-        private let onCompleteState: () -> Void
-        init(onNext: @escaping (Shared.PhraseListStoreState) -> Void, onComplete: @escaping () -> Void) {
-            self.onNextState = onNext
-            self.onCompleteState = onComplete
-        }
-        func onComplete() { onCompleteState() }
-        func onNext(value: Any?) {
-            if let s = value as? Shared.PhraseListStoreState {
-                onNextState(s)
-            }
-        }
-    }
     var store: Shared.PhraseListStore?
-    var disposable: Shared.RxDisposable?
+    private var phraseSubscription: Shared.NativeSubscription?
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
@@ -72,6 +58,7 @@ final class IosViewModel: ObservableObject {
     var boardPredictionSubscription: Shared.NativeSubscription?
 
     deinit {
+        phraseSubscription?.cancel()
         sessionSubscription?.cancel()
         boardPredictionSubscription?.cancel()
         #if DEBUG
@@ -229,11 +216,10 @@ final class IosViewModel: ObservableObject {
             self?.applySessionState(state)
         }
         self.store = communicationFacade.phraseListStore()
-        let observer = StoreObserver(onNext: { [weak self] newState in self?.state = newState }, onComplete: { [weak self] in
-            self?.disposable = nil
-            self?.store = nil
-        })
-        self.disposable = store?.states(observer: observer)
+        phraseSubscription?.cancel()
+        phraseSubscription = communicationFacade.observePhrases { [weak self] state in
+            self?.state = state
+        }
     // Load selected voice and languages for welcome gating and UI
     refreshVoiceAndLanguages()
 

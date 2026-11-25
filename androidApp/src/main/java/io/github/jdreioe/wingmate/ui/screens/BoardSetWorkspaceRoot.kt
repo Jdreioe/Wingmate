@@ -4,15 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,13 +14,11 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +30,7 @@ import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.VoiceUseCase
 import io.github.jdreioe.wingmate.domain.CommunicationAction
+import io.github.jdreioe.wingmate.domain.CommunicationPlaybackStatus
 import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.CommunicationSessionSnapshot
 import io.github.jdreioe.wingmate.domain.FileStorage
@@ -53,8 +44,8 @@ import io.github.jdreioe.wingmate.domain.toScreenButtons
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.CellTapResult
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
-import io.github.jdreioe.wingmate.domain.obf.ObfButtonActionEffect
 import io.github.jdreioe.wingmate.domain.obf.ObfButtonShape
+import io.github.jdreioe.wingmate.domain.obf.ObfImage
 import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
@@ -65,7 +56,7 @@ import io.github.jdreioe.wingmate.domain.obf.moveDraftField
 import io.github.jdreioe.wingmate.domain.obf.normalizedOrder
 import io.github.jdreioe.wingmate.domain.obf.orderedPredictionButtonIds
 import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
-import io.github.jdreioe.wingmate.domain.obf.parseObfButtonActions
+import io.github.jdreioe.wingmate.domain.obf.renameDraftBoardSet
 import io.github.jdreioe.wingmate.domain.obf.resizeDraftBoard
 import io.github.jdreioe.wingmate.domain.obf.resizeDraftField
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
@@ -90,7 +81,9 @@ internal fun BoardSetWorkspaceRoot(
     boardSetId: String,
     initialMode: BoardWorkspaceMode,
     onSwitchToKeyboard: () -> Unit,
-    onExitToLibrary: () -> Unit
+    onExitToLibrary: () -> Unit,
+    onOpenSettings: () -> Unit = {},
+    hideStatusBar: Boolean = true,
 ) {
     val useCase = koinInject<BoardSetUseCase>()
     val remoteActions = koinInject<RemoteScreenActions>()
@@ -124,7 +117,6 @@ internal fun BoardSetWorkspaceRoot(
     val mode = workspace.mode
     val showFinishDialog = workspace.showFinishDialog
     val isExporting = workspace.isExporting
-    val isFullscreen = workspace.isFullscreen
     val legacySentenceButtons = remember(workspaceViewModel) {
         workspaceViewModel.consumeLegacySentenceButtons()
     }
@@ -136,11 +128,11 @@ internal fun BoardSetWorkspaceRoot(
     var selectedField by remember(boardSetId) { mutableStateOf<Pair<Int, Int>?>(null) }
     var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
+    var showRenameScreenDialog by remember { mutableStateOf(false) }
     var settingsTarget by remember(boardSetId) { mutableStateOf<BoardSettingsTarget?>(null) }
     val hiddenButtonsSession = remember(boardSetId) { HiddenButtonsSession() }
     val showHiddenButtons = hiddenButtonsSession.revealed
     val showEditingAccessDialog = workspace.showEditingAccessDialog
-    var appBarMenuExpanded by remember(boardSetId) { mutableStateOf(false) }
     var showExportDialog by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(R.string.board_workspace_unlock_to_edit)
     val loadErrorMessage = stringResource(R.string.board_workspace_load_error)
@@ -306,24 +298,6 @@ internal fun BoardSetWorkspaceRoot(
         )
     }
     val messageText = activeMessage.displayText
-    val availableBoardActions = remember(activeBoard, showHiddenButtons) {
-        val visibleGridButtonIds = activeBoard?.grid
-            ?.order
-            ?.flatten()
-            ?.filterNotNull()
-            ?.toSet()
-        activeBoard?.buttons
-            ?.asSequence()
-            ?.filter { button ->
-                (!button.hidden || showHiddenButtons) &&
-                    (visibleGridButtonIds == null || button.id in visibleGridButtonIds)
-            }
-            ?.flatMap { parseObfButtonActions(it).asSequence() }
-            ?.toList()
-            .orEmpty()
-    }
-    val boardHasDeleteField = availableBoardActions.any { it == ObfButtonActionEffect.Backspace }
-    val boardHasClearField = availableBoardActions.any { it == ObfButtonActionEffect.Clear }
     val predictionButtonIds = remember(activeBoard?.id, activeBoard?.grid, activeBoard?.buttons, showHiddenButtons) {
         orderedPredictionButtonIds(activeBoard, showHiddenButtons)
     }
@@ -511,6 +485,7 @@ internal fun BoardSetWorkspaceRoot(
 
     BackHandler(enabled = true, onBack = ::navigateBack)
     PlatformBackgroundEffect { editingAccessController?.lock() }
+    HideStatusBarEffect(hidden = hideStatusBar)
     // The selected Button while editing, if any; Back deselects it before leaving.
     val selectedButton = if (mode == BoardWorkspaceMode.Edit) {
         selectedField?.let { (row, column) ->
@@ -520,293 +495,350 @@ internal fun BoardSetWorkspaceRoot(
     } else null
     BackHandler(enabled = selectedButton != null) { selectedField = null }
 
-    Scaffold(
-        topBar = {
-            BoardWorkspaceTopBar(
-                isFullscreen = isFullscreen,
-                mode = mode,
-                activeGraph = activeGraph,
-                activeBoard = activeBoard,
-                selectedButton = selectedButton,
-                selectedField = selectedField,
-                canUndo = editSession?.undoStack?.isNotEmpty() == true,
-                showHiddenButtons = showHiddenButtons,
-                isExporting = isExporting,
-                menuExpanded = appBarMenuExpanded,
-                onMenuExpandedChange = { appBarMenuExpanded = it },
-                onLeave = ::leave,
-                onUndo = { workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit) },
-                onRequestFinishEditing = ::requestFinishEditing,
-                onOpenAddBoard = { showAddBoardDialog = true },
-                onOpenSettings = { settingsTarget = it },
-                onOpenResizeBoard = { showResizeBoardDialog = true },
-                onSetHomeBoard = {
-                    val session = editSession
-                    val board = activeBoard
-                    if (session != null && board != null) {
-                        workspaceViewModel.onAction(
-                            BoardWorkspaceAction.ApplyEdit(setDraftRoot(session.draft, board.id))
-                        )
-                    }
-                },
-                onOpenDeleteBoard = { showDeleteBoardDialog = true },
-                onToggleHiddenButtons = hiddenButtonsSession::toggle,
-                onEnterFullscreen = { workspaceViewModel.onAction(BoardWorkspaceAction.FullscreenChanged(true)) },
-                onSwitchToKeyboard = onSwitchToKeyboard,
-                onOpenExport = { showExportDialog = true },
-                onPrint = {
-                    runExport {
-                        printBoardSetAsPdf(
-                            graph = activeGraph,
-                            settings = settings,
-                            fileStorage = fileStorage,
-                            mediaUrlLoader = mediaUrlLoader,
-                            shareService = shareService,
-                            resources = resources,
-                            exportedTemplate = exportedTemplate,
-                            exportCancelledMessage = exportCancelledMessage,
-                            exportErrorMessage = exportErrorMessage,
-                        )
-                    }
-                },
-                onStartEditing = ::startEditing,
-                onEditSelectedButton = { selection, button ->
-                    editingCell = WorkspaceCellTarget(selection.first, selection.second, button)
-                },
-                onRemoveSelectedButton = { selection ->
-                    val session = editSession
-                    val boardId = activeBoard?.id
-                    if (session != null && boardId != null) {
-                        selectedField = null
-                        workspaceViewModel.onAction(
-                            BoardWorkspaceAction.ApplyEdit(
-                                clearDraftCell(session.draft, boardId, selection.first, selection.second)
-                            )
-                        )
-                    }
-                },
-                onDeselectButton = { selectedField = null },
+    val messagePartItems = remember(activeMessage, activeGraph, settings.primaryLanguage) {
+        buildScreensMessagePartItems(activeMessage, activeGraph, settings.primaryLanguage)
+    }
+    val loadChipImage: suspend (ObfImage) -> ImageBitmap? = remember(fileStorage, mediaUrlLoader) {
+        { image ->
+            withContext(Dispatchers.Default) {
+                loadObfImageBytes(image, fileStorage, mediaUrlLoader)
+                    ?.decodeSampledBitmap(256)
+                    ?.asImageBitmap()
+            }
+        }
+    }
+    val isSpeaking = communicationState.playbackStatus != CommunicationPlaybackStatus.Idle
+    val isHolding = communicationState.heldMessage != null
+    val hasMessage = activeMessage.parts.isNotEmpty()
+    val pageNavigation = activeGraph
+        ?.takeIf { mode == BoardWorkspaceMode.Run && it.boards.size > 1 }
+        ?.let { graph ->
+            PageNavigation(
+                canGoBack = workspace.canNavigateBack,
+                atStartPage = workspace.selectedBoardId == graph.boardSet.rootBoardId,
+                onBack = { workspaceViewModel.onAction(BoardWorkspaceAction.PreviousPageClicked) },
+                onStartPage = { workspaceViewModel.onAction(BoardWorkspaceAction.GoHome(graph.boardSet.rootBoardId)) },
             )
-        },
-    ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            BoardWorkspaceContent(
-                state = workspace,
-                hasActiveBoard = activeGraph != null && activeBoard != null,
-                onBackToLibrary = onExitToLibrary,
-                onRetry = { workspaceViewModel.onAction(BoardWorkspaceAction.RetryLoad) },
-            ) {
-                if (activeGraph != null && activeBoard != null) {
-                    if (!isFullscreen && mode == BoardWorkspaceMode.Edit) {
-                        BoardStrip(
-                            boards = activeGraph.boards,
-                            selectedBoardId = workspace.selectedBoardId,
-                            onSelect = {
-                                workspaceViewModel.onAction(BoardWorkspaceAction.SelectBoard(it))
-                                selectedField = null
-                            }
-                        )
-                    }
-                    PageSwipeBox(
-                        enabled = settings.swipeBetweenPages && mode == BoardWorkspaceMode.Run,
-                        onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                    ) {
-                        ObfBoardView(
-                            pageNavigation = activeGraph.takeIf { mode == BoardWorkspaceMode.Run && it.boards.size > 1 }?.let { graph ->
-                                PageNavigation(
-                                    canGoBack = workspace.canNavigateBack,
-                                    atStartPage = workspace.selectedBoardId == graph.boardSet.rootBoardId,
-                                    onBack = { workspaceViewModel.onAction(BoardWorkspaceAction.PreviousPageClicked) },
-                                    onStartPage = { workspaceViewModel.onAction(BoardWorkspaceAction.GoHome(graph.boardSet.rootBoardId)) },
+        }
+
+    Box(Modifier.fillMaxSize()) {
+        BoardWorkspaceContent(
+            state = workspace,
+            hasActiveBoard = activeGraph != null && activeBoard != null,
+            onBackToLibrary = onExitToLibrary,
+            onRetry = { workspaceViewModel.onAction(BoardWorkspaceAction.RetryLoad) },
+        ) {
+            if (activeGraph != null && activeBoard != null) {
+                if (mode == BoardWorkspaceMode.Edit) {
+                    ScreensEditHeader(
+                        screenName = activeGraph.boardSet.name,
+                        boards = activeGraph.boards,
+                        selectedBoardId = workspace.selectedBoardId,
+                        rootBoardId = activeGraph.boardSet.rootBoardId,
+                        canResizePage = activeBoard.grid != null,
+                        canUndo = editSession?.undoStack?.isNotEmpty() == true,
+                        onLeave = ::leave,
+                        onRenameScreen = { showRenameScreenDialog = true },
+                        onOpenScreenSettings = { settingsTarget = BoardSettingsTarget.Screen },
+                        onSelectBoard = {
+                            workspaceViewModel.onAction(BoardWorkspaceAction.SelectBoard(it))
+                            selectedField = null
+                        },
+                        onOpenPageSettings = { settingsTarget = BoardSettingsTarget.Page },
+                        onResizePage = { showResizeBoardDialog = true },
+                        onSetRootPage = { boardId ->
+                            val session = editSession ?: return@ScreensEditHeader
+                            workspaceViewModel.onAction(
+                                BoardWorkspaceAction.ApplyEdit(setDraftRoot(session.draft, boardId))
+                            )
+                        },
+                        onDeletePage = { showDeleteBoardDialog = true },
+                        onAddPage = { showAddBoardDialog = true },
+                        onUndo = { workspaceViewModel.onAction(BoardWorkspaceAction.UndoEdit) },
+                        onFinish = ::requestFinishEditing,
+                    )
+                } else {
+                    ScreensRunTopRow(
+                        canEdit = !activeGraph.boardSet.isLocked,
+                        showHiddenButtons = showHiddenButtons,
+                        isExporting = isExporting,
+                        pageNavigation = pageNavigation,
+                        onEditScreen = ::startEditing,
+                        onToggleHiddenButtons = hiddenButtonsSession::toggle,
+                        onExport = { showExportDialog = true },
+                        onPrint = {
+                            runExport {
+                                printBoardSetAsPdf(
+                                    graph = activeGraph,
+                                    settings = settings,
+                                    fileStorage = fileStorage,
+                                    mediaUrlLoader = mediaUrlLoader,
+                                    shareService = shareService,
+                                    resources = resources,
+                                    exportedTemplate = exportedTemplate,
+                                    exportCancelledMessage = exportCancelledMessage,
+                                    exportErrorMessage = exportErrorMessage,
                                 )
-                            },
-                            board = activeBoard,
-                            isEditMode = mode == BoardWorkspaceMode.Edit,
-                            showMessageBar = mode == BoardWorkspaceMode.Run && resolvedBoardSettings.showMessageBar,
-                            messageBarEditable = resolvedBoardSettings.messageBarEditable,
-                            onSentenceChanged = { text ->
-                                communicationSession.accept(
-                                    Message.fromTextDiff(
-                                        currentText = communicationSession.state.value.activeMessage.displayText,
-                                        newText = text,
+                            }
+                        },
+                        onBackToLibrary = ::leave,
+                        onSwitchToTyping = onSwitchToKeyboard,
+                        onOpenSettings = onOpenSettings,
+                    )
+                }
+
+                if (resolvedBoardSettings.showMessageBar) {
+                    ScreensMessageBarRow(
+                        isEditMode = mode == BoardWorkspaceMode.Edit,
+                        parts = messagePartItems,
+                        messageText = messageText,
+                        editable = resolvedBoardSettings.messageBarEditable,
+                        actions = resolvedBoardSettings.messageBarActions,
+                        hasMessage = hasMessage,
+                        isSpeaking = isSpeaking,
+                        isHolding = isHolding,
+                        selectOnTouchDown = settings.selectOnTouchDown,
+                        onSpeakPart = { index ->
+                            val part = activeMessage.parts.getOrNull(index) ?: return@ScreensMessageBarRow
+                            communicationSession.accept(
+                                CommunicationAction.SpeakPart(part = part, voice = selectedVoice)
+                            )
+                        },
+                        onRemovePart = { index ->
+                            removeMessagePartAction(activeMessage, index)
+                                ?.let(communicationSession::accept)
+                        },
+                        onTextChange = { text ->
+                            communicationSession.accept(
+                                Message.fromTextDiff(
+                                    currentText = communicationSession.state.value.activeMessage.displayText,
+                                    newText = text,
+                                )
+                            )
+                        },
+                        loadImage = loadChipImage,
+                        onSpeak = {
+                            communicationSession.accept(
+                                CommunicationAction.SpeakActive(
+                                    voice = selectedVoice,
+                                    cacheAudio = activeGraph.boardSet.cacheWholeSentences,
+                                )
+                            )
+                        },
+                        onStopSpeech = { communicationSession.accept(CommunicationAction.Stop) },
+                        onHold = { communicationSession.accept(CommunicationAction.SwapHeldMessage) },
+                        onDeleteLast = {
+                            communicationSession.accept(
+                                CommunicationAction.RemoveLastPart(activeBoard.spellingMode)
+                            )
+                        },
+                        onClear = { communicationSession.accept(CommunicationAction.Clear) },
+                        onActionsChanged = { nextActions ->
+                            val session = editSession ?: return@ScreensMessageBarRow
+                            val updatedScreen = session.draft.boardSet.screenSettings.copy(
+                                messageBarActions = nextActions,
+                            )
+                            workspaceViewModel.onAction(
+                                BoardWorkspaceAction.ApplyEdit(
+                                    session.draft.copy(
+                                        boardSet = session.draft.boardSet.copy(
+                                            screenSettings = updatedScreen,
+                                        )
                                     )
                                 )
-                            },
-                            messageText = messageText,
-                            symbolBarPresentation = if (isFullscreen) {
-                                SymbolBarPresentation.Fullscreen
-                            } else {
-                                SymbolBarPresentation.Normal
-                            },
-                            showSpeakControl = resolvedBoardSettings.showSpeakButton,
-                            showDeleteControl = !boardHasDeleteField,
-                            showClearControl = !boardHasClearField,
-                            boardSettings = resolvedBoardSettings,
-                            showHiddenButtons = showHiddenButtons,
-                            selectedButtons = selectedButtons,
-                            highlightedButtonId = selectionHighlight.buttonId,
-                            backgroundImage = backgroundBitmap,
-                            predictionLabels = predictionsById,
-                            onButtonClick = { button ->
-                                handleWorkspaceButtonClick(
-                                    button = button,
-                                    activeGraph = activeGraph,
-                                    activeBoard = activeBoard,
-                                    workspace = workspace,
-                                    settings = settings,
-                                    resolvedBoardSettings = resolvedBoardSettings,
-                                    selectedVoice = selectedVoice,
-                                    predictionButtonIds = predictionButtonIds,
-                                    predictionsById = predictionsById,
-                                    communicationSession = communicationSession,
-                                    workspaceViewModel = workspaceViewModel,
-                                    fileStorage = fileStorage,
-                                    soundPlayer = soundPlayer,
-                                    mediaUrlLoader = mediaUrlLoader,
-                                    scope = scope,
-                                    unsupportedActionTemplate = unsupportedActionTemplate,
-                                    onMarkButtonSelected = selectionHighlight::select,
-                                    onOpenNativeKeyboardDraft = { nativeKeyboardDraft = it },
-                                )
-                            },
-                            onCellClick = if (mode == BoardWorkspaceMode.Edit) {
-                                { row, column, button ->
-                                    when (
-                                        val result = resolveCellTap(
-                                            grid = activeBoard.grid,
-                                            row = row,
-                                            column = column,
-                                            button = button
-                                        )
-                                    ) {
-                                        is CellTapResult.OpenDialog -> {
-                                            // Like a launcher: a tap selects a Button (Edit and Remove in the
-                                            // top bar, resize handles on it); tapping it again deselects. An
-                                            // empty cell has nothing to select, so a tap adds a Button there.
-                                            if (result.button != null) {
-                                                val anchor = activeBoard.grid?.fieldAnchorAt(result.row, result.column)
-                                                selectedField = anchor.takeUnless { it == selectedField }
+                            )
+                        },
+                    )
+                }
+
+                PageSwipeBox(
+                    enabled = settings.swipeBetweenPages && mode == BoardWorkspaceMode.Run,
+                    onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                ) {
+                    ObfBoardView(
+                        board = activeBoard,
+                        isEditMode = mode == BoardWorkspaceMode.Edit,
+                        showMessageBar = false,
+                        messageText = messageText,
+                        boardSettings = resolvedBoardSettings,
+                        showHiddenButtons = showHiddenButtons,
+                        selectedButtons = selectedButtons,
+                        highlightedButtonId = selectionHighlight.buttonId,
+                        backgroundImage = backgroundBitmap,
+                        predictionLabels = predictionsById,
+                        onButtonClick = { button ->
+                            handleWorkspaceButtonClick(
+                                button = button,
+                                activeGraph = activeGraph,
+                                activeBoard = activeBoard,
+                                workspace = workspace,
+                                settings = settings,
+                                resolvedBoardSettings = resolvedBoardSettings,
+                                selectedVoice = selectedVoice,
+                                predictionButtonIds = predictionButtonIds,
+                                predictionsById = predictionsById,
+                                communicationSession = communicationSession,
+                                workspaceViewModel = workspaceViewModel,
+                                fileStorage = fileStorage,
+                                soundPlayer = soundPlayer,
+                                mediaUrlLoader = mediaUrlLoader,
+                                scope = scope,
+                                unsupportedActionTemplate = unsupportedActionTemplate,
+                                onMarkButtonSelected = selectionHighlight::select,
+                                onOpenNativeKeyboardDraft = { nativeKeyboardDraft = it },
+                            )
+                        },
+                        onCellClick = if (mode == BoardWorkspaceMode.Edit) {
+                            { row, column, button ->
+                                when (
+                                    val result = resolveCellTap(
+                                        grid = activeBoard.grid,
+                                        row = row,
+                                        column = column,
+                                        button = button
+                                    )
+                                ) {
+                                    is CellTapResult.OpenDialog -> {
+                                        // On-canvas editing: first tap selects the field (showing
+                                        // resize handles and the trash badge), second tap opens its
+                                        // editor. Empty cells open the editor immediately.
+                                        if (result.button != null) {
+                                            val anchor = activeBoard.grid?.fieldAnchorAt(result.row, result.column)
+                                            if (anchor != null && anchor == selectedField) {
+                                                editingCell = WorkspaceCellTarget(anchor.first, anchor.second, result.button)
                                             } else {
-                                                selectedField = null
-                                                editingCell = WorkspaceCellTarget(result.row, result.column, null)
+                                                selectedField = anchor
                                             }
+                                        } else {
+                                            selectedField = null
+                                            editingCell = WorkspaceCellTarget(result.row, result.column, null)
                                         }
                                     }
                                 }
-                            } else null,
-                            onCellMove = if (mode == BoardWorkspaceMode.Edit) {
-                                { fromRow, fromColumn, toRow, toColumn ->
+                            }
+                        } else null,
+                        onCellMove = if (mode == BoardWorkspaceMode.Edit) {
+                            { fromRow, fromColumn, toRow, toColumn ->
+                                val session = editSession
+                                if (session != null) {
+                                    selectedField = null
+                                    workspaceViewModel.onAction(
+                                        BoardWorkspaceAction.ApplyEdit(
+                                            moveDraftField(session.draft, activeBoard.id, fromRow, fromColumn, toRow, toColumn)
+                                        )
+                                    )
+                                }
+                            }
+                        } else null,
+                        // Launcher-style: hold a Button for Edit, Resize or Remove.
+                        cellMenu = if (mode == BoardWorkspaceMode.Edit) {
+                            BoardCellMenu(
+                                onEdit = { row, column, button ->
+                                    selectedField = activeBoard.grid?.fieldAnchorAt(row, column)
+                                    editingCell = WorkspaceCellTarget(row, column, button)
+                                },
+                                // Selecting the Button shows its resize handles.
+                                onResize = { row, column -> selectedField = activeBoard.grid?.fieldAnchorAt(row, column) },
+                                // One edit, so Undo brings it back.
+                                onRemove = { row, column ->
                                     val session = editSession
                                     if (session != null) {
                                         selectedField = null
                                         workspaceViewModel.onAction(
                                             BoardWorkspaceAction.ApplyEdit(
-                                                moveDraftField(session.draft, activeBoard.id, fromRow, fromColumn, toRow, toColumn)
+                                                clearDraftCell(session.draft, activeBoard.id, row, column)
                                             )
                                         )
                                     }
-                                }
-                            } else null,
-                            // Launcher-style: hold a Button for Edit, Resize or Remove.
-                            cellMenu = if (mode == BoardWorkspaceMode.Edit) {
-                                BoardCellMenu(
-                                    onEdit = { row, column, button ->
-                                        selectedField = activeBoard.grid?.fieldAnchorAt(row, column)
-                                        editingCell = WorkspaceCellTarget(row, column, button)
-                                    },
-                                    // Selecting the Button shows its resize handles.
-                                    onResize = { row, column -> selectedField = activeBoard.grid?.fieldAnchorAt(row, column) },
-                                    // One edit, so Undo brings it back.
-                                    onRemove = { row, column ->
-                                        val session = editSession
-                                        if (session != null) {
-                                            selectedField = null
-                                            workspaceViewModel.onAction(
-                                                BoardWorkspaceAction.ApplyEdit(
-                                                    clearDraftCell(session.draft, activeBoard.id, row, column)
-                                                )
-                                            )
-                                        }
-                                    },
+                                },
+                            )
+                        } else null,
+                        selectedFieldAnchor = selectedField,
+                        selectedFieldSpans = remember(activeBoard.grid, selectedField) {
+                            selectedField?.let { (row, column) ->
+                                activeBoard.grid?.availableFieldSpansAt(row, column).orEmpty()
+                            }.orEmpty()
+                        },
+                        onResizeField = if (mode == BoardWorkspaceMode.Edit) {
+                            { anchorRow, anchorColumn, rowSpan, columnSpan ->
+                                val session = editSession ?: return@ObfBoardView
+                                val resized = resizeDraftField(
+                                    graph = session.draft,
+                                    boardId = activeBoard.id,
+                                    row = anchorRow,
+                                    column = anchorColumn,
+                                    rowSpan = rowSpan,
+                                    columnSpan = columnSpan
                                 )
-                            } else null,
-                            selectedFieldAnchor = selectedField,
-                            selectedFieldSpans = remember(activeBoard.grid, selectedField) {
-                                selectedField?.let { (row, column) ->
-                                    activeBoard.grid?.availableFieldSpansAt(row, column).orEmpty()
-                                }.orEmpty()
-                            },
-                            onResizeField = if (mode == BoardWorkspaceMode.Edit) {
-                                { anchorRow, anchorColumn, rowSpan, columnSpan ->
-                                    val session = editSession ?: return@ObfBoardView
-                                    val resized = resizeDraftField(
-                                        graph = session.draft,
-                                        boardId = activeBoard.id,
-                                        row = anchorRow,
-                                        column = anchorColumn,
-                                        rowSpan = rowSpan,
-                                        columnSpan = columnSpan
-                                    )
-                                    if (resized != session.draft) {
-                                        workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(resized))
-                                    }
+                                if (resized != session.draft) {
+                                    workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(resized))
                                 }
-                            } else null,
-                            onGridHeightFractionChange = if (mode == BoardWorkspaceMode.Edit) {
-                                { fraction ->
-                                    val session = editSession ?: return@ObfBoardView
-                                    workspaceViewModel.onAction(
-                                        BoardWorkspaceAction.ApplyEdit(
-                                            session.draft.copy(
-                                                boards = session.draft.boards.map { board ->
-                                                    if (board.id == activeBoard.id) board.withGridHeightFraction(fraction) else board
-                                                }
-                                            )
+                            }
+                        } else null,
+                        onRemoveField = if (mode == BoardWorkspaceMode.Edit) {
+                            { row, column ->
+                                val session = editSession ?: return@ObfBoardView
+                                selectedField = null
+                                workspaceViewModel.onAction(
+                                    BoardWorkspaceAction.ApplyEdit(
+                                        clearDraftCell(session.draft, activeBoard.id, row, column)
+                                    )
+                                )
+                            }
+                        } else null,
+                        onGridHeightFractionChange = if (mode == BoardWorkspaceMode.Edit) {
+                            { fraction ->
+                                val session = editSession ?: return@ObfBoardView
+                                workspaceViewModel.onAction(
+                                    BoardWorkspaceAction.ApplyEdit(
+                                        session.draft.copy(
+                                            boards = session.draft.boards.map { board ->
+                                                if (board.id == activeBoard.id) board.withGridHeightFraction(fraction) else board
+                                            }
                                         )
                                     )
-                                }
-                            } else null,
-                            homeBoardId = activeGraph.boardSet.rootBoardId,
-                            onSpeakSentence = {
-                                communicationSession.accept(
-                                    CommunicationAction.SpeakActive(
-                                        voice = selectedVoice,
-                                        cacheAudio = activeGraph.boardSet.cacheWholeSentences,
-                                    )
                                 )
-                            },
-                            onDeleteLast = {
-                                communicationSession.accept(
-                                    CommunicationAction.RemoveLastPart(activeBoard.spellingMode)
+                            }
+                        } else null,
+                        homeBoardId = activeGraph.boardSet.rootBoardId,
+                        onSpeakSentence = {
+                            communicationSession.accept(
+                                CommunicationAction.SpeakActive(
+                                    voice = selectedVoice,
+                                    cacheAudio = activeGraph.boardSet.cacheWholeSentences,
                                 )
-                            },
-                            onClearSentence = {
-                                communicationSession.accept(CommunicationAction.Clear)
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
-            if (isFullscreen && mode == BoardWorkspaceMode.Run && activeGraph != null && activeBoard != null) {
-                Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    tonalElevation = 4.dp
-                ) {
-                    IconButton(onClick = {
-                        workspaceViewModel.onAction(BoardWorkspaceAction.FullscreenChanged(false))
-                    }) {
-                        Icon(
-                            Icons.Default.FullscreenExit,
-                            contentDescription = stringResource(R.string.board_workspace_exit_fullscreen)
-                        )
-                    }
+                            )
+                        },
+                        onDeleteLast = {
+                            communicationSession.accept(
+                                CommunicationAction.RemoveLastPart(activeBoard.spellingMode)
+                            )
+                        },
+                        onClearSentence = {
+                            communicationSession.accept(CommunicationAction.Clear)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
+    }
+
+    if (showRenameScreenDialog && activeGraph != null) {
+        RenameScreenDialog(
+            currentName = activeGraph.boardSet.name,
+            onDismiss = { showRenameScreenDialog = false },
+            onRename = { newName ->
+                val session = editSession
+                if (session != null) {
+                    workspaceViewModel.onAction(
+                        BoardWorkspaceAction.ApplyEdit(renameDraftBoardSet(session.draft, newName))
+                    )
+                }
+                showRenameScreenDialog = false
+            },
+        )
     }
 
     if (showAddBoardDialog) {

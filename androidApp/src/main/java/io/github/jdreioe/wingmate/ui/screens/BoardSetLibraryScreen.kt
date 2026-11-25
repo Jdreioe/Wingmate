@@ -19,11 +19,28 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.obf.fieldItems
+import io.github.jdreioe.wingmate.domain.obf.resolveObfLocalizedString
+import io.github.jdreioe.wingmate.domain.obf.resolvedBackgroundColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
@@ -57,9 +74,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -70,8 +84,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -210,10 +222,18 @@ fun BoardSetManagerRoot(
 ) {
     val koin = org.koin.compose.getKoin()
     val useCase = koinInject<BoardSetUseCase>()
+    val boardRepository = remember(koin) { koin.getOrNull<BoardRepository>() }
     val boardSetSpeechCache = koinInject<BoardSetSpeechCacheUseCase>()
     val boardImportService = remember(koin) { koin.getOrNull<BoardImportService>() }
     val editingAccessController = remember(koin) { koin.getOrNull<EditingAccessController>() }
     val remoteActions = koinInject<RemoteScreenActions>()
+    val loadPreview: suspend (String) -> ObfBoard? = remember(boardRepository) {
+        { rootBoardId ->
+            withContext(Dispatchers.Default) {
+                runCatching { boardRepository?.getBoard(rootBoardId) }.getOrNull()
+            }
+        }
+    }
     val operations = remember(
         useCase,
         boardSetSpeechCache,
@@ -312,6 +332,7 @@ fun BoardSetManagerRoot(
             status = state.status,
             importAvailable = boardImportService != null,
             onManageRemote = ::manageRemote,
+            loadPreview = loadPreview,
             onAction = viewModel::onAction,
         )
         is BoardSetManagerRoute.Workspace -> BoardSetWorkspaceRoot(
@@ -319,6 +340,8 @@ fun BoardSetManagerRoot(
             initialMode = route.mode,
             onSwitchToKeyboard = { viewModel.onAction(BoardSetManagerAction.BackClicked) },
             onExitToLibrary = { viewModel.onAction(BoardSetManagerAction.WorkspaceExited) },
+            onOpenSettings = { viewModel.onAction(BoardSetManagerAction.SettingsClicked) },
+            hideStatusBar = !state.showSettings,
         )
     }
 
@@ -424,12 +447,14 @@ internal fun BoardSetManagerScreen(
     importAvailable: Boolean,
     onManageRemote: ((ObfBoardSet?) -> Unit)? = null,
     onAction: (BoardSetManagerAction) -> Unit,
+    loadPreview: suspend (String) -> ObfBoard? = { null },
 ) {
     BoardSetLibraryScreen(
         boardSets = state.boardSets,
         isLoading = state.isLoading,
         isCreating = state.isCreating,
         status = status,
+        loadPreview = loadPreview,
         onBack = { onAction(BoardSetManagerAction.BackClicked) },
         onOpenSettings = { onAction(BoardSetManagerAction.SettingsClicked) },
         onCreate = { onAction(BoardSetManagerAction.CreateClicked) },
@@ -501,7 +526,8 @@ internal fun BoardSetLibraryScreen(
     onEdit: (ObfBoardSet) -> Unit,
     onDuplicate: (ObfBoardSet) -> Unit,
     onToggleLock: (ObfBoardSet) -> Unit,
-    onDelete: (ObfBoardSet) -> Unit
+    onDelete: (ObfBoardSet) -> Unit,
+    loadPreview: suspend (String) -> ObfBoard? = { null },
 ) {
     // A large window shows the library as one readable column with its actions above it,
     // instead of floating buttons stranded in a far corner.
@@ -511,14 +537,7 @@ internal fun BoardSetLibraryScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(stringResource(R.string.board_sets_title), fontWeight = FontWeight.SemiBold)
-                        Text(
-                            stringResource(R.string.board_sets_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(stringResource(R.string.board_sets_title), fontWeight = FontWeight.SemiBold)
                 },
                 actions = {
                     IconButton(onClick = onBack) {
@@ -624,19 +643,22 @@ internal fun BoardSetLibraryScreen(
                             Button(onClick = onCreate) { Text(stringResource(R.string.board_sets_create)) }
                         }
                     }
-                    else -> LazyColumn(
+                    else -> LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 280.dp),
                         modifier = Modifier.fillMaxSize(),
                         // Room for the floating buttons, which a large window does not have.
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = if (large) 24.dp else 152.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         status?.let {
-                            item(key = "status") { LibraryStatusBanner(it) }
+                            item(key = "status", span = { GridItemSpan(maxLineSpan) }) { LibraryStatusBanner(it) }
                         }
                         items(boardSets, key = { it.id }) { boardSet ->
                             BoardSetLibraryCard(
                                 boardSet = boardSet,
                                 onManageRemote = onManageRemote?.let { manage -> { manage(boardSet) } },
+                                loadPreview = loadPreview,
                                 onOpen = { onOpen(boardSet) },
                                 onEdit = { onEdit(boardSet) },
                                 onDuplicate = { onDuplicate(boardSet) },
@@ -688,82 +710,77 @@ internal fun BoardSetLibraryActions(onImportSpeech: () -> Unit, onCreate: () -> 
     }
 }
 
-/**
- * The edit top bar while a Button is selected, as Android shows a selection: what is selected,
- * and labelled actions for it. The non-gesture way to edit or remove a Button.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun SelectedButtonTopBar(label: String, onEdit: () -> Unit, onRemove: () -> Unit, onDeselect: () -> Unit) {
-    TopAppBar(
-        title = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        navigationIcon = {
-            IconButton(onClick = onDeselect) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.board_selection_done))
-            }
-        },
-        actions = {
-            TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Default.Edit, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.board_cell_menu_edit))
-            }
-            TextButton(onClick = onRemove, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.board_cell_menu_remove), color = MaterialTheme.colorScheme.error)
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-    )
-}
-
 /** How wide the Screens library grows on a large window. */
-internal val BoardSetLibraryMaxWidth = 840.dp
+internal val BoardSetLibraryMaxWidth = 1120.dp
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 internal fun BoardSetLibraryCard(
     boardSet: ObfBoardSet,
     onManageRemote: (() -> Unit)?,
+    loadPreview: suspend (String) -> ObfBoard? = { null },
     onOpen: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onToggleLock: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val previewBoard by produceState<ObfBoard?>(
+        initialValue = null,
+        key1 = boardSet.rootBoardId,
+        key2 = boardSet.updatedAt,
+    ) {
+        value = loadPreview(boardSet.rootBoardId)
+    }
+    var menuExpanded by remember(boardSet.id) { mutableStateOf(false) }
+    val openLabel = stringResource(R.string.board_sets_open)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val openLabel = stringResource(R.string.board_sets_open)
-            ListItem(
-                headlineContent = { Text(boardSet.name, fontWeight = FontWeight.SemiBold) },
-                supportingContent = {
-                    val countText = pluralStringResource(R.plurals.board_sets_board_count, boardSet.boardIds.size, boardSet.boardIds.size)
-                    // Ownership shows as an icon on Edit; only a conflict needs words here.
-                    val remoteText = boardSet.remoteLink?.takeIf { it.hasConflict }
-                        ?.let { stringResource(R.string.remote_screen_conflict_badge) }
-                    Text(if (remoteText != null) "$countText · $remoteText" else countText)
-                },
-                leadingContent = {
-                    Icon(
-                        if (boardSet.isLocked) Icons.Default.Lock else Icons.Default.Home,
-                        contentDescription = if (boardSet.isLocked) stringResource(R.string.board_sets_locked) else null
-                    )
-                },
-                // The card supplies the background, so the row and its actions read as one surface.
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable(onClickLabel = openLabel, onClick = onOpen)
                     .testTag("$BOARD_SET_OPEN_TEST_TAG_PREFIX${boardSet.id}"),
-            )
-            Row {
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ScreenLibraryPreview(
+                    board = previewBoard,
+                    isLocked = boardSet.isLocked,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
+                )
+                Text(
+                    text = boardSet.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val count = pluralStringResource(
+                    R.plurals.board_sets_board_count,
+                    boardSet.boardIds.size,
+                    boardSet.boardIds.size,
+                )
+                val conflict = boardSet.remoteLink?.takeIf { it.hasConflict }
+                    ?.let { stringResource(R.string.remote_screen_conflict_badge) }
+                Text(
+                    text = if (conflict != null) "$count · $conflict" else count,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 if (onManageRemote != null) {
                     IconButton(onClick = onManageRemote) {
                         val isShared = boardSet.remoteLink?.isSharedFromOther == true
@@ -784,7 +801,11 @@ internal fun BoardSetLibraryCard(
                         )
                     }
                 }
-                IconButton(onClick = onEdit, enabled = !boardSet.isLocked) {
+                OutlinedButton(
+                    onClick = onEdit,
+                    enabled = !boardSet.isLocked,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) {
                     val link = boardSet.remoteLink
                     val ownership = link?.let {
                         when {
@@ -795,40 +816,165 @@ internal fun BoardSetLibraryCard(
                             else -> stringResource(R.string.remote_screen_linked_badge, it.resolvedDisplayName())
                         }
                     }
-                    val editLabel = stringResource(R.string.board_sets_edit)
-                    BadgedBox(
-                        badge = {
-                            if (link != null) {
-                                Icon(
-                                    when {
-                                        link.isSharedFromOther -> Icons.Default.Group
-                                        link.isOwnedByUser -> Icons.Default.Person
-                                        else -> Icons.Default.Cloud
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = if (link.hasConflict) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        },
+                    Icon(Icons.Default.Edit, contentDescription = ownership)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.board_sets_edit))
+                }
+                Box {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.size(48.dp),
                     ) {
                         Icon(
-                            Icons.Default.Edit,
-                            contentDescription = ownership?.let { "$editLabel, $it" } ?: editLabel,
+                            Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.board_sets_more),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.board_sets_duplicate)) },
+                            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onDuplicate()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (boardSet.isLocked) R.string.board_sets_unlock
+                                        else R.string.board_sets_lock
+                                    )
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onToggleLock()
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(R.string.common_delete),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onDelete()
+                            },
                         )
                     }
                 }
-                IconButton(onClick = onDuplicate) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.board_sets_duplicate))
+            }
+        }
+    }
+}
+
+/** Miniature of a Screen's start Page. Empty cells stay blank, matching use mode. */
+@Composable
+private fun ScreenLibraryPreview(
+    board: ObfBoard?,
+    isLocked: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val background = board?.backgroundColor?.let(::parseObfColorOrNull)
+        ?: MaterialTheme.colorScheme.surfaceContainerHighest
+    val defaultCellColor = MaterialTheme.colorScheme.surface
+    val defaultTextColor = MaterialTheme.colorScheme.onSurface
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+
+    BoxWithConstraints(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(background)
+            .border(1.dp, outlineColor, RoundedCornerShape(12.dp)),
+    ) {
+        val grid = board?.grid
+        if (board != null && grid != null && grid.rows > 0 && grid.columns > 0) {
+            val inset = 8.dp
+            val gap = 3.dp
+            val gridWidth = (maxWidth - inset * 2).coerceAtLeast(0.dp)
+            val gridHeight = (maxHeight - inset * 2).coerceAtLeast(0.dp)
+            val cellWidth = ((gridWidth - gap * (grid.columns - 1)).coerceAtLeast(0.dp)) / grid.columns
+            val cellHeight = ((gridHeight - gap * (grid.rows - 1)).coerceAtLeast(0.dp)) / grid.rows
+            val buttonsById = remember(board) { board.buttons.associateBy { it.id } }
+            val fields = remember(grid) { grid.fieldItems() }
+
+            fields.forEach { field ->
+                val button = field.buttonId?.let { buttonsById[it] } ?: return@forEach
+                if (button.hidden) return@forEach
+                val tileWidth = cellWidth * field.columnSpan + gap * (field.columnSpan - 1)
+                val tileHeight = cellHeight * field.rowSpan + gap * (field.rowSpan - 1)
+                val tileX = inset + (cellWidth + gap) * field.column
+                val tileY = inset + (cellHeight + gap) * field.row
+                val colorHex = button.resolvedBackgroundColor(
+                    io.github.jdreioe.wingmate.domain.WordTypeColorScheme.None,
+                    board.locale,
+                    button.label,
+                )
+                val fill = colorHex?.let(::parseObfColorOrNull) ?: defaultCellColor
+                val labelColor = if (colorHex != null) {
+                    contrastingContentColor(fill, backdrop = background)
+                } else {
+                    defaultTextColor
                 }
-                IconButton(onClick = onToggleLock) {
+                val label = resolveObfLocalizedString(board.strings, board.locale, button.label)
+                    ?.trim()
+                    .orEmpty()
+                val corner = (minOf(tileWidth, tileHeight) / 6f).coerceAtMost(6.dp)
+                Box(
+                    modifier = Modifier
+                        .offset(x = tileX, y = tileY)
+                        .size(width = tileWidth, height = tileHeight)
+                        .clip(RoundedCornerShape(corner))
+                        .background(fill)
+                        .padding(horizontal = 2.dp, vertical = 1.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (label.isNotEmpty()) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = labelColor,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        if (isLocked) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(28.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        if (boardSet.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                        contentDescription = stringResource(if (boardSet.isLocked) R.string.board_sets_unlock else R.string.board_sets_lock)
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = stringResource(R.string.board_sets_locked),
+                        modifier = Modifier.size(16.dp),
                     )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.common_delete), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }

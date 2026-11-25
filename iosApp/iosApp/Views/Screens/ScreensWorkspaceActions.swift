@@ -161,6 +161,9 @@ extension SymbolBoardWorkspaceView {
            let prediction = model.boardPrediction(for: cell.buttonId) {
             return prediction
         }
+        if let expanded = ScreenButtonText.expandedText(label: cell.label, vocalization: cell.vocalization) {
+            return expanded
+        }
         return trimmed(cell.label) ?? trimmed(cell.vocalization) ?? ""
     }
 

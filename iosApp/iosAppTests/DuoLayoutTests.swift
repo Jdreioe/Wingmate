@@ -32,9 +32,14 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertFalse(WindowLayoutClass.usesWideTyping(size: CGSize(width: 402, height: 874)))
         XCTAssertFalse(WindowLayoutClass.usesWideTyping(size: CGSize(width: 874, height: 402)))
 
-        // iPad portrait & landscape use wide layout
+        // iPad portrait & landscape use wide layout, including while the keyboard is raised
         XCTAssertTrue(WindowLayoutClass.usesWideTyping(size: CGSize(width: 820, height: 1180)))
         XCTAssertTrue(WindowLayoutClass.usesWideTyping(size: CGSize(width: 1180, height: 820)))
+        XCTAssertTrue(WindowLayoutClass.usesWideTyping(
+            size: CGSize(width: 1180, height: 350),
+            restingHeight: 766,
+            keyboardVisible: true
+        ))
     }
 
     // MARK: - FoldDivision & BoardFoldLayout

@@ -27,6 +27,7 @@ class ExpandedButtonTextTest {
     fun aShortenedCueShowsTheWholeParagraph() {
         val paragraph = "He once tried to cook dinner for twelve people and set off every smoke alarm in the building."
         assertEquals(paragraph, expandedButtonText("He once tried to cook dinner for twelve people and set off every smoke…", paragraph))
+        assertEquals(paragraph, expandedButtonText("He once tried to cook dinner for twelve people and set off every smoke...", paragraph))
     }
 
     @Test
