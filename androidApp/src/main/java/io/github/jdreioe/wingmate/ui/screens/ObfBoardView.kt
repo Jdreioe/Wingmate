@@ -306,6 +306,7 @@ fun ObfBoardView(
     selectedFieldAnchor: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    onRemoveField: ((row: Int, column: Int) -> Unit)? = null,
     onGridHeightFractionChange: ((Float) -> Unit)? = null,
     homeBoardId: String? = null,
     // When set, fit whole rows to the viewport while keeping this minimum
@@ -353,6 +354,7 @@ fun ObfBoardView(
         cellMenu = cellMenu,
         pageNavigation = pageNavigation,
         onResizeField = onResizeField,
+        onRemoveField = onRemoveField,
         onGridHeightFractionChange = onGridHeightFractionChange,
         modifier = modifier,
         reorder = reorder,
@@ -374,6 +376,7 @@ internal fun ObfBoardContent(
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     onResizeField: ((anchorRow: Int, anchorColumn: Int, rowSpan: Int, columnSpan: Int) -> Unit)? = null,
+    onRemoveField: ((row: Int, column: Int) -> Unit)? = null,
     onGridHeightFractionChange: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
     reorder: BoardReorder? = null,
@@ -634,6 +637,7 @@ internal fun ObfBoardContent(
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
                                 onResizeField = onResizeField,
+                                onRemoveField = onRemoveField,
                                 focusedCell = focusedCell
                             ) { item ->
                             val button = item.button
@@ -662,7 +666,8 @@ internal fun ObfBoardContent(
                                         boardSettings = effectiveBoardSettings,
                                         labelOverride = predictionLabels[button.id],
                                         isSelectionHighlighted = button.id == highlightedButtonId,
-                                        fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan)
+                                        fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan),
+                                        rowSpan = item.rowSpan
                                     )
                                 } else if (isEditMode && button == null) {
                                     OutlinedCard(

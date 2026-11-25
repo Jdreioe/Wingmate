@@ -363,3 +363,39 @@ internal fun ResizeBoardDialog(
         }
     )
 }
+
+@Composable
+internal fun RenameScreenDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit,
+) {
+    var draftName by remember(currentName) { mutableStateOf(currentName) }
+    val trimmed = draftName.trim()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.board_workspace_rename_screen)) },
+        text = {
+            OutlinedTextField(
+                value = draftName,
+                onValueChange = { draftName = it },
+                label = { Text(stringResource(R.string.board_settings_screen_name)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onRename(trimmed) },
+                enabled = trimmed.isNotEmpty() && trimmed != currentName.trim(),
+            ) {
+                Text(stringResource(R.string.common_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
+    )
+}

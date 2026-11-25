@@ -19,13 +19,15 @@ struct TypingWorkspaceView: View {
     let uiTextFieldHeight: Double
     let uiChipFontSize: Double
     let uiPlayIconSize: Double
+    /// Full window height measured ignoring the keyboard safe area, supplied by `ContentView`.
+    var restingWindowHeight: CGFloat = 0
     let requestMicAndStart: (String) -> Void
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var messageFocused = false
     @State private var onScreenKeyboard = false
     @State private var page: TypingPage = .all
-    @State private var restingHeight: CGFloat = 0
+    @State private var fallbackRestingHeight: CGFloat = 0
     @State private var isWideWindow = false
     @State private var dragStartHeight: CGFloat? = nil
     @State private var pendingMutation: (() -> Void)? = nil
@@ -38,13 +40,17 @@ struct TypingWorkspaceView: View {
     /// Landscape with the keyboard up leaves room for one row above the Message bar.
     private var oneRowWhileTyping: Bool { onScreenKeyboard && verticalSizeClass == .compact }
 
+    private var effectiveRestingHeight: CGFloat {
+        restingWindowHeight > 0 ? restingWindowHeight : fallbackRestingHeight
+    }
+
     private var minTrayHeight: CGFloat { min(180, maxTrayHeight) }
-    private var maxTrayHeight: CGFloat { max(0, restingHeight * 0.6) }
+    private var maxTrayHeight: CGFloat { max(0, effectiveRestingHeight * 0.6) }
 
     private func trayHeight(bottomSafeInset: CGFloat) -> CGFloat {
         let fromKeyboard = keyboardHeight > 0
             ? CGFloat(keyboardHeight) - bottomSafeInset - 8
-            : restingHeight * 0.4
+            : effectiveRestingHeight * 0.4
         let preferred = draggedTrayHeight > 0 ? CGFloat(draggedTrayHeight) : fromKeyboard
         return min(max(preferred, minTrayHeight), maxTrayHeight)
     }
@@ -53,6 +59,7 @@ struct TypingWorkspaceView: View {
         (model.typingTray?.elements ?? [])
             .filter { $0.kind.name == "ActionStrip" }
             .flatMap { $0.actions }
+            .filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
     }
 
     private var pagePhrases: [Shared.Phrase] {
@@ -69,11 +76,12 @@ struct TypingWorkspaceView: View {
     var body: some View {
         GeometryReader { proxy in
             // Decide wide vs compact from the full window height (ignoring the keyboard inset)
-            // so raising the on-screen keyboard on unfolded Duo landscape never flips layouts.
+            // so raising the on-screen keyboard on iPad or unfolded Duo never flips layouts.
+            let resting = effectiveRestingHeight
             let wide = WindowLayoutClass.usesWideTyping(
                 size: proxy.size,
-                restingHeight: restingHeight,
-                keyboardVisible: onScreenKeyboard || restingHeight > proxy.size.height
+                restingHeight: resting,
+                keyboardVisible: onScreenKeyboard || resting > proxy.size.height
             )
             let foldDivision = proxy.activeFoldDivision
             let bottomInset = proxy.safeAreaInsets.bottom
@@ -90,15 +98,11 @@ struct TypingWorkspaceView: View {
             }
             .onAppear {
                 isWideWindow = wide
+                if !onScreenKeyboard { fallbackRestingHeight = proxy.size.height }
             }
-        }
-        .background {
-            GeometryReader { windowProxy in
-                Color.clear
-                    .onAppear { restingHeight = windowProxy.size.height }
-                    .onChange(of: windowProxy.size.height) { _, h in restingHeight = h }
+            .onChange(of: proxy.size.height) { _, h in
+                if !onScreenKeyboard { fallbackRestingHeight = h }
             }
-            .ignoresSafeArea(.keyboard)
         }
         // On compact windows the app bar gives way to the Message while the keyboard is up.
         .toolbar((!isWideWindow && onScreenKeyboard) ? .hidden : .visible, for: .navigationBar)
@@ -184,7 +188,7 @@ struct TypingWorkspaceView: View {
     @ViewBuilder
     private func wideTypingLayout(size: CGSize, division: FoldDivision?) -> some View {
         let panelWidth = WindowLayoutClass.typingSidePanelWidth(for: size.width)
-        let messageHeight: CGFloat = onScreenKeyboard
+        let messageHeight: CGFloat = size.height < 420
             ? max(64, CGFloat(uiTextFieldHeight) * 0.9)
             : max(88, CGFloat(uiTextFieldHeight) * 1.25)
 
@@ -331,7 +335,7 @@ struct TypingWorkspaceView: View {
         let paused = model.playback.name == "Paused"
         let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
         let speechActive = paused || playing
-        let roomy = !onScreenKeyboard && availableHeight >= 520
+        let roomy = availableHeight >= 460
         let speakHeight: CGFloat = roomy ? min(max(CGFloat(uiPlayIconSize) * 2.0, 68), 92) : 56
         let secondaryHeight: CGFloat = roomy ? 60 : 48
         let panelActions = actionStripActions.filter { action in

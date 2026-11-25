@@ -437,8 +437,8 @@
     <string name="welcome_start_mode_keyboard_desc">Skriv beskeder, og tryk på gemte fraser.</string>
     <string name="welcome_start_mode_screens_title">Skærme</string>
     <string name="welcome_start_mode_screens_desc">Tryk på symboler på sider. Opret eller importér en skærm for at starte.</string>
-    <string name="mode_switch_to_screens">Skift til skærme</string>
-    <string name="mode_switch_to_keyboard">Skift til tastatur og fraser</string>
+    <string name="mode_switch_to_screens">Skift til Skærme</string>
+    <string name="mode_switch_to_keyboard">Skift til Skriv</string>
     <string name="board_workspace_enter_fullscreen">Åbn siden i fuld skærm</string>
     <string name="board_workspace_exit_fullscreen">Afslut fuld skærm</string>
 
@@ -736,6 +736,20 @@
     <string name="board_message_clear">Ryd</string>
     <string name="board_page_back">Forrige side</string>
     <string name="board_page_start">Startside</string>
+    <string name="board_workspace_menu">Menu</string>
+    <string name="board_workspace_rename_screen">Omdøb skærm</string>
+    <string name="board_sets_more">Mere</string>
+    <string name="screens_message_bar">Besked</string>
+    <string name="screens_message_bar_hold">Parkér beskeden</string>
+    <string name="screens_message_bar_swap_held">Skift med parkeret besked</string>
+    <string name="screens_message_bar_delete_last">Slet sidste</string>
+    <string name="screens_message_bar_clear_all">Slet alt</string>
+    <string name="screens_message_bar_say_part_hint">Siger denne del igen</string>
+    <string name="screens_message_bar_remove_part">Fjern ord</string>
+    <string name="screens_message_bar_edit_text">Rediger beskedtekst</string>
+    <string name="screens_message_bar_add_button">Tilføj knap til beskedlinjen</string>
+    <string name="screens_message_bar_remove_button">Fjern knap</string>
+    <string name="screens_message_bar_edit_hint">Vælg hvad knappen gør</string>
     <!-- Default Typing Screen Action-strip labels, shown until the user renames a Button -->
     <string name="typing_action_hold">Parkér</string>
     <string name="typing_action_language">Sprog</string>
