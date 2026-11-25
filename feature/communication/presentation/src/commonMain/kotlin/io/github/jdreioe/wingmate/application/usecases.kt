@@ -1,9 +1,6 @@
 package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.*
-import io.github.jdreioe.wingmate.infrastructure.AzureVoiceCatalog
-import io.github.jdreioe.wingmate.infrastructure.ElevenLabsVoiceCatalog
-import io.github.jdreioe.wingmate.infrastructure.GoogleVoiceCatalog
 
 /**
  * Thin application-layer use cases over the domain repositories, shared by the
@@ -113,12 +110,11 @@ class SettingsUseCase(
 
 class VoiceUseCase(
     private val repo: VoiceRepository,
-    private val azure: AzureVoiceCatalog,
-    private val google: GoogleVoiceCatalog,
-    private val configRepo: ConfigRepository,
+    private val azure: AzureVoiceCatalogPort,
+    private val google: GoogleVoiceCatalogPort,
+    private val elevenLabs: ElevenLabsVoiceCatalogPort,
     private val featureUsageReporter: FeatureUsageReporter,
     private val boardSetSpeechCache: BoardSpeechCache? = null,
-    private val elevenLabs: ElevenLabsVoiceCatalog = ElevenLabsVoiceCatalog(configRepo),
 ) {
     suspend fun list(): List<Voice> = repo.getVoices()
     suspend fun listForEngine(engine: TtsEngine): List<Voice> = repo.getVoices().forTtsEngine(engine)
@@ -167,7 +163,7 @@ class VoiceUseCase(
     /**
      * Downloads Google's catalog for the saved key without saving it or falling
      * back to cached voices, so it can verify a key. Failures propagate from
-     * [GoogleVoiceCatalog.load]; save a verified catalog with [saveGoogleCatalog].
+     * [GoogleVoiceCatalogPort.load]; save a verified catalog with [saveGoogleCatalog].
      */
     suspend fun loadGoogleCatalog(): List<Voice> = google.load()
 

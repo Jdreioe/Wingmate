@@ -46,6 +46,8 @@ data class TypingTrayAction(
     val id: String,
     val label: String,
     val effects: List<TypingEffect>,
+    /** Set while the Button keeps its English default label; iOS shows its translation instead. */
+    val defaultLabelKey: String? = null,
 )
 
 /** A Page element of the Typing Screen, placed on the template's grid. */
@@ -128,6 +130,7 @@ class TypingScreenFacade(
 private fun ObfButton.toTrayAction() = TypingTrayAction(
     id = id,
     label = label.orEmpty(),
+    defaultLabelKey = TypingScreenProjector.defaultActionLabelKey(this),
     effects = parseObfButtonActions(this).map { effect ->
         when (effect) {
             is ObfButtonActionEffect.AppendText -> TypingEffect(TypingEffectKind.InsertText, effect.text, "")

@@ -41,13 +41,16 @@ import io.github.jdreioe.wingmate.application.usecase.DeletePhraseUseCase
 import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUseCase
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.domain.AacLogger
+import io.github.jdreioe.wingmate.domain.AzureVoiceCatalogPort
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.BoardSetRepository
 import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.CommunicationSessionDataSource
 import io.github.jdreioe.wingmate.domain.ConfigRepository
+import io.github.jdreioe.wingmate.domain.ElevenLabsVoiceCatalogPort
 import io.github.jdreioe.wingmate.domain.FileStorage
+import io.github.jdreioe.wingmate.domain.GoogleVoiceCatalogPort
 import io.github.jdreioe.wingmate.domain.NoopSoundPlayer
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
@@ -133,9 +136,9 @@ internal val coreDefaultsModule: Module = module {
 
 /** Voice catalogs, cloud speech configuration, and pronunciation dictionary. */
 internal val speechModule: Module = module {
-    singleOf(::AzureVoiceCatalog)
-    singleOf(::GoogleVoiceCatalog)
-    singleOf(::ElevenLabsVoiceCatalog)
+    singleOf(::AzureVoiceCatalog) { bind<AzureVoiceCatalogPort>() }
+    singleOf(::GoogleVoiceCatalog) { bind<GoogleVoiceCatalogPort>() }
+    singleOf(::ElevenLabsVoiceCatalog) { bind<ElevenLabsVoiceCatalogPort>() }
     singleOf(::VoiceUseCase)
     singleOf(::SpeechFacade)
     singleOf(::PronunciationFacade)

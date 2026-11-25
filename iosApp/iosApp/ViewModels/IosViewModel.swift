@@ -211,14 +211,19 @@ final class IosViewModel: ObservableObject {
     var lookedUpPageIds: Set<String> = []
     var lastActivationAtMillis: [String: Int64] = [:]
 
+    /// Starts the shared Koin graph. Later calls do nothing. The app calls this at launch,
+    /// before any view exists, because views such as the welcome flow resolve facades in
+    /// their first `.task`, which can run before `ContentView.onAppear` calls `start()`.
+    static func startDependencies() {
+        IosDiBridge().start(
+            deviceSpeech: SystemTtsManager.shared,
+            openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
+            aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
+        )
+    }
+
     func start() async {
-        await MainActor.run {
-            IosDiBridge().start(
-                deviceSpeech: SystemTtsManager.shared,
-                openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
-                aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
-            )
-        }
+        Self.startDependencies()
         sessionSubscription?.cancel()
         sessionSubscription = session.observe { [weak self] state in
             self?.applySessionState(state)

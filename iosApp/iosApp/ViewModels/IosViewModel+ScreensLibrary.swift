@@ -265,7 +265,8 @@ extension IosViewModel {
             let sharedSet = try await boardsFacade.createBoardSet(
                 name: boardsetName,
                 rows: Int32(safeRows),
-                columns: Int32(safeColumns)
+                columns: Int32(safeColumns),
+                rootBoardName: NSLocalizedString("boardset.default_root_page", comment: "")
             )
             let set = boardSetInfo(from: sharedSet)
             await loadBoardSets()
