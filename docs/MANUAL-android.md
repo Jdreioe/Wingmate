@@ -10,9 +10,6 @@ Manualen er til dig, der bruger Wingmate, og til familie, hjælpere, lærere og 
 - Knap- og menunavne står med **fed**, præcis som de står i appen. Appen er på dansk, når telefonen eller tabletten er sat til dansk.
 - Billederne er taget på en Android-telefon med dansk sprog.
 
-> [!IMPORTANT]
-> Wingmate må ikke være din eneste måde at tilkalde hjælp på i en nødsituation.
-
 ## Indhold
 
 - [Hvad er Wingmate](#hvad-er-wingmate)
