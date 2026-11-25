@@ -66,7 +66,7 @@ Hent Wingmate i [Google Play](https://play.google.com/store/apps/details?id=com.
 
 ## Første start
 
-Første gang du åbner Wingmate, viser den en kort opsætning. Du kan ændre alle valg senere under **Indstillinger**.
+Første gang du åbner Wingmate, viser den en kort opsætning. Du kan ændre alle valg senere under **Indstillinger**. Se [Indstillinger](#indstillinger), hvis du vil vide, hvordan du åbner dem.
 
 Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede på den første side. Tryk **Gendan en sikkerhedskopi**. Se [Sikkerhedskopi](#sikkerhedskopi).
 
@@ -91,7 +91,7 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
 
 Når opsætningen er færdig, åbner Wingmate det sted, du valgte. Du kan skifte, når du vil:
 
-- Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **Skift til skærme**.
+- Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **Skift til skærme**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet, så de tre prikker kommer frem. På en bred skærm, fx en tablet, trykker du på gitter-ikonet i panelet til højre.
 
   <!-- SCREENSHOT: Typing workspace in communication use: message bar with some text, phrase grid or Typing Screen visible, and the control to switch to Screens visible in the toolbar or menu. -->
   <img src="images/skrivning-oversigt.png" alt="Skrivning med beskedlinje og fraser" width="300">
@@ -112,15 +112,17 @@ I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et
 ### Skriv og læs op
 
 - Skriv i feltet **Indtast tekst der skal tales**.
-- Tryk på afspil, så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
-- Tryk på tastatur-knappen til venstre for tekstfeltet for at skifte mellem tastaturet og dine fraser. TalkBack kalder den **Vis tastatur** eller **Vis skriveskærm**. Skriveskærmen viser dine fraser som knapper i stedet for tastaturet.
+- Tryk på den runde afspil-knap (▶), så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
+- På en telefon: tryk på tastatur-knappen til venstre for tekstfeltet for at få tastaturet frem. Mens tastaturet er fremme, er knappen et plus. Tryk på plusset for at komme tilbage til fraserne og de tre prikker øverst. TalkBack kalder knappen **Vis tastatur** eller **Vis skriveskærm**.
+- På en bred skærm, fx en tablet: tryk **Vis tastatur** i panelet til højre. Tryk **Skjul tastatur** samme sted for at skjule tastaturet igen.
+- Skriveskærmen viser dine fraser som knapper.
 
 ### Siderne på skriveskærmen
 
 - Du starter som regel på siden **Alle**. Den viser alle dine fraser.
 - Hver kategori får sin egen side.
 - Er talehistorik tændt, kan siden **Historik** vises.
-- **Sandsynligt næste** er en side, der foreslår hele beskeder ud fra det, der er sagt på denne enhed. Den er stadig ny. Du tænder den med **Sandsynlige næste beskeder (eksperimentel)** under **Indstillinger → Privatliv**.
+- **Sandsynligt næste** er en side, der foreslår hele beskeder ud fra det, der er sagt på denne enhed. Den er stadig ny. Du tænder den med **Sandsynlige næste beskeder (eksperimentel)** under **Indstillinger → Privatliv**. Valget vises kun, når **Vis talehistorik** er slået til.
 
 Skriveskærmen bygger selv sine sider ud fra dine fraser og kategorier. Du kan ikke flytte rundt på siderne eller slette skriveskærmen. Vil du selv bygge sider, bruger du **Skærme**.
 
@@ -143,15 +145,14 @@ Du kan også markere frasen som **Skjult**, så den ikke vises blandt knapperne.
 ### Ordn dine fraser
 
 - Hold fingeren på en frase, og vælg **Rediger** for at rette den. Træk frasen for at flytte den.
+- Tryk på **+** sidst i rækken med kategorier (efter **Alle** og dine egne kategorier) for at lave en kategori (**Tilføj kategori**). En kategori kan ikke ligge inde i en anden kategori.
 
 > [!TIP]
-> Bruger du **Hold for at vælge** eller **Vælg ved berøring**, kan du komme til at vælge frasen, når du vil rette den. Sæt **Hold for at vælge (ms)** til `0`, og slå **Vælg ved berøring** fra under **Indstillinger → Tilgængelighed**, mens du retter. Slå dem til igen bagefter.
-
-- Tryk på **+** sidst i rækken med kategorier (efter **Alle** og dine egne kategorier) for at lave en kategori (**Tilføj kategori**). En kategori kan ikke ligge inde i en anden kategori.
+> Er **Hold for at vælge (ms)** over `0`, eller er **Vælg ved berøring** slået til, kan du ikke holde fingeren på en frase for at rette eller flytte den. Sæt **Hold for at vælge (ms)** til `0`, og slå **Vælg ved berøring** fra under **Indstillinger → Tilgængelighed**, mens du retter. Slå dem til igen bagefter.
 
 ### Læg en besked til side
 
-Du kan lægge den besked, du er i gang med, til side og starte på en ny. Tryk **Hold** nederst på skriveskærmen. Knappen står på engelsk i denne version. Den gemte tekst vises som **Parkeret:**. Tryk **Byt** for at bytte om på den nye besked og den, der ligger til side.
+Du kan lægge den besked, du er i gang med, til side og starte på en ny. Tryk **Hold** ved bogmærket, nederst på skriveskærmen på en telefon og i panelet til højre på en tablet. Knappen står på engelsk i denne version. Den gemte tekst vises som **Parkeret:**. Tryk **Byt** for at bytte om på den nye besked og den, der ligger til side.
 
 ## Skærme
 
@@ -224,7 +225,7 @@ Tryk på blyanten (**Rediger**) i oversigten **Skærme**. Har du skærmen åben,
 
 Mens du redigerer:
 
-- Tryk på et tomt felt for at lave en ny knap.
+- Tryk på et tomt felt for at lave en ny knap. Skriv fx `Ja` under **Etiket**, og tryk **Gem**.
 - Tryk på en knap for at vælge den, og tryk **Rediger** eller **Fjern** øverst. Du kan også holde fingeren på knappen og vælge **Rediger**, **Tilpas størrelse** eller **Fjern**, eller trække knappen til et andet felt.
 - Tryk på de tre prikker øverst til højre for at se flere valg: **Tilføj side**, **Brug som startside**, **Tilpas sidens størrelse**, **Slet side**, **Skærmindstillinger** og **Sideindstillinger**. På en bred skærm, fx en tablet, står de fleste som ikoner øverst, og under de tre prikker finder du kun **Tilføj side**.
 - **Tilpas sidens størrelse** ændrer antal rækker og kolonner. Skal siden gøres mindre, skal de knapper, der ikke kan være der, først flyttes.
@@ -238,7 +239,7 @@ Når du er færdig, trykker du **Afslut redigering**. Vælg **Gem ændringer**, 
 
 ### Symboler, billeder, farver og størrelse
 
-Når du redigerer et felt, kan du blandt andet sætte:
+Når du redigerer en knap (vinduet hedder **Rediger felt**), kan du blandt andet sætte:
 
 - **Etiket** – teksten, der står på knappen.
 - **Udtale (valgfri)** – det, der skal siges, hvis det skal være noget andet end etiketten.
@@ -259,7 +260,7 @@ Du kan hente hele ARASAAC-biblioteket ned under **Indstillinger → System og da
 
 ### Sider og navigation
 
-I **Rediger felt** bestemmer du, hvad en knap gør, under **Felthandling**. Vælg **Tilføj og udtal** eller **Åbn side**. Vælger du **Åbn side**, vælger du siden under **Målside**.
+I **Rediger felt** bestemmer du, hvad en knap gør, under **Felthandling**. Vælg **Tilføj og udtal** eller **Åbn side**. Vælger du **Åbn side**, trykker du **Vælg en side** under **Målside**, vælger siden og trykker **Gem**. Har skærmen kun én side, så lav først den nye side med **Tilføj side**.
 
 **Særlige handlinger** kan lægges på en knap. De hedder blandt andet:
 
@@ -287,7 +288,7 @@ Du kan også bestemme, hvad der sker, når du har trykket på en almindelig knap
 - vælge **Sidebaggrund** og et **Baggrundsbillede** under **Sideindstillinger**. Billedet kan fylde hele siden (**Fyld siden**) eller vises helt (**Hele billedet**).
 - tænde **Forudindlæs tale**. Så laver Wingmate lyden til alle knapper på forhånd med den stemme, du har valgt på nettet. Det koster hos den, der leverer stemmen, og det fylder på enheden. Det er slukket fra start.
 
-En side kan følge skærmen eller appen. Vælg **Brug skærmindstilling** (som resten af skærmen) eller **Brug appstandard** (som under **Indstillinger**). **Nulstil skærmindstillinger** og **Nulstil sidetilpasninger** fjerner dine egne valg.
+En skærm kan følge appen med **Brug appstandard**, og en side kan følge skærmen med **Brug skærmindstilling**. **Nulstil skærmindstillinger** og **Nulstil sidetilpasninger** fjerner dine egne valg.
 
 <!-- SCREENSHOT: Screen settings page (Skærmindstillinger) showing appearance and communication options such as Vis etiketter, Vis symboler, Beskedlinje and Aktivering af knap. -->
 <img src="images/skaerm-indstillinger.png" alt="Skærmindstillinger" width="300">
@@ -402,7 +403,7 @@ Du finder **Sikkerhedskopiér Wingmate** under **Indstillinger → System og dat
 - **Opret sikkerhedskopi** gemmer eller deler en fil. Den ender på `.wingmate-backup`.
 - **Gendan sikkerhedskopi**: vælg filen, og tryk **Validér og erstat**. Wingmate tjekker filen og erstatter så de data, der ligger på enheden nu. Tryk **Annuller**, hvis du vil beholde dine nuværende data.
 
-Kopien kan indeholde skærme, sider, fraser, kategorier, billeder, optagelser, indstillinger, talehistorik, stemmevalg og udtaleordbog. Dit valg af stemme kommer med. Bruger du Azure, kommer regionen også med, men ikke selve nøglen. Det gør redigeringskoden og midlertidige lydfiler heller ikke. Efter en gendannelse skal du sætte nøglen og en eventuel redigeringskode op igen.
+Kopien kan indeholde skærme, sider, fraser, kategorier, billeder, optagelser, indstillinger, talehistorik, stemmevalg og udtaleordbog. Dit valg af stemme kommer med. Bruger du Azure, kommer regionen også med, men ikke selve nøglen. Redigeringskoden og midlertidige lydfiler kommer heller ikke med. Efter en gendannelse skal du sætte nøglen og en eventuel redigeringskode op igen.
 
 > [!WARNING]
 > Filen er ikke låst med en kode, og den kan indeholde dine beskeder. Gem den et sikkert sted.
@@ -414,7 +415,7 @@ Vil du se, hvordan filen er bygget op, så læs [BACKUP_FORMAT.md](BACKUP_FORMAT
 
 ## Indstillinger
 
-Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **App-indstillinger**. Fra **Skærme**: tryk på tandhjulet øverst. Du kan søge med **Søg i Indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
+Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **App-indstillinger**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet. På en bred skærm, fx en tablet, trykker du på tandhjulet i panelet til højre. Fra **Skærme**: tryk på tandhjulet øverst. Du kan søge med **Søg i Indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
 
 | Afsnit | Her finder du blandt andet |
 | --- | --- |
@@ -461,7 +462,7 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 **Stemmen på nettet virker ikke.** Tjek, at du har internet, og at nøglen stadig virker. Wingmate bruger enhedens stemme i stedet og beholder beskeden. Er nøglen blevet ændret, så sæt den nye ind under **Indstillinger → Tale og sprog**. Er du i den første opsætning, kan du trykke **Indtast nøglen igen**.
 
-**Stemmerne på enheden mangler eller lyder forkert.** Stemmerne styres i telefonens egen app **Indstillinger**, typisk under **Tekst-til-tale-output**. Navnet og stedet kan være lidt anderledes på din telefon.
+**Stemmerne på enheden mangler eller lyder forkert.** Stemmerne styres i telefonens egen app **Indstillinger**, typisk under **Tilgængelighed → Tekst-til-tale-output**. Navnet og stedet kan være lidt anderledes på din telefon.
 
 **En tavlefil kan ikke hentes ind.** Appen siger selv, hvad der er galt: filen kan ikke åbnes, er ikke en tavle Wingmate kan læse, er gået i stykker, er for stor, mangler billeder eller lyde, eller er låst med en adgangskode.
 
@@ -469,7 +470,7 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 **Jeg har glemt redigeringskoden.** Koden ligger kun på enheden og kommer ikke med i en sikkerhedskopi. Wingmate kan ikke nulstille den for dig. Sidder du fast, så skriv til udvikleren. Se [Giv feedback](#giv-feedback).
 
-**Historik eller «Sandsynligt næste» vises ikke.** Gå til **Indstillinger → Privatliv**. Tænd **Vis talehistorik**, og tænd derefter **Sandsynlige næste beskeder (eksperimentel)**. Læs derefter en besked op, så vises **Historik**. Læs endnu en anden besked op. Når Wingmate har noget at foreslå, vises **Sandsynligt næste** også. Når tastaturet er fremme, vises forslagene også i en række over tastaturet.
+**Historik eller «Sandsynligt næste» vises ikke.** Gå til **Indstillinger → Privatliv**. Tænd **Vis talehistorik**, og tænd derefter **Sandsynlige næste beskeder (eksperimentel)**. Læs så en besked op, så vises **Historik**. Læs endnu en anden besked op. Når Wingmate har noget at foreslå, vises **Sandsynligt næste** også. Når tastaturet er fremme, vises forslagene også i en række over tastaturet.
 
 **Søgningen finder ingen symboler, eller den er langsom.** Søgningen kræver net, medmindre symbolerne allerede ligger på enheden. Har du søgt mange gange lige efter hinanden, beder appen dig vente og prøve igen. Hent ARASAAC ned under **Indstillinger → System og data → Offline-symboler**, så virker det uden net.
 
