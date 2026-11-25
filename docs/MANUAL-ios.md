@@ -86,7 +86,7 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
    <img src="images/ios/iphone-welcome-stemmemotor.png" alt="Vælg din stemmemodel i den første opsætning (iPhone)" width="300">
 
 4. Vælg stemme:
-   - Har du valgt **System Tekst-til-Tale**, så tryk **Næste**. Vil du have en anden stemme, så tryk først **Åbn iOS Indstillinger**.
+   - Har du valgt **System Tekst-til-Tale**, så tryk **Næste**. Du kan vælge en anden stemme senere i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**.
    - Har du valgt en stemme på nettet, så tryk **Vælg stemme**, vælg en stemme, og tryk **Vælg**. Tryk derefter **Næste**. Spørger appen om sprog, så tryk på et sprog. Så går appen selv videre.
 5. På siden **Test din stemme** trykker du **Afspil** for at høre en prøve. Tryk **Næste**.
 6. Vælg, om du vil slå **Del anonym analysedata** til. Det er slukket fra start. Tryk **Næste**.
@@ -101,7 +101,7 @@ Talehistorik slår du til bagefter under **Indstillinger → Privatliv**.
 
 Når opsætningen er færdig, åbner Wingmate det sted, du valgte. Du kan skifte, når du vil:
 
-- Fra Skrivning: tryk på gitter-ikonet øverst til højre. VoiceOver kalder det **Skift til Skærme**.
+- Fra Skrivning: tryk på gitter-ikonet øverst til højre. VoiceOver kalder det **Skift til Skærme**. Kan du ikke se knapperne øverst, mens tastaturet er fremme, så se [Skriv og læs op](#skriv-og-læs-op).
 - Fra oversigten **Skærme**: tryk på taleboble-ikonet øverst til højre. VoiceOver kalder det **Skift til Skriv**.
 - Fra en åben skærm: tryk **Menu** øverst til venstre, og vælg **Skift til Skriv**. Vil du tilbage til oversigten, så vælg **Skærme** i samme menu.
 
@@ -120,7 +120,9 @@ I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et
 
 - Skriv i feltet **Tekst der skal oplæses**.
 - Tryk på afspil, så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
-- Skift mellem tastaturet og dine fraser. På iPhone trykker du på tastatur-knappen ved tekstfeltet. VoiceOver kalder den **Vis tastatur** eller **Vis skriveskærm**. På iPad står knappen **Vis tastatur** i kolonnen til højre. Tryk **Skjul tastatur** samme sted for at komme tilbage til fraserne. Skriveskærmen viser dine fraser som knapper i stedet for tastaturet.
+- På iPhone: tryk på tastatur-knappen til venstre for tekstfeltet for at få tastaturet frem. Mens tastaturet er fremme, er knappen et plus. Tryk på plusset for at komme tilbage til fraserne og knapperne øverst. VoiceOver kalder knappen **Vis tastatur** eller **Vis skriveskærm**.
+- På iPad: tryk **Vis tastatur** i kolonnen til højre. Tryk **Skjul tastatur** samme sted for at komme tilbage til fraserne.
+- Skriveskærmen viser dine fraser som knapper i stedet for tastaturet.
 
 ### Siderne på skriveskærmen
 
@@ -143,11 +145,15 @@ Felterne hedder **Titel** og **Udtale**. Pas på, for navnene er byttet om i app
 Under **Symbol** vælger du et billede fra **OpenSymbols** eller **Mine fotos**. Du kan også lave en **Optagelse**. Tryk **Gem**, når du er færdig.
 
 <!-- SCREENSHOT: iPhone phrase sheet with Titel and Udtale. -->
-<img src="images/ios/iphone-skrivning-frase-rediger.png" alt="Arket Rediger frase med Titel og Udtale. Ny frase ser ens ud (iPhone)" width="300">
+<img src="images/ios/iphone-skrivning-frase-rediger.png" alt="Rediger frase. Under Udtale står «Jeg vil gerne have vand», og Titel er tom, så Wingmate læser teksten på frasen op (iPhone)" width="300">
 
 ### Ordn dine fraser
 
-- Hold fingeren på en frase for at rette den, eller træk den for at flytte den. Bruger du VoiceOver, kan du også flytte den med handlingerne **Flyt tidligere** og **Flyt senere**.
+- Hold fingeren på en frase, og vælg **Rediger** for at rette den. Træk frasen for at flytte den. Bruger du VoiceOver, kan du også flytte den med handlingerne **Flyt tidligere** og **Flyt senere**.
+
+> [!TIP]
+> Er **Vælg ved berøring** slået til, vises **Rediger** ikke, og du kan ikke trække fraser. Bruger du **Hold for at vælge**, kan du komme til at vælge frasen, når du vil rette den. Slå **Vælg ved berøring** fra, og sæt **Hold for at vælge** til `0` under **Indstillinger → Tilgængelighed**, mens du retter. Slå dem til igen bagefter.
+
 - Tryk på det runde plus sidst i rækken med kategorier (efter **Alle** og dine egne kategorier) for at lave en kategori. En kategori kan ikke ligge inde i en anden kategori.
 
 ### Læg en besked til side
@@ -184,7 +190,7 @@ Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele 
 
 På iPhone og iPad kan du ikke hente tavlefiler (`.obf` eller `.obz`) ind i denne version.
 
-Tryk på en skærm i oversigten for at åbne den, eller tryk **Rediger**. Under **Flere handlinger** finder du **Duplikér**, **Lås skærm** / **Lås skærm op** og **Slet**.
+Tryk på en skærm i oversigten for at åbne den, eller tryk **Rediger**. Under **Flere handlinger** finder du **Duplikér**, **Lås skærm** / **Lås skærm op**, **Eksportér**, **Eksportér skærm som PDF** og **Slet**.
 
 > [!WARNING]
 > En slettet skærm kan ikke hentes tilbage.
@@ -202,7 +208,7 @@ Er beskedlinjen vist, har den knapper med ikoner. Hvilke knapper der er, afhæng
 
 Har skærmen flere sider, er der en pil (**Forrige side**) og et hus (**Startside**) øverst til højre.
 
-Er **Stryg mellem sider** tændt under **Tilgængelighed**, kan du også stryge til siden ved siden af. Fra den sidste side kommer du ikke til den første ved at stryge, og omvendt. Strygning virker ikke, mens **Vælg ved berøring** eller **Hold for at vælge** er tændt.
+Er **Stryg mellem sider** tændt under **Tilgængelighed**, kan du også stryge: mod venstre for at gå til næste side, og mod højre for at gå til forrige side. Fra den sidste side kommer du ikke til den første ved at stryge, og omvendt. Strygning virker ikke, mens **Vælg ved berøring** eller **Hold for at vælge** er tændt.
 
 Vil du se de skjulte knapper et øjeblik, så tryk **Menu**, og vælg **Vis skjulte knapper midlertidigt**.
 
@@ -214,25 +220,24 @@ Vil du se de skjulte knapper et øjeblik, så tryk **Menu**, og vælg **Vis skju
 ### Rediger sider og knapper
 
 > [!TIP]
-> Er du bange for at ødelægge noget? Tryk **Duplikér** i oversigten først. Så har du en kopi af skærmen, som den var. Ændringer gemmes med det samme, og der er ingen fortryd-knap.
+> Er du bange for at ødelægge noget? Tryk **Flere handlinger** og **Duplikér** ved skærmen i oversigten først. Så har du en kopi af skærmen, som den var. Ændringer gemmes med det samme, og der er ingen fortryd-knap.
 
-Tryk **Rediger** i oversigten, eller tryk **Menu** og **Rediger** på en åben skærm. Er skærmen låst, skal du låse den op først. Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
+Tryk **Rediger** i oversigten, eller tryk **Menu** og **Rediger** på en åben skærm. Er skærmen låst, så tryk **Flere handlinger** ved skærmen i oversigten, og vælg **Lås skærm op** først. Er der sat en redigeringskode, skal den tastes først. Se [Låsning af redigering](#låsning-af-redigering).
 
-Mens du redigerer:
-
-Knapperne:
+Mens du redigerer, kan du ændre knapperne:
 
 - Tryk på **+** i et tomt felt for at lave en ny knap.
 - Tryk på en knap for at åbne **Rediger felt**. Her kan du ændre knappen eller fjerne den med **Ryd felt**.
-- Under **Flyt** kan du flytte knappen ét felt ad gangen med **Flyt op**, **Flyt ned**, **Flyt til venstre** og **Flyt til højre**.
-- Under **Størrelse** gør du knappen **Bredere**, **Smalere**, **Højere** eller **Lavere**. En knap kan kun fylde felter, der er ledige.
+- I **Rediger felt** kan du også flytte knappen og ændre dens størrelse:
+  - Under **Flyt** flytter du knappen ét felt ad gangen med pilene. VoiceOver kalder dem **Flyt op**, **Flyt ned**, **Flyt til venstre** og **Flyt til højre**.
+  - Under **Størrelse** ændrer du **Bredde** og **Højde** med **−** og **+**. En knap kan kun fylde felter, der er ledige.
 - Du kan også holde fingeren på en knap og trække den til et andet felt.
 - Skjulte knapper vises, mens du redigerer.
 
 Siderne og skærmen:
 
 - Tryk **Tilføj side** øverst for at lave en ny side.
-- Tryk på sidens navn øverst (fx **Home** med en lille pil). Her finder du **Omdøb side**, **Tilpas sidens størrelse**, **Sidebaggrund**, **Sidens baggrundsbillede**, **Sideindstillinger**, **Brug som startside** og **Slet side**.
+- Tryk på sidens navn øverst (fx **Home** med en lille pil). Her finder du **Omdøb side**, **Tilpas sidens størrelse**, **Sidebaggrund**, **Sidens baggrundsbillede** og **Sideindstillinger**. På andre sider end startsiden finder du også **Brug som startside** og **Slet side**.
 - Tryk på titlen **Redigerer …** øverst. Her finder du **Omdøb skærm** og **Skærmindstillinger**.
 - **Tilpas sidens størrelse** ændrer antal rækker og kolonner. Gør du siden mindre, fjernes de knapper, der ikke kan være der. Appen advarer dig først.
 
@@ -259,7 +264,7 @@ Ordtypefarver er Fitzgerald-farver. Hver ordtype får sin egen farve, så det er
 
 ### Sider og navigation
 
-Du bestemmer, hvad en knap gør, under **Hvad knappen gør**. Vælg **Tilføj og udtal** eller **Åbn side**. Vælger du **Åbn side**, trykker du **Vælg en side** under **Forbundet side**.
+I **Rediger felt** bestemmer du, hvad en knap gør, under **Hvad knappen gør**. Vælg **Tilføj og udtal** eller **Åbn side**. Vælger du **Åbn side**, trykker du **Vælg en side** under **Forbundet side**.
 
 **Særlige handlinger** kan lægges på en knap:
 
@@ -312,7 +317,7 @@ Bagefter kan du trykke **Skift redigeringskode** eller **Deaktivér redigeringsk
 
 ### Lås på en enkelt skærm
 
-**Lås skærm** fryser sider og knapper på en skærm. De kan ikke ændres, før du trykker **Lås skærm op**. Er redigeringskoden tændt, skal den tastes for at låse eller låse op. En låst skærm vises som **Låst** i oversigten. Du kan stadig åbne den og tale.
+**Lås skærm** fryser sider og knapper på en skærm. Du finder **Lås skærm** og **Lås skærm op** under **Flere handlinger** ved skærmen i oversigten **Skærme**. Sider og knapper kan ikke ændres, før du trykker **Lås skærm op**. Er redigeringskoden tændt, skal den tastes for at låse eller låse op. En låst skærm vises som **Låst** i oversigten. Du kan stadig åbne den og tale.
 
 ## Stemmer
 
@@ -416,24 +421,24 @@ Andre valg, der er gode at kende:
 
 ## Tilgængelighed og betjening
 
-Under **Tilgængelighed** kan du ændre, hvordan der peges og vælges. Tiderne under **Berøring og timing** står i millisekunder (ms). 1000 ms er 1 sekund. **Tast til valg** og **Tast til hviletilstand** ligger under **Betjening** øverst i **Indstillinger → Tale og sprog**.
+Under **Tilgængelighed** kan du ændre, hvordan der peges og vælges. Tiderne står i millisekunder (ms). 1000 ms er 1 sekund. **Tast til valg** og **Tast til hviletilstand** ligger under **Betjening** øverst i **Indstillinger → Tale og sprog**.
 
 - **Hold for at vælge** – knappen vælges først, når du har holdt fingeren nede så længe. Vælg `0` for at slå det fra. Mens det er slået til, kan du ikke stryge mellem sider.
 - **Dvæl for at vælge** – knappen vælges, når markøren bliver stående på den, uden at du klikker. `0` slår det fra.
 - **Vælg ved berøring** – knappen vælges, så snart du rører den, ikke når du slipper. Knapfelterne ruller ikke længere. **Hold for at vælge** gælder stadig, hvis det er tændt. Mens det er slået til, kan du ikke stryge mellem sider.
-- **Stryg mellem sider** – stryg til siden ved siden af.
+- **Stryg mellem sider** – stryg mod venstre for at gå til næste side, og mod højre for at gå til forrige side.
 - **Markeringsde-bounce** – ignorerer hurtige tryk på den samme knap lige efter hinanden.
 - **Markeringsfremhævning** og **Lyd ved valg** – en kort ramme og en lyd, når en knap er valgt.
 - **Auditiv søgning** – Wingmate hvisker knappens tekst, når du rører knappen eller holder markøren over den.
 - **Tast til valg** (under **Tale og sprog → Betjening**) – vælg en tast: **Space**, **Enter**, **F8** eller **F9**. Når du trykker på den, vælges den knap, markøren eller tastaturet står på.
-- **Tast til hviletilstand** (under **Tale og sprog → Betjening**) – vælg en tast, der sætter **Dvæl for at vælge** og **Tast til valg** på pause. Når **Dvæl for at vælge** eller **Tast til valg** er tændt, er der også en rund pause-/afspil-knap nederst til højre. VoiceOver kalder den **Hviletilstand** eller **Genoptag input**. Almindelige tryk virker stadig, mens der hviles. Hold tasten til valg nede i 2 sekunder for at starte igen.
+- **Tast til hviletilstand** (under **Tale og sprog → Betjening**) – vælg en tast, der sætter **Dvæl for at vælge** og **Tast til valg** på pause. Når **Dvæl for at vælge** eller **Tast til valg** er tændt, er der også en rund pause-/afspil-knap nederst til højre. VoiceOver kalder den **Hviletilstand** eller **Genoptag input**. Almindelige tryk virker stadig, mens der hviles. Tryk på knappen eller på hviletasten for at starte igen. Bruger du **Tast til valg**, kan du også holde den nede i 2 sekunder.
 - **Markørfremhævning** – behold den almindelige markør, eller læg en tydelig ring eller et omrids ovenpå. Under **Markørstil** er valgene **System**, **Ring** og **Omrids**.
 
 ### Scanning
 
 Bruger du en kontakt, er det iPhone og iPad selv, der flytter markeringen rundt på skærmen. Wingmate bestemmer, hvilke dele af skærmen markeringen kommer forbi, og i hvilken rækkefølge.
 
-1. Slå **Knapbetjening** til i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed**.
+1. Tilslut din kontakt, og sæt **Knapbetjening** op i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed → Knapbetjening**. Følg [Apples vejledning](https://support.apple.com/da-dk/119835), og slå **Knapbetjening** til.
 2. Åbn **Indstillinger → Tilgængelighed → Scanning** i Wingmate, og slå **Aktiver scanning** til.
 3. Vælg de områder, du vil kunne vælge med din kontakt: **Afspilningsområde**, **Inputfelt**, **Frasegitter**, **Kategori-elementer** og **Toplinje/indstillinger**.
 4. Under **Frasegitter-rækkefølge** vælger du, om fraserne skal gennemgås **Rækkevis**, **Kolonnevis** eller **Lineær**.
@@ -451,7 +456,7 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 **Stemmen på nettet virker ikke.** Tjek, at du har internet, og at nøglen stadig virker. Wingmate bruger enhedens stemme i stedet og beholder beskeden. Er nøglen blevet ændret, så sæt den nye ind under **Indstillinger → Tale og sprog**.
 
-**Stemmerne på enheden mangler eller lyder forkert.** Stemmer hentes og vælges i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed → Oplæst indhold → Stemmer**.
+**Stemmerne på enheden mangler eller lyder forkert.** Vælg stemmen i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**. Mangler stemmen på listen, så hent den i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed → Oplæst indhold → Stemmer**. Gå tilbage til Wingmate, og vælg den.
 
 **Jeg kan ikke hente en tavlefil ind.** Det kan man ikke på iPhone og iPad i denne version. Brug **Importér tale**, eller byg skærmen i Wingmate.
 
@@ -459,7 +464,7 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 **Jeg har glemt redigeringskoden.** Koden ligger kun på enheden og kommer ikke med i en sikkerhedskopi. Wingmate kan ikke nulstille den for dig. Sidder du fast, så skriv til udvikleren. Se [Giv feedback](#giv-feedback).
 
-**Historik eller «Sandsynligt næste» vises ikke.** Gå til **Indstillinger → Privatliv**. Tænd **Vis talehistorik**, og tænd derefter **Næste beskeder (eksperimentelt)**. Forslagene vises kun, når talehistorikken er tændt. Når tastaturet er fremme, vises forslagene også i en række over tastaturet.
+**Historik eller «Sandsynligt næste» vises ikke.** Gå til **Indstillinger → Privatliv**. Tænd **Vis talehistorik**, og tænd derefter **Næste beskeder (eksperimentelt)**. Læs en besked op, så vises **Historik**. Læs endnu en anden besked op. Når Wingmate har noget at foreslå, vises **Sandsynligt næste** også. Når tastaturet er fremme, vises forslagene også i en række over tastaturet.
 
 **Søgningen finder ingen symboler, eller den er langsom.** Søgningen kræver net. Har du søgt mange gange lige efter hinanden, beder appen dig vente og prøve igen.
 
