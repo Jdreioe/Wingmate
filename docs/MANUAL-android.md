@@ -54,7 +54,7 @@ Beskeden, du er i gang med, bliver liggende. Den følger med, når du skifter me
 
 Wingmate gemmer dine beskeder, fraser og skærme på enheden. Der er ingen konto, og appen kopierer ikke selv dine ting til en anden enhed.
 
-Noget forlader kun enheden i disse tilfælde:
+Wingmate sender kun noget ud af enheden i disse tilfælde. Bruger du enhedens egen stemme, kan nogle af stemmerne alligevel bruge internettet.
 
 - Vælger du en stemme på nettet, sendes teksten til den tjeneste, der læser den op.
 - Søger du efter symboler på nettet, sendes det, du søger på.
@@ -76,7 +76,7 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
    <!-- SCREENSHOT: Android welcome step “Hvad skal tale for dig?” with the four engine options visible: Denne enhed, Microsoft Azure, Google Cloud, ElevenLabs. -->
    <img src="images/welcome-stemmemotor.png" alt="Valg af, hvad der skal tale, i den første opsætning" width="300">
 
-3. Vælg en stemme.
+3. På siden **Vælg en stemme** trykker du på en stemme. Så går appen selv videre. Står der allerede «Valgt: …», kan du bare trykke **Fortsæt**.
 4. På siden **Hør din stemme** trykker du **Afspil** for at høre stemmen. Vil du ændre, hvor hurtigt den taler, så brug **Hastighed**.
 5. Vil du skifte sprog, så tryk **Skift sprog**, hvis knappen vises. Vælg et sprog, og tryk **Fortsæt**. Så kommer du tilbage til **Hør din stemme**.
 6. Tryk **Fortsæt** på **Hør din stemme** for at gå videre.
@@ -129,7 +129,7 @@ Skriveskærmen bygger selv sine sider ud fra dine fraser og kategorier. Du kan i
 
 ### Gem en frase
 
-Tryk på knappen **Tilføj ny frase**. Den står sidst blandt dine fraser, så rul ned, hvis du ikke kan se den. Her kan du sætte:
+Tryk på knappen **Tilføj ny frase**. Den står efter din sidste frase, nogle gange på en ny række længere nede, selv om der er tomme felter. Rul ned i fraserne, hvis du ikke kan se den. Her kan du sætte:
 
 - **Vokalisering (det der skal siges)** – det øverste felt. Brug det, hvis Wingmate skal sige noget andet end teksten på knappen. Lader du feltet stå tomt, læser Wingmate teksten fra **Ny frasetekst** op.
 - **Ny frasetekst** – teksten, der står på knappen. Lader du feltet stå tomt, bruges teksten fra **Vokalisering**.
@@ -180,7 +180,7 @@ Du kan også lave en skærm ud fra en tale eller en anden tekst:
 2. Skriv et navn under **Talens navn**.
 3. Sæt teksten ind under **Taletekst**. Lav en tom linje mellem de afsnit, der skal have hver sin knap.
 4. Vil du give en side et navn, så skriv fx `# Velkomst` på sin egen linje. Linjen bliver ikke læst op.
-5. Se resultatet under **Forhåndsvisning**. Vælg med **Færre** og **Flere**, hvor mange afsnit der skal være på hver side (1–8).
+5. Vælg med **Færre** og **Flere** under **Afsnit pr. side**, hvor mange afsnit der skal være på hver side (1–8). Se resultatet under **Forhåndsvisning**.
 6. Tryk **Opret skærm**. Du kan rette skærmen bagefter.
 
 Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele afsnittet op med det samme. Teksten lægges ikke i beskedlinjen.
@@ -199,11 +199,11 @@ Tryk på en skærms navn i oversigten for at åbne den. Ikonerne til højre på 
 
 Er **Beskedlinje** vist, har den knapper med ikoner. På en bred skærm står navnet ved siden af ikonet:
 
-- ▶ læser beskeden op (**Afspil**).
+- ▶ (**Afspil**) læser beskeden op.
 - ⌫ (**Slet ord**) fjerner den sidste del af beskeden, fx hele teksten fra den sidste knap, du trykkede på. På en staveside fjerner den det sidste tegn.
-- ✕ sletter hele beskeden (**Ryd**).
+- ✕ (**Ryd**) sletter hele beskeden.
 
-Har skærmen flere sider, er der også to knapper til at gå rundt mellem siderne:
+Har skærmen flere sider, er der også to knapper til venstre i beskedlinjen:
 
 - ← går en side tilbage (**Forrige side**).
 - ⌂ går til startsiden (**Startside**).
@@ -266,7 +266,14 @@ Du kan hente hele ARASAAC-biblioteket ned under **Indstillinger → System og da
 
 ### Sider og navigation
 
-I **Rediger felt** bestemmer du, hvad en knap gør, under **Felthandling**. Vælg **Tilføj og udtal** eller **Åbn side**. Vælger du **Åbn side**, trykker du **Vælg en side** under **Målside**, vælger siden og trykker **Gem**. Har skærmen kun én side, så lav først den nye side med **Tilføj side**.
+I **Rediger felt** bestemmer du, hvad en knap gør, under **Felthandling**. Vælg **Tilføj og udtal** eller **Åbn side**.
+
+Sådan får du en knap til at åbne en anden side:
+
+1. Mangler siden, så vælg **Tilføj side**, giv siden et navn, og tryk **Opret**. Wingmate viser nu den nye side.
+2. Tryk på navnet på den side, hvor knappen skal ligge, i rækken med sider øverst.
+3. Tryk på knappen, og vælg **Rediger**. Vælg **Åbn side** under **Felthandling**.
+4. Tryk **Vælg en side** under **Målside**, vælg siden, og tryk **Gem**.
 
 **Særlige handlinger** kan lægges på en knap. De hedder blandt andet:
 
@@ -390,7 +397,7 @@ Fra oversigten **Skærme**:
    <!-- SCREENSHOT: The Eksportér dialog, showing Open Board (.obz) and Eksportér til Grid. -->
    <img src="images/eksport-menu.png" alt="Dialogen Eksportér med Open Board (.obz) og Eksportér til Grid" width="300">
 
-Vil du udskrive skærmen, laver du en PDF. Tryk på de tre prikker øverst til højre, og vælg **Udskriv (PDF)**. På en bred skærm uden tre prikker kan du ikke udskrive i denne version. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
+Vil du udskrive skærmen, laver du en PDF. Tryk på de tre prikker øverst til højre, og vælg **Udskriv (PDF)**. På en tablet, hvor der ikke er tre prikker øverst, kan du ikke udskrive i denne version. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
 
 ### Hvad følger med til Grid
 
@@ -421,7 +428,13 @@ Vil du se, hvordan filen er bygget op, så læs [BACKUP_FORMAT.md](BACKUP_FORMAT
 
 ## Indstillinger
 
-Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **App-indstillinger**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet. På en bred skærm, fx en tablet, trykker du på tandhjulet i panelet til højre. Fra **Skærme**: tryk på tandhjulet øverst. Du kan søge med **Søg i Indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
+Sådan åbner du **Indstillinger**:
+
+- Fra Skrivning på en telefon: tryk på de tre prikker øverst til højre, og vælg **App-indstillinger**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet.
+- Fra Skrivning på en bred skærm, fx en tablet: tryk på tandhjulet i panelet til højre.
+- Fra **Skærme**: tryk på tandhjulet øverst.
+
+Du kan søge med **Søg i Indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
 
 | Afsnit | Her finder du blandt andet |
 | --- | --- |
@@ -450,7 +463,7 @@ Tider står i millisekunder (ms). 1000 ms er 1 sekund.
 
 - **Hold for at vælge (ms)** – knappen vælges først, når du har holdt fingeren nede så længe. `0` slår det fra.
 - **Dwell-valg (ms)** – knappen vælges, når markøren bliver stående på den, uden at du klikker. `0` slår det fra.
-- **Vælg ved berøring** – knappen vælges, så snart du rører den, ikke når du slipper. Knapfelterne ruller ikke længere, og **Stryg mellem sider** virker ikke. **Hold for at vælge** gælder stadig, hvis det er tændt.
+- **Vælg ved berøring** – knappen vælges, så snart du rører den, ikke når du slipper. Knapfelterne ruller ikke længere, og **Stryg mellem sider** virker ikke. **Hold for at vælge (ms)** gælder stadig, hvis det er tændt.
 - **Stryg mellem sider** – stryg mod venstre for at gå til næste side, og mod højre for at gå til forrige side.
 - **Markeringsde-bounce (ms)** – ignorerer hurtige tryk på den samme knap lige efter hinanden.
 - **Markeringsfremhævning (ms)** og **Markeringslyd** – en kort ramme og en lyd, når en knap er valgt.

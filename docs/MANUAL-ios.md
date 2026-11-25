@@ -56,7 +56,7 @@ Beskeden, du er i gang med, bliver liggende. Den følger med, når du skifter me
 
 Wingmate gemmer dine beskeder, fraser og skærme på enheden. Der er ingen konto, og appen kopierer ikke selv dine ting til en anden enhed.
 
-Noget forlader kun enheden i disse tilfælde:
+Wingmate sender kun noget ud af enheden i disse tilfælde. Bruger du enhedens egen stemme, kan nogle af stemmerne alligevel bruge internettet.
 
 - Vælger du en stemme på nettet, sendes teksten til den tjeneste, der læser den op.
 - Søger du efter symboler på nettet, sendes det, du søger på.
@@ -101,7 +101,7 @@ Talehistorik slår du til bagefter under **Indstillinger → Privatliv**.
 
 Når opsætningen er færdig, åbner Wingmate det sted, du valgte. Du kan skifte, når du vil:
 
-- Fra Skrivning: tryk på gitter-ikonet øverst til højre. VoiceOver kalder det **Skift til Skærme**. Kan du ikke se knapperne øverst, mens tastaturet er fremme, så se [Skriv og læs op](#skriv-og-læs-op).
+- Fra Skrivning: tryk på gitter-ikonet øverst til højre. VoiceOver kalder det **Skift til Skærme**. Er tastaturet fremme på iPhone, så tryk først på plusset til venstre for tekstfeltet, så knapperne øverst kommer frem.
 - Fra oversigten **Skærme**: tryk på taleboble-ikonet øverst til højre. VoiceOver kalder det **Skift til Skriv**.
 - Fra en åben skærm: tryk **Menu** øverst til venstre, og vælg **Skift til Skriv**. Vil du tilbage til oversigten, så vælg **Skærme** i samme menu.
 
@@ -135,9 +135,9 @@ Skriveskærmen bygger selv sine sider ud fra dine fraser og kategorier. Du kan i
 
 ### Gem en frase
 
-Tryk på feltet med det sorte plus nederst blandt dine fraser. Der står **Tilføj** under plusset. Rul ned, hvis du ikke kan se det. VoiceOver kalder feltet **Ny frase**. Så åbner **Ny frase**. (Det runde plus sidst i rækken med kategorier laver en ny kategori.)
+Tryk på feltet med det sorte plus nederst blandt dine fraser. Der står **Tilføj** under plusset. Rul ned, hvis du ikke kan se det. VoiceOver kalder feltet **Ny frase**. Så åbner **Ny frase**. Retter du en frase, der findes, hedder vinduet **Rediger frase**, som på billedet. (Det runde plus sidst i rækken med kategorier laver en ny kategori.)
 
-Felterne hedder **Titel** og **Udtale**. Pas på, for navnene er byttet om i appen:
+Rul ned forbi **Symbol** til felterne **Titel** og **Udtale**. Pas på, for navnene er byttet om i appen:
 
 - **Udtale** er teksten, der står på frasen. Den skal udfyldes.
 - **Titel** er det, der bliver sagt, hvis det skal være noget andet end teksten. Den kan du lade stå tom.
@@ -174,6 +174,8 @@ Sådan laver du en ny skærm:
 3. Vælg under **Tavletype**: **Tom tavle**, **QWERTY-tastatur** eller **Alfabetisk tastatur**.
 4. Til en tom tavle vælger du, hvor mange **Rækker** og **Kolonner** der skal være (1–12).
 5. Tryk **Gem**.
+
+Valgte du **Tom tavle**, er der ingen knapper endnu. Tryk **Rediger** ved din nye skærm i oversigten, og følg [Rediger sider og knapper](#rediger-sider-og-knapper).
 
 <!-- SCREENSHOT: iPhone new screen sheet with Tavletype. -->
 <img src="images/ios/iphone-ny-skaerm-skabelon.png" alt="Ny skærm med Tavletype (iPhone)" width="300">
@@ -255,8 +257,8 @@ I **Rediger felt** kan du blandt andet sætte:
 
 - **Etiket** – teksten, der står på knappen.
 - **Vokalisering** – det, der skal siges, hvis det skal være noget andet end etiketten.
-- Et billede. Søg efter et symbol, eller vælg et foto fra enheden. Symbolerne kommer fra OpenSymbols. Det er en samling af billeder, blandt andet fra ARASAAC og Mulberry.
-- **Farver**: **Baggrundsfarve** og **Rammens farve**.
+- **Symbol** – søg efter et symbol fra **OpenSymbols**, eller vælg et foto under **Mine fotos**. OpenSymbols er en samling af billeder, blandt andet fra ARASAAC og Mulberry.
+- **Farver** – slå **Vælg baggrundsfarve** eller **Vælg rammens farve** til, og vælg en farve.
 - **Knapform** (**Rundet**, **Firkantet**, **Pille**, **Taleboble**, **Tankeboble**) og **Ordtype**. Ordtype kan være **Automatisk**, eller du vælger selv: **Stedord**, **Udsagnsord**, **Beskrivende ord**, **Navneord**, **Socialt ord**, **Andet**.
 - **Skjult i brugstilstand** – knappen er der stadig, når du redigerer, men den vises ikke, når du bruger skærmen.
 - **Sprog** for den enkelte knap, hvis den skal siges på et andet sprog end det normale.
@@ -269,10 +271,11 @@ I **Rediger felt** bestemmer du, hvad en knap gør, under **Hvad knappen gør**.
 
 Sådan får du en knap til at åbne en anden side:
 
-1. Siden skal findes først. Mangler den, så lav den med **Tilføj side**.
-2. Tryk på knappen for at åbne **Rediger felt**, og vælg **Åbn side** under **Hvad knappen gør**.
-3. Tryk **Vælg en side** under **Forbundet side**, og tryk på den side, knappen skal åbne.
-4. Tryk **Gem** øverst.
+1. Mangler siden, så tryk **Tilføj side**, og giv siden et navn. Wingmate viser nu den nye side.
+2. Tryk på navnet på den side, hvor knappen skal ligge, i rækken med sider øverst.
+3. Tryk på knappen for at åbne **Rediger felt**, og vælg **Åbn side** under **Hvad knappen gør**.
+4. Tryk **Vælg en side** under **Forbundet side**, og tryk på den side, knappen skal åbne.
+5. Tryk **Gem** øverst.
 
 **Særlige handlinger** kan lægges på en knap:
 
@@ -405,7 +408,12 @@ Vil du se, hvordan filen er bygget op, så læs [BACKUP_FORMAT.md](BACKUP_FORMAT
 
 ## Indstillinger
 
-I Skrivning og i oversigten **Skærme** åbner du **Indstillinger** med ikonet med skydeknapper øverst til højre. VoiceOver kalder det **Indstillingspanel**. På en åben skærm trykker du **Menu** og vælger **Indstillingspanel**. Du kan søge med **Søg i indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
+Sådan åbner du **Indstillinger**:
+
+- Fra Skrivning og oversigten **Skærme**: tryk på ikonet med skydeknapper øverst til højre. VoiceOver kalder det **Indstillingspanel**. Er tastaturet fremme på iPhone, så tryk først på plusset til venstre for tekstfeltet.
+- Fra en åben skærm: tryk **Menu**, og vælg **Indstillingspanel**.
+
+Du kan søge med **Søg i indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
 
 | Afsnit | Her finder du blandt andet |
 | --- | --- |
