@@ -15,6 +15,8 @@ gaze work are preserved at the [`desktop-archive`](https://github.com/Jdreioe/Wi
 See [current capabilities](docs/CAPABILITIES.md) and
 [supported platforms](docs/PLATFORM_SUPPORT.md).
 
+New users can follow the Danish guide: [Wingmate – manual til nye brugere](docs/MANUAL.md).
+
 For pointer, switch, head-tracking, and eye-tracking setup, see
 [Pointer input and Rest mode](docs/HEAD_EYE_TRACKING.md).
 
