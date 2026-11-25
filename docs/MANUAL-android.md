@@ -4,7 +4,7 @@ Manualen passer til Wingmate **1.9.0** på Android (november 2026). Bruger du iP
 
 ## Sådan bruger du manualen
 
-Manualen er til dig, der bruger Wingmate, og til familie, hjælpere, lærere og terapeuter, der hjælper med atbruge Wingmate
+Manualen er til dig, der bruger Wingmate, og til familie, hjælpere, lærere og terapeuter, der hjælper med at bruge Wingmate.
 
 - Er du helt ny? Start med [Første start](#første-start) og [De to arbejdsområder](#de-to-arbejdsområder).
 - Knap- og menunavne står med **fed**, præcis som de står i appen. Appen er på dansk, når telefonen eller tabletten er sat til dansk.
