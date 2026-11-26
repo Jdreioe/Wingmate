@@ -59,7 +59,7 @@ struct TypingWorkspaceView: View {
         (model.typingTray?.elements ?? [])
             .filter { $0.kind.name == "ActionStrip" }
             .flatMap { $0.actions }
-            .filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
+            .filter { $0.isVisibleForTtsEngineNamed(engineName: model.speech.ttsEngine) }
     }
 
     private var pagePhrases: [Shared.Phrase] {
@@ -277,7 +277,7 @@ struct TypingWorkspaceView: View {
             maxHeight: max(height, CGFloat(uiTextFieldHeight) * 2.2),
             scanEnabled: model.scanningEnabled,
             includeInScanArea: model.scanInputFieldEnabled,
-            secondaryLanguage: model.secondaryLanguage,
+            secondaryLanguage: model.speech.secondaryLanguage,
             secondaryLanguageRanges: model.secondaryLanguageRanges,
             allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
             onMarkSelectionAsSecondaryLanguage: { model.markSelectionAsSecondaryLanguage(range: $0) }

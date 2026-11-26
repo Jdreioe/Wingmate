@@ -26,9 +26,9 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     var body: some View {
         content()
             .sheet(isPresented: $showVoiceSheet) {
-                VoiceSelectionSheet(selected: model.selectedVoice, primaryLanguage: model.primaryLanguage, onClose: { showVoiceSheet = false }) { v in
+                VoiceSelectionSheet(selected: model.speech.selectedVoice, primaryLanguage: model.speech.primaryLanguage, onClose: { showVoiceSheet = false }) { v in
                     Task {
-                        await model.chooseVoice(v)
+                        await model.speech.chooseVoice(v)
                         await MainActor.run { showVoiceSheet = false }
                     }
                 }
@@ -36,20 +36,22 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showLanguageSheet) {
-                LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages,
-                                       selected: model.primaryLanguage,
+                LanguageSelectionSheet(languages: model.speech.availableLanguages.isEmpty ? [model.speech.primaryLanguage] : model.speech.availableLanguages,
+                                       selected: model.speech.primaryLanguage,
                                        onClose: { showLanguageSheet = false }) { lang in
-                    model.updateLanguage(lang)
+                    model.speech.updateLanguage(lang)
                     showLanguageSheet = false
                 }
                 .presentationDetents([.height(300), .medium, .large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showSecondaryLanguageSheet) {
-                LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.secondaryLanguage] : model.availableLanguages.filter { $0 != model.primaryLanguage },
-                                       selected: model.secondaryLanguage,
+                LanguageSelectionSheet(languages: model.speech.availableLanguages.isEmpty ? [model.speech.secondaryLanguage] : model.speech.availableLanguages.filter { $0 != model.speech.primaryLanguage },
+                                       selected: model.speech.secondaryLanguage,
                                        onClose: { showSecondaryLanguageSheet = false }) { lang in
-                    model.updateSecondaryLanguage(lang)
+                    model.speech.updateSecondaryLanguage(lang) {
+                        model.applySessionState(model.session.state())
+                    }
                     showSecondaryLanguageSheet = false
                 }
                 .presentationDetents([.height(300), .medium, .large])

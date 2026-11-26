@@ -122,6 +122,7 @@ struct ContentView: View {
                     if shouldShowWelcomeFlow {
                         WelcomeFlow(
                             model: model,
+                            speech: model.speech,
                             backup: model.backup,
                             onComplete: {
                                 model.setStartupUsesScreens(model.boardModeEnabled)

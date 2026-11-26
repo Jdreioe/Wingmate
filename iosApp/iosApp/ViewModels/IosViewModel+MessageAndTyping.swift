@@ -11,7 +11,7 @@ extension IosViewModel {
         let textChanged = input != text
         if textChanged { input = text }
         inputSelectionRange = clampedSelectionRange(inputSelectionRange, maxLength: (text as NSString).length)
-        let secondary = secondaryLanguage
+        let secondary = speech.secondaryLanguage
         let ranges = state.activeMessage.languageSpans
             .filter { $0.languageTag == secondary }
             .map { NSRange(location: Int($0.range.start), length: Int($0.range.length)) }
@@ -143,8 +143,8 @@ extension IosViewModel {
 
     /// Whether the secondary-language action can tag a selection.
     var hasUsableSecondaryLanguage: Bool {
-        let secondary = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !secondary.isEmpty && secondary != primaryLanguage
+        let secondary = speech.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !secondary.isEmpty && secondary != speech.primaryLanguage
     }
 
     /// Appends a Button of the current Page to the Message.
@@ -191,7 +191,7 @@ extension IosViewModel {
     /// Speaks the whole Message. The session records it in History once spoken.
     func speakMessage(cacheAudio: Bool = true) {
         AudioSessionHelper.activatePlayback()
-        session.speak(voice: selectedVoice, cacheAudio: cacheAudio)
+        session.speak(voice: speech.selectedVoice, cacheAudio: cacheAudio)
     }
 
     /// Speaks the Message from a Screen, honoring the Screen's sentence caching.
@@ -203,19 +203,19 @@ extension IosViewModel {
     func speak(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
-        session.speakText(text: text, voice: selectedVoice)
+        session.speakText(text: text, voice: speech.selectedVoice)
     }
 
     /// Says one part of the Message again, e.g. a word the listener missed.
     func speakMessagePart(at index: Int) {
         AudioSessionHelper.activatePlayback()
-        session.speakMessagePart(index: Int32(index), voice: selectedVoice)
+        session.speakMessagePart(index: Int32(index), voice: speech.selectedVoice)
     }
 
     /// Speaks a Phrase on its own, playing its recording when it has one.
     func speakPhrase(_ phrase: Shared.Phrase) {
         AudioSessionHelper.activatePlayback()
-        session.speakPhrase(phrase: phrase, voice: selectedVoice)
+        session.speakPhrase(phrase: phrase, voice: speech.selectedVoice)
     }
 
     func pauseSpeech() { session.pause() }
@@ -225,8 +225,8 @@ extension IosViewModel {
     func retrySessionStorage() { session.retryStorage() }
 
     func markSelectionAsSecondaryLanguage(range: NSRange) {
-        let locale = secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !locale.isEmpty, locale != primaryLanguage,
+        let locale = speech.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !locale.isEmpty, locale != speech.primaryLanguage,
               range.location != NSNotFound, range.length > 0 else { return }
         editMessage {
             session.toggleSecondaryLanguage(start: Int32(range.location), endExclusive: Int32(range.location + range.length))
@@ -237,14 +237,14 @@ extension IosViewModel {
     func playBoardButtonSound(_ dataUrl: String) {
         guard !dataUrl.isEmpty, let url = playableURL(from: dataUrl), url.isFileURL else { return }
         AudioSessionHelper.activatePlayback()
-        session.speakRecording(path: url.path, voice: selectedVoice)
+        session.speakRecording(path: url.path, voice: speech.selectedVoice)
     }
 
     /// Plays a Button recording stored as a file path.
     func playBoardButtonFile(_ path: String) {
         guard !path.isEmpty else { return }
         AudioSessionHelper.activatePlayback()
-        session.speakRecording(path: path, voice: selectedVoice)
+        session.speakRecording(path: path, voice: speech.selectedVoice)
     }
 
     /// Records how the current Page's Buttons look, for the message bar on other Pages.

@@ -82,7 +82,7 @@ struct TypingMessageBar: View {
                 maxHeight: max(160, minHeight * 2.5),
                 scanEnabled: model.scanningEnabled,
                 includeInScanArea: model.scanInputFieldEnabled,
-                secondaryLanguage: model.secondaryLanguage,
+                secondaryLanguage: model.speech.secondaryLanguage,
                 secondaryLanguageRanges: model.secondaryLanguageRanges,
                 allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
                 onMarkSelectionAsSecondaryLanguage: { model.markSelectionAsSecondaryLanguage(range: $0) }

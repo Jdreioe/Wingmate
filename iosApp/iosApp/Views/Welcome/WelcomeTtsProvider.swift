@@ -33,16 +33,16 @@ enum WelcomeTtsProvider: String, CaseIterable, Identifiable {
     }
 
     @MainActor
-    func isConfigured(in model: IosViewModel) -> Bool {
+    func isConfigured(in speech: SpeechSettingsModel) -> Bool {
         switch self {
         case .system:
             return true
         case .azure:
-            return model.azureConfigured
+            return speech.azureConfigured
         case .google:
-            return model.googleConfigured
+            return speech.googleConfigured
         case .elevenLabs:
-            return model.elevenLabsConfigured
+            return speech.elevenLabsConfigured
         }
     }
 

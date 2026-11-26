@@ -270,7 +270,7 @@ extension SymbolBoardWorkspaceView {
                     Text("boardset.cell.hidden_footer")
                 }
 
-                if model.ttsEngine.contains("AZURE") {
+                if model.speech.ttsEngine.contains("AZURE") {
                     Section {
                         Toggle("boardset.cell.math", isOn: $editingMathMode)
                     } footer: {
@@ -672,11 +672,11 @@ extension SymbolBoardWorkspaceView {
 
     var cellLanguageChoices: [(tag: String, title: String)] {
         var choices: [(tag: String, title: String)] = []
-        let primary = model.primaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let primary = model.speech.primaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if !primary.isEmpty {
             choices.append((primary, String(format: NSLocalizedString("boardset.cell.language.primary", comment: ""), primary)))
         }
-        let secondary = model.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondary = model.speech.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if !secondary.isEmpty, secondary != primary {
             choices.append((secondary, String(format: NSLocalizedString("boardset.cell.language.secondary", comment: ""), secondary)))
         }

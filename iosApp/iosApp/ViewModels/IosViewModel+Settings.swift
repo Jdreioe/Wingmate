@@ -2,88 +2,6 @@ import Foundation
 import Shared
 
 extension IosViewModel {
-    func effectiveLanguage(for v: Shared.Voice) -> String {
-        func nonEmpty(_ s: String?) -> String? {
-            let t = (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return t.isEmpty ? nil : t
-        }
-        if let s = nonEmpty(v.selectedLanguage) { return s }
-        if let p = nonEmpty(v.primaryLanguage) { return p }
-        return self.primaryLanguage
-    }
-
-    var canChangeVoiceLanguage: Bool {
-        let languages = availableLanguages
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return Set(languages).count > 1
-    }
-
-    func refreshAzureConfiguration() async {
-        do {
-            let cfg = try await speechFacade.getSpeechConfig()
-            let ep = cfg.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-            azureConfigured = !ep.isEmpty && cfg.credentialConfigured
-        } catch {
-            azureConfigured = false
-        }
-    }
-
-    func refreshGoogleConfiguration() async {
-        do {
-            let status = try await speechFacade.getGoogleSpeechConfig()
-            googleConfigured = status.credentialConfigured
-        } catch {
-            googleConfigured = false
-        }
-    }
-
-    func saveGoogleApiKey(_ apiKey: String) async throws {
-        _ = try await speechFacade.saveValidatedGoogleSpeechConfig(apiKey: apiKey)
-        await refreshGoogleConfiguration()
-        setTtsEngine("GOOGLE_CLOUD")
-    }
-
-    func clearGoogleApiKey() async throws {
-        try await speechFacade.clearGoogleSpeechConfig()
-        await refreshGoogleConfiguration()
-    }
-
-    func refreshElevenLabsConfiguration() async {
-        do {
-            let status = try await speechFacade.getElevenLabsSpeechConfig()
-            elevenLabsConfigured = status.credentialConfigured
-        } catch {
-            elevenLabsConfigured = false
-        }
-    }
-
-    func saveElevenLabsApiKey(_ apiKey: String) async throws {
-        _ = try await speechFacade.saveValidatedElevenLabsSpeechConfig(apiKey: apiKey)
-        await refreshElevenLabsConfiguration()
-        setTtsEngine("ELEVENLABS")
-    }
-
-    func clearElevenLabsApiKey() async throws {
-        try await speechFacade.clearElevenLabsSpeechConfig()
-        await refreshElevenLabsConfiguration()
-    }
-
-    func refreshLanguagePreferences() async {
-        do {
-            let settings = try await settingsFacade.getSettings()
-            await MainActor.run {
-                self.primaryLanguage = settings.primaryLanguage
-                self.secondaryLanguage = settings.secondaryLanguage
-            }
-        } catch {
-            await MainActor.run {
-                self.primaryLanguage = self.primaryLanguage
-                self.secondaryLanguage = self.secondaryLanguage
-            }
-        }
-    }
-
     func refreshScanningSettings() async {
         do {
             let settings = try await settingsFacade.getSettings()
@@ -111,14 +29,11 @@ extension IosViewModel {
         do {
             let settings = try await settingsFacade.getSettings()
             let flags = try? await settingsFacade.iosSettingsFlags()
-            let systemTts = flags?.usesSystemTts ?? useSystemTts
+            let systemTts = flags?.usesSystemTts ?? speech.useSystemTts
             let engine = flags?.ttsEngine ?? (systemTts ? "SYSTEM" : "AZURE_USER_RESOURCE")
             let opensScreens = flags?.startupUsesScreens ?? false
             await MainActor.run {
-                self.useSystemTts = systemTts
-                self.ttsEngine = engine
-                UserDefaults.standard.set(systemTts, forKey: "use_system_tts")
-                UserDefaults.standard.set(engine, forKey: "tts_engine")
+                self.speech.applyEngineFromSettings(useSystemTts: systemTts, ttsEngine: engine)
                 self.showButtonLabels = settings.showLabels
                 self.showButtonSymbols = settings.showSymbols
                 self.labelAtTop = settings.labelAtTop
@@ -170,14 +85,6 @@ extension IosViewModel {
     func setSwipeBetweenPages(_ enabled: Bool) {
         swipeBetweenPages = enabled
         Task { try? await settingsFacade.updateSwipeBetweenPages(enabled: enabled) }
-    }
-
-    func setTtsEngine(_ engine: String) {
-        ttsEngine = engine
-        useSystemTts = engine == "SYSTEM"
-        UserDefaults.standard.set(engine, forKey: "tts_engine")
-        UserDefaults.standard.set(useSystemTts, forKey: "use_system_tts")
-        Task { try? await speechFacade.updateTtsEngineNamed(engine: engine) }
     }
 
     func setScanningEnabled(_ enabled: Bool) {
@@ -437,42 +344,6 @@ extension IosViewModel {
         value.clamped(to: 0.5...3.0)
     }
 
-    func chooseVoice(_ v: Shared.Voice) async {
-        do {
-            try await speechFacade.selectVoiceAndMaybeUpdatePrimary(voice: v)
-            await MainActor.run {
-                self.selectedVoice = v
-                if let langs = v.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
-                self.primaryLanguage = effectiveLanguage(for: v)
-            }
-            let persisted = try? await speechFacade.selectedVoice()
-            if let pv = persisted {
-                self.selectedVoice = pv
-                if let langs = pv.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
-                self.primaryLanguage = effectiveLanguage(for: pv)
-            }
-        } catch {
-            // swallow for now
-        }
-    }
-
-    func updateLanguage(_ lang: String) {
-        Task {
-            _ = try? await speechFacade.updateSelectedVoiceLanguage(lang: lang)
-            self.primaryLanguage = lang
-            refreshVoiceAndLanguages()
-        }
-    }
-
-    func updateSecondaryLanguage(_ lang: String) {
-        Task {
-            _ = try? await settingsFacade.updateSecondaryLanguage(lang: lang)
-            self.secondaryLanguage = lang
-            // Highlight the spans tagged with the new secondary language.
-            self.applySessionState(self.session.state())
-        }
-    }
-
     func clampedSelectionRange(_ range: NSRange, maxLength: Int) -> NSRange {
         if range.location == NSNotFound {
             return NSRange(location: maxLength, length: 0)
@@ -480,14 +351,5 @@ extension IosViewModel {
         let safeLocation = min(max(0, range.location), maxLength)
         let safeLength = min(max(0, range.length), max(0, maxLength - safeLocation))
         return NSRange(location: safeLocation, length: safeLength)
-    }
-
-    func refreshVoiceAndLanguages() {
-        Task {
-            let v = try? await speechFacade.selectedVoice()
-            self.selectedVoice = v
-            if let langs = v?.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
-            if let v = v { self.primaryLanguage = effectiveLanguage(for: v) }
-        }
     }
 }

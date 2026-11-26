@@ -293,7 +293,7 @@ struct TypingActionStrip: View {
     var leading: AnyView? = nil
 
     private var visibleActions: [Shared.TypingTrayAction] {
-        actions.filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
+        actions.filter { $0.isVisibleForTtsEngineNamed(engineName: model.speech.ttsEngine) }
     }
 
     var body: some View {
@@ -324,7 +324,7 @@ struct TypingActionGrid: View {
     ]
 
     private var visibleActions: [Shared.TypingTrayAction] {
-        actions.filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
+        actions.filter { $0.isVisibleForTtsEngineNamed(engineName: model.speech.ttsEngine) }
     }
 
     var body: some View {
@@ -370,8 +370,8 @@ struct TypingActionButton: View {
     }
 
     private var label: String {
-        if single?.name == "SecondaryLanguage", !model.secondaryLanguage.isEmpty {
-            return (model.secondaryLanguage.split(separator: "-").first.map(String.init) ?? model.secondaryLanguage).uppercased()
+        if single?.name == "SecondaryLanguage", !model.speech.secondaryLanguage.isEmpty {
+            return (model.speech.secondaryLanguage.split(separator: "-").first.map(String.init) ?? model.speech.secondaryLanguage).uppercased()
         }
         if let key = action.defaultLabelKey {
             let stringKey = "typing.action." + key

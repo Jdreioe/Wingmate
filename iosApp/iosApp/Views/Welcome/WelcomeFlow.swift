@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct WelcomeFlow: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var speech: SpeechSettingsModel
     @ObservedObject var backup: BackupModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State var currentStep = 0
@@ -100,7 +101,7 @@ struct WelcomeFlow: View {
         .sheet(isPresented: $showVoicePicker) {
             VoiceSelectionSheet(selected: selectedVoice, onClose: { showVoicePicker = false }) { voice in
                 Task {
-                    await model.chooseVoice(voice)
+                    await speech.chooseVoice(voice)
                     let langs = availablePrimaryLanguages(for: voice)
 
                     await MainActor.run {
@@ -120,10 +121,10 @@ struct WelcomeFlow: View {
         .sheet(isPresented: $showLanguagePicker) {
             LanguageSelectionSheet(
                 languages: languageOptions,
-                selected: model.primaryLanguage,
+                selected: speech.primaryLanguage,
                 onClose: { showLanguagePicker = false },
                 onSelect: { lang in
-                    model.updateLanguage(lang)
+                    speech.updateLanguage(lang)
                     pendingLanguageSelection = false
                     showLanguagePicker = false
                 }
@@ -134,7 +135,7 @@ struct WelcomeFlow: View {
                 onDone: {
                     showAzureSetup = false
                     Task {
-                        await model.refreshAzureConfiguration()
+                        await speech.refreshAzureConfiguration()
                         await MainActor.run {
                             completeProviderSetup(.azure)
                         }
@@ -146,7 +147,7 @@ struct WelcomeFlow: View {
         }
         .sheet(isPresented: $showGoogleSetup) {
             GoogleTtsSetupView(
-                model: model,
+                speech: speech,
                 onClose: { showGoogleSetup = false },
                 onSaved: {
                     showGoogleSetup = false
@@ -156,7 +157,7 @@ struct WelcomeFlow: View {
         }
         .sheet(isPresented: $showElevenLabsSetup) {
             ElevenLabsSetupView(
-                model: model,
+                speech: speech,
                 onClose: { showElevenLabsSetup = false },
                 onSaved: {
                     showElevenLabsSetup = false
@@ -166,7 +167,7 @@ struct WelcomeFlow: View {
         }
         .onAppear {
             checkTtsConfiguration()
-            selectedVoice = model.selectedVoice
+            selectedVoice = speech.selectedVoice
         }
         .task {
             await refreshAllProviderConfigurations()

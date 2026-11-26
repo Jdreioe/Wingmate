@@ -172,7 +172,7 @@ struct SettingsView: View {
     private func destinationView(_ destination: SettingsDestination) -> some View {
         switch destination {
         case .speech:
-            SpeechSettingsView(model: model)
+            SpeechSettingsView(model: model, speech: model.speech)
         case .display:
             DisplaySettingsView(
                 model: model,

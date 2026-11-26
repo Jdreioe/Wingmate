@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Shared
 import AVFoundation
 import Network
@@ -7,6 +8,7 @@ import Network
 final class IosViewModel: ObservableObject {
     var store: Shared.PhraseListStore?
     private var phraseSubscription: Shared.NativeSubscription?
+    private var childModelCancellables: Set<AnyCancellable> = []
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
@@ -14,9 +16,9 @@ final class IosViewModel: ObservableObject {
     let pronunciationDictionary = PronunciationDictionaryModel()
     let editingAccess = EditingAccessModel()
     let backup = BackupModel()
+    let speech = SpeechSettingsModel()
 
     // Shared feature facades, resolved from the iOS composition root after start()
-    lazy var speechFacade = IosDiBridge().speechFacade()
     lazy var settingsFacade = IosDiBridge().settingsFacade()
     lazy var boardsFacade = IosDiBridge().boardsFacade()
     lazy var communicationFacade = IosDiBridge().communicationFacade()
@@ -24,6 +26,16 @@ final class IosViewModel: ObservableObject {
     lazy var typingScreens = IosDiBridge().typingScreenFacade()
     lazy var predictionFacade = IosDiBridge().predictionFacade()
     lazy var symbolSearchFacade = IosDiBridge().symbolSearchFacade()
+
+    init() {
+        // Forward child observable changes while transitional screens still observe IosViewModel.
+        speech.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &childModelCancellables)
+        editingAccess.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &childModelCancellables)
+    }
     // Shared access and highlight policies; Swift only supplies events and the clock.
     let accessInput = AccessInputController()
     let selectionHighlight = SelectionHighlight()
@@ -47,11 +59,7 @@ final class IosViewModel: ObservableObject {
     /// The Typing Screen template that lays out the Typing tray; nil until loaded.
     @Published var typingTray: Shared.TypingTray? = nil
     @Published var typingTrayFailed: Bool = false
-    @Published var primaryLanguage: String = "en-US"
-    @Published var secondaryLanguage: String = "en-US"
     @Published var secondaryLanguageRanges: [NSRange] = []
-    @Published var selectedVoice: Shared.Voice? = nil
-    @Published var availableLanguages: [String] = []
     // Predictions
     #if DEBUG
     @Published var predictions: Shared.PredictionResult = Shared.PredictionResult(words: [], letters: [])
@@ -80,9 +88,6 @@ final class IosViewModel: ObservableObject {
     @Published var boardBackgroundImageFit = "Fill"
     @Published var historyPhrases: [Shared.Phrase] = []
 
-    // Speech engine preference. The session falls back to the device voice by itself.
-    @Published var useSystemTts: Bool = UserDefaults.standard.bool(forKey: "use_system_tts")
-    @Published var ttsEngine: String = UserDefaults.standard.string(forKey: "tts_engine") ?? "SYSTEM"
     // Accessibility scanning configuration (persisted in shared Settings)
     @Published var scanningEnabled: Bool = false
     @Published var scanPlaybackAreaEnabled: Bool = true
@@ -120,11 +125,6 @@ final class IosViewModel: ObservableObject {
     @Published var historyVisible: Bool = true
     @Published var startupUsesScreens: Bool = false
     @Published var startupBoardSetId: String? = nil
-
-    // Azure availability (subscription configured)
-    @Published var azureConfigured: Bool = false
-    @Published var googleConfigured: Bool = false
-    @Published var elevenLabsConfigured: Bool = false
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
@@ -216,19 +216,17 @@ final class IosViewModel: ObservableObject {
             self?.state = state
         }
     // Load selected voice and languages for welcome gating and UI
-    refreshVoiceAndLanguages()
+    speech.refreshVoiceAndLanguages()
 
-        await refreshLanguagePreferences()
+        await speech.refreshLanguagePreferences()
         await refreshScanningSettings()
         await refreshParitySettings()
         // The startup workspace applies at launch only. Settings also refresh
         // these values, and must not switch the workspace the user is in.
         boardModeEnabled = startupUsesScreens
 
-        // Determine if Azure is configured (endpoint + key)
-        await refreshAzureConfiguration()
-        await refreshGoogleConfiguration()
-        await refreshElevenLabsConfiguration()
+        // Determine if cloud TTS providers are configured
+        await speech.refreshAllProviderConfigurations()
 
         // Start connectivity monitoring
         ConnectivityMonitor.shared.onChange { [weak self] online in
@@ -253,10 +251,8 @@ final class IosViewModel: ObservableObject {
         await loadTypingTray()
         await loadHistory()
         await refreshParitySettings()
-        await refreshAzureConfiguration()
-        await refreshGoogleConfiguration()
-        await refreshElevenLabsConfiguration()
-        refreshVoiceAndLanguages()
+        await speech.refreshAllProviderConfigurations()
+        _ = await speech.refreshVoiceAndLanguages().value
         await loadBoardSets()
     }
 
