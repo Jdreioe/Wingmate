@@ -580,18 +580,13 @@ internal fun ObfBoardContent(
             selectOnTouchDown = settings.selectOnTouchDown,
             selectOnTouchExit = settings.selectOnTouchExit,
         )
-        val touchExitDebouncer = remember(board.id) { SelectionDebouncer() }
+        // Shared across Touch Exit and per-Button actions (tap, dwell, switch, accessibility)
+        // so switching access methods within the debounce window cannot bypass the guard.
+        val boardDebouncer = remember(homeBoardId, board.id) { SelectionDebouncer() }
         val hapticView = LocalView.current
         val accessHost = LocalAccessInputHost.current
         val previewScope = rememberCoroutineScope()
-        val previewJobHolder = remember(board.id) { PreviewJobHolder() }
-        DisposableEffect(board.id, touchExitEligible) {
-            onDispose {
-                previewJobHolder.job?.cancel()
-                previewJobHolder.job = null
-                feedback.onCancelAuditoryCue()
-            }
-        }
+        val previewJobHolder = remember(homeBoardId, board.id) { PreviewJobHolder() }
         
         // Use Column/Row for fixed grid that fills the space
         BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit)) {
@@ -669,6 +664,13 @@ internal fun ObfBoardContent(
                     val effectiveTouchExitActive = touchExitEligible && rowsFitForTouchExit
                     val disableGridScroll = settings.selectOnTouchDown || effectiveTouchExitActive
                     val constrainHeight = scrollingMinimumCellHeight == null || disableGridScroll
+                    DisposableEffect(homeBoardId, board.id, effectiveTouchExitActive) {
+                        onDispose {
+                            previewJobHolder.job?.cancel()
+                            previewJobHolder.job = null
+                            feedback.onCancelAuditoryCue()
+                        }
+                    }
                     val boardTouchExit = if (effectiveTouchExitActive) {
                         BoardTouchExit(
                             isButtonSelectable = isVisible,
@@ -695,7 +697,7 @@ internal fun ObfBoardContent(
                                 previewJobHolder.job?.cancel()
                                 previewJobHolder.job = null
                                 feedback.onCancelAuditoryCue()
-                                val accepted = touchExitDebouncer.tryActivate(
+                                val accepted = boardDebouncer.tryActivate(
                                     button.id,
                                     Clock.System.now().toEpochMilliseconds(),
                                     settings.selectionDebounceMillis,
@@ -746,10 +748,7 @@ internal fun ObfBoardContent(
                     var previewHeightFraction by remember(
                         board.id,
                         board.gridHeightFraction,
-                        maxHeight,
-                        desiredVerticalGapDp,
-                        desiredOuterMarginDp,
-                        constrainHeight,
+                        defaultHeightFraction,
                     ) {
                         mutableFloatStateOf((board.gridHeightFraction ?: defaultHeightFraction).coerceIn(0.15f, 1f))
                     }
@@ -768,7 +767,7 @@ internal fun ObfBoardContent(
                     val verticalGapDp = effectiveSpacing.verticalGapDp.dp
                     val outerMarginDp = effectiveSpacing.outerMarginDp.dp
                     val availableGridHeight = (maxHeight - outerMarginDp * 2).coerceAtLeast(0.dp)
-                    val fittedHeight = availableGridHeight * previewHeightFraction
+                    val fittedHeight = availableGridHeight * effectiveSpacing.effectiveHeightFraction.toFloat()
                     // Touch-down and Touch Exit turn scrolling off, so every row must fit.
                     val contentHeight = scrollingMinimumCellHeight
                         ?.takeUnless { disableGridScroll }
@@ -806,6 +805,7 @@ internal fun ObfBoardContent(
                                 cellMenu = cellMenu,
                                 reorder = reorder,
                                 touchExit = boardTouchExit,
+                                gestureKey = homeBoardId to board.id,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
                                 onResizeField = onResizeField,
@@ -820,6 +820,7 @@ internal fun ObfBoardContent(
                                     ObfButtonContent(
                                         settings = settings,
                                         feedback = feedback,
+                                        debouncer = boardDebouncer,
                                         button = button,
                                         image = image,
                                         extractedImageBytes = button.imageId?.let {

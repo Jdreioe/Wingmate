@@ -152,6 +152,7 @@ struct TypingWorkspaceView: View {
                         model.undoPendingPhraseDeletion()
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(undo.isRestoring)
                     Button {
                         model.dismissPendingPhraseUndo()
                     } label: {

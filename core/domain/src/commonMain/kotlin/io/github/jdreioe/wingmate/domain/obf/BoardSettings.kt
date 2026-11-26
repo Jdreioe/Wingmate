@@ -67,6 +67,7 @@ data class EffectiveKeyguardSpacing(
     val horizontalGapDp: Double,
     val verticalGapDp: Double,
     val outerMarginDp: Double,
+    val effectiveHeightFraction: Double = 1.0,
 )
 
 fun effectiveKeyguardSpacing(
@@ -86,19 +87,30 @@ fun effectiveKeyguardSpacing(
     val clampedMargin = desiredOuterMarginDp.coerceAtLeast(0.0)
     val clampedHGap = desiredHorizontalGapDp.coerceAtLeast(0.0)
     val clampedVGap = desiredVerticalGapDp.coerceAtLeast(0.0)
+    val requestedFraction = heightFraction.coerceIn(0.15, 1.0)
     if (viewportWidthDp <= 0.0 || (constrainHeight && viewportHeightDp <= 0.0)) {
         return EffectiveKeyguardSpacing(
             horizontalGapDp = clampedHGap,
             verticalGapDp = clampedVGap,
             outerMarginDp = clampedMargin,
+            effectiveHeightFraction = requestedFraction,
         )
     }
 
     val minCell = minimumCellSizeDp.coerceAtLeast(1.0)
-    val clampedFraction = heightFraction.coerceIn(0.15, 1.0)
+    // When a saved gridHeightFraction would crush rows below minCell even with zero spacing,
+    // lift the rendered fraction just enough to keep cells usable while preserving the saved
+    // fraction on larger viewports.
+    val effectiveFraction = if (constrainHeight) {
+        val minRequiredHeight = minCell * safeRows
+        val minFraction = (minRequiredHeight / viewportHeightDp).coerceIn(0.15, 1.0)
+        maxOf(requestedFraction, minFraction)
+    } else {
+        requestedFraction
+    }
     val maxMarginX = ((viewportWidthDp - minCell * safeCols) / 2.0).coerceAtLeast(0.0)
     val effectiveMargin = if (constrainHeight) {
-        val maxMarginY = ((viewportHeightDp - (minCell * safeRows) / clampedFraction) / 2.0).coerceAtLeast(0.0)
+        val maxMarginY = ((viewportHeightDp - (minCell * safeRows) / effectiveFraction) / 2.0).coerceAtLeast(0.0)
         minOf(clampedMargin, maxMarginX, maxMarginY)
     } else {
         minOf(clampedMargin, maxMarginX)
@@ -112,7 +124,7 @@ fun effectiveKeyguardSpacing(
         clampedHGap
     }
     val effectiveVGap = if (constrainHeight && safeRows > 1) {
-        val effectiveContentHeight = (viewportHeightDp - effectiveMargin * 2.0).coerceAtLeast(0.0) * clampedFraction
+        val effectiveContentHeight = (viewportHeightDp - effectiveMargin * 2.0).coerceAtLeast(0.0) * effectiveFraction
         val maxGapY = ((effectiveContentHeight - minCell * safeRows) / (safeRows - 1)).coerceAtLeast(0.0)
         minOf(clampedVGap, maxGapY)
     } else {
@@ -122,6 +134,7 @@ fun effectiveKeyguardSpacing(
         horizontalGapDp = effectiveHGap,
         verticalGapDp = effectiveVGap,
         outerMarginDp = effectiveMargin,
+        effectiveHeightFraction = effectiveFraction,
     )
 }
 

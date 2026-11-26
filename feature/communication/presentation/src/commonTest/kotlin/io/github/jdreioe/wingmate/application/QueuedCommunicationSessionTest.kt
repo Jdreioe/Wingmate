@@ -421,6 +421,38 @@ class QueuedCommunicationSessionTest {
         assertEquals(CommunicationPlaybackStatus.Idle, session.state.value.playbackStatus)
     }
 
+    @Test
+    fun `delayed native preview stop finishes before committed speech starts`() = runTest {
+        val stopGate = CompletableDeferred<Unit>()
+        val speech = RecordingSpeechService(blockFirstRequest = true).apply {
+            this.stopGate = stopGate
+        }
+        val session = session(speechService = speech)
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("preview"), null, isPreview = true))
+        runCurrent()
+        speech.firstStarted.await()
+
+        // Cancel preview (native stop blocks on stopGate) and immediately enqueue committed speech.
+        session.accept(CommunicationAction.CancelPreview)
+        session.accept(CommunicationAction.SpeakPart(MessagePart("committed"), null, isPreview = false))
+        runCurrent()
+
+        // Committed speech MUST wait behind the stop barrier so the late preview stop cannot cut it off.
+        assertEquals(listOf("preview"), speech.spoken)
+        assertEquals(1, speech.stopCount)
+        assertEquals(1, session.state.value.queuedSpeechCount)
+
+        stopGate.complete(Unit)
+        runCurrent()
+
+        assertEquals(listOf("preview", "committed"), speech.spoken)
+        assertEquals(1, speech.stopCount)
+        assertEquals(0, session.state.value.queuedSpeechCount)
+        assertEquals(CommunicationPlaybackStatus.Idle, session.state.value.playbackStatus)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.session(
         dataSource: FakeSessionDataSource = FakeSessionDataSource(),
         speechService: RecordingSpeechService = RecordingSpeechService(),

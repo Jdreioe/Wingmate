@@ -661,7 +661,8 @@ internal fun BoardSetWorkspaceRoot(
                         // Only suppress swipe when the active Page actually installs the Touch Exit grid.
                         selectOnTouchExit = settings.selectOnTouchExit &&
                             activeBoard.grid != null &&
-                            !activeBoard.isAbsoluteLayout,
+                            !activeBoard.isAbsoluteLayout &&
+                            activeBoard.hasVisibleButton(showHiddenButtons),
                     ),
                     onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
                     modifier = Modifier.weight(1f).fillMaxWidth(),

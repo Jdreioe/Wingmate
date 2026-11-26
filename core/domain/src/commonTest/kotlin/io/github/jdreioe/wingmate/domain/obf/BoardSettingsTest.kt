@@ -320,9 +320,37 @@ class BoardSettingsTest {
             desiredOuterMarginDp = 8.0,
             heightFraction = 0.5,
         )
-        val halfContentHeight = (400.0 - halfHeight.outerMarginDp * 2.0) * 0.5
+        val halfContentHeight = (400.0 - halfHeight.outerMarginDp * 2.0) * halfHeight.effectiveHeightFraction
         val halfCellHeight = (halfContentHeight - halfHeight.verticalGapDp * 5.0) / 6.0
         assertTrue(halfCellHeight >= MIN_KEYGUARD_CELL_SIZE_DP - 0.001, "Expected cellHeight >= 24, got $halfCellHeight")
+
+        // Very small saved gridHeightFraction (30% of 400dp with 6 rows) lifts effectiveHeightFraction so cells stay >= 24dp,
+        // while a larger 1000dp tablet preserves the 30% fraction untouched.
+        val tinyFraction = effectiveKeyguardSpacing(
+            viewportWidthDp = 400.0,
+            viewportHeightDp = 400.0,
+            columns = 4,
+            rows = 6,
+            desiredHorizontalGapDp = 16.0,
+            desiredVerticalGapDp = 16.0,
+            desiredOuterMarginDp = 8.0,
+            heightFraction = 0.30,
+        )
+        val tinyContentHeight = (400.0 - tinyFraction.outerMarginDp * 2.0) * tinyFraction.effectiveHeightFraction
+        val tinyCellHeight = (tinyContentHeight - tinyFraction.verticalGapDp * 5.0) / 6.0
+        assertTrue(tinyCellHeight >= MIN_KEYGUARD_CELL_SIZE_DP - 0.001, "Expected cellHeight >= 24, got $tinyCellHeight")
+
+        val tabletSmallFraction = effectiveKeyguardSpacing(
+            viewportWidthDp = 1000.0,
+            viewportHeightDp = 1000.0,
+            columns = 4,
+            rows = 6,
+            desiredHorizontalGapDp = 16.0,
+            desiredVerticalGapDp = 16.0,
+            desiredOuterMarginDp = 8.0,
+            heightFraction = 0.30,
+        )
+        assertEquals(0.30, tabletSmallFraction.effectiveHeightFraction)
 
         // Scrollable Phrase trays (constrainHeight = false) preserve default margin and vertical gaps with many rows.
         val scrollable = effectiveKeyguardSpacing(

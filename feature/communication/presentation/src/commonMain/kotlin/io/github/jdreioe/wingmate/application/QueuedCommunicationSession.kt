@@ -86,29 +86,51 @@ class QueuedCommunicationSession(
         }
         scope.launch {
             for (request in speechRequests) {
-                // Take ownership of the queued count immediately so cancelling a lazy
-                // playback job before play() starts can never leak queuedSpeechCount.
-                mutableState.update { current ->
-                    current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
-                }
                 pendingStop.value?.join()
-                if (isStale(request)) continue
+                if (isStale(request)) {
+                    mutableState.update { current ->
+                        current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
+                    }
+                    continue
+                }
                 // Native Stop may cancel its caller. Give each request its own job so
                 // cancellation cannot terminate the consumer of future speech requests.
                 supervisorScope {
                     val playback = async(start = CoroutineStart.LAZY) { play(request) }
                     val active = ActiveSpeech(request, playback)
                     activeSpeech.value = active
-                    try {
-                        if (isStale(request)) {
-                            playback.cancel()
-                        } else {
-                            playback.await()
-                        }
-                    } catch (cancelled: CancellationException) {
-                        if (!currentCoroutineContext().isActive) throw cancelled
-                    } finally {
+                    if (isStale(request)) {
                         activeSpeech.compareAndSet(active, null)
+                        playback.cancel()
+                        mutableState.update { current ->
+                            current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
+                        }
+                    } else {
+                        // Atomically transition queued -> preparing so there is no Idle/0-queue gap.
+                        mutableState.update { current ->
+                            current.copy(
+                                playbackStatus = CommunicationPlaybackStatus.Preparing,
+                                currentSpeechRequestId = request.id,
+                                queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0),
+                            )
+                        }
+                        try {
+                            playback.await()
+                        } catch (cancelled: CancellationException) {
+                            if (!currentCoroutineContext().isActive) throw cancelled
+                        } finally {
+                            activeSpeech.compareAndSet(active, null)
+                            mutableState.update { current ->
+                                if (current.currentSpeechRequestId == request.id) {
+                                    current.copy(
+                                        playbackStatus = CommunicationPlaybackStatus.Idle,
+                                        currentSpeechRequestId = null,
+                                    )
+                                } else {
+                                    current
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -524,6 +546,10 @@ class QueuedCommunicationSession(
     private fun stop() {
         stopGeneration.update { it + 1 }
         val active = activeSpeech.getAndUpdate { null }
+        // Publish the stop barrier BEFORE cancelling active.job so the consumer loop
+        // cannot advance to a subsequent request before native speechService.stop() finishes.
+        val stopReady = CompletableDeferred<Unit>()
+        val previousStop = pendingStop.getAndUpdate { stopReady }
         active?.job?.cancel()
         pauseRequested.value = false
         var drained = 0
@@ -535,14 +561,15 @@ class QueuedCommunicationSession(
                 queuedSpeechCount = (current.queuedSpeechCount - drained).coerceAtLeast(0),
             )
         }
-        val previousStop = pendingStop.value
-        val stopping = scope.launch(start = CoroutineStart.LAZY) {
-            previousStop?.join()
-            active?.job?.join()
-            runCatching { speechService.stop() }.onFailure { markPlaybackFailure() }
+        scope.launch {
+            try {
+                previousStop?.join()
+                active?.job?.join()
+                runCatching { speechService.stop() }.onFailure { markPlaybackFailure() }
+            } finally {
+                stopReady.complete(Unit)
+            }
         }
-        pendingStop.value = stopping
-        stopping.start()
     }
 
     private fun cancelPreviews() {
@@ -550,6 +577,10 @@ class QueuedCommunicationSession(
         val active = activeSpeech.value ?: return
         if (!active.request.isPreview) return
         if (!activeSpeech.compareAndSet(active, null)) return
+        // Publish the stop barrier BEFORE cancelling active.job so a following committed
+        // speech request always waits for the preview's native stop() to complete first.
+        val stopReady = CompletableDeferred<Unit>()
+        val previousStop = pendingStop.getAndUpdate { stopReady }
         active.job.cancel()
         mutableState.update { state ->
             if (state.currentSpeechRequestId == active.request.id) {
@@ -561,14 +592,15 @@ class QueuedCommunicationSession(
                 state
             }
         }
-        val previousStop = pendingStop.value
-        val stopping = scope.launch(start = CoroutineStart.LAZY) {
-            previousStop?.join()
-            active.job.join()
-            runCatching { speechService.stop() }
+        scope.launch {
+            try {
+                previousStop?.join()
+                active.job.join()
+                runCatching { speechService.stop() }
+            } finally {
+                stopReady.complete(Unit)
+            }
         }
-        pendingStop.value = stopping
-        stopping.start()
     }
 
     private fun markPlaybackFailure() = markFailure(CommunicationFailureKind.Playback)

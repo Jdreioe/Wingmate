@@ -356,18 +356,34 @@ extension IosViewModel {
     }
 
     /// Mirrors confirmed deletion undo state from `PhraseListStore` so the banner only
-    /// appears after persistence succeeds, and never unlinks recordings still referenced
-    /// by active/held Messages or History.
+    /// appears after persistence succeeds, stays visible while a restore is in flight so
+    /// failed restores can be retried, and never unlinks recordings still referenced by
+    /// active/held Messages or History.
     func syncPhraseUndo(from storeState: Shared.PhraseListStoreState) {
         guard let undo = storeState.lastDeletedUndo else {
             pendingPhraseUndoTask?.cancel()
             pendingPhraseUndoTask = nil
-            if pendingPhraseUndo != nil {
+            if let current = pendingPhraseUndo {
+                if current.isRestoring {
+                    AccessHaptics.perform(.confirm)
+                }
                 pendingPhraseUndo = nil
             }
             return
         }
-        guard pendingPhraseUndo?.id != undo.id, !handledPhraseUndoIds.contains(undo.id) else { return }
+        if let current = pendingPhraseUndo, current.id == undo.id {
+            // If an in-flight restore failed, re-enable Undo so the Communicator can retry or dismiss.
+            if current.isRestoring, storeState.error != nil {
+                AccessHaptics.perform(.reject)
+                pendingPhraseUndo = PendingPhraseUndo(
+                    id: undo.id,
+                    includesSubItems: undo.includesSubItems,
+                    isRestoring: false
+                )
+            }
+            return
+        }
+        guard !dismissedPhraseUndoIds.contains(undo.id) else { return }
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
 
@@ -381,7 +397,10 @@ extension IosViewModel {
         if !UIAccessibility.isVoiceOverRunning && !UIAccessibility.isSwitchControlRunning {
             pendingPhraseUndoTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 6_000_000_000)
-                guard !Task.isCancelled, let self, self.pendingPhraseUndo?.id == entry.id else { return }
+                guard !Task.isCancelled, let self,
+                      let current = self.pendingPhraseUndo,
+                      current.id == entry.id,
+                      !current.isRestoring else { return }
                 self.dismissPendingPhraseUndo()
             }
         }
@@ -390,10 +409,13 @@ extension IosViewModel {
     func undoPendingPhraseDeletion() {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
-        guard let pending = pendingPhraseUndo else { return }
-        handledPhraseUndoIds.insert(pending.id)
-        pendingPhraseUndo = nil
-        AccessHaptics.perform(.confirm)
+        guard let pending = pendingPhraseUndo, !pending.isRestoring else { return }
+        // Keep the banner visible with Undo disabled until the store confirms restore or reports an error.
+        pendingPhraseUndo = PendingPhraseUndo(
+            id: pending.id,
+            includesSubItems: pending.includesSubItems,
+            isRestoring: true
+        )
         store?.accept(intent: Shared.PhraseListStoreIntent.UndoLastDeletion(undoId: pending.id))
     }
 
@@ -401,7 +423,7 @@ extension IosViewModel {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
         guard let pending = pendingPhraseUndo else { return }
-        handledPhraseUndoIds.insert(pending.id)
+        dismissedPhraseUndoIds.insert(pending.id)
         pendingPhraseUndo = nil
         store?.accept(intent: Shared.PhraseListStoreIntent.DismissDeletionUndo(undoId: pending.id))
     }

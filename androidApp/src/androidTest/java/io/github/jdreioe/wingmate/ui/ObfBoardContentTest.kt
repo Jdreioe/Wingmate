@@ -474,6 +474,42 @@ class ObfBoardContentTest {
         }
     }
 
+    @Test
+    fun touchExitCancelsWhenPageIdentityChangesMidGesture() {
+        val clicked = mutableListOf<String>()
+        var cancelCount = 0
+        var activeBoard by mutableStateOf(board.copy(id = "page-a"))
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = ObfBoardUiState(
+                        board = activeBoard,
+                        settings = Settings(selectOnTouchExit = true),
+                    ),
+                    onButtonClick = { clicked += "${activeBoard.id}:${it.id}" },
+                    feedback = BoardFeedback(onCancelAuditoryCue = { cancelCount++ }),
+                )
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesLocal = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot.center - gridBounds.topLeft
+
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        // Swap to a different Page with the exact same grid shape and items while finger is held down.
+        composeRule.runOnIdle { activeBoard = board.copy(id = "page-b") }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(emptyList<String>(), clicked)
+            assert(cancelCount > 0)
+        }
+    }
+
     private fun SemanticsNodeInteraction.runCustomAction(label: String) {
         val action = fetchSemanticsNode().config[SemanticsActions.CustomActions].single { it.label == label }
         composeRule.runOnUiThread { action.action() }

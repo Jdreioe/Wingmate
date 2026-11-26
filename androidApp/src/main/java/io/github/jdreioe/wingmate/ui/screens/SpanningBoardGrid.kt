@@ -194,6 +194,7 @@ internal fun SpanningBoardGrid(
     reorder: BoardReorder? = null,
     cellMenu: BoardCellMenu? = null,
     touchExit: BoardTouchExit? = null,
+    gestureKey: Any = Unit,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     // The Button whose launcher-style menu (Edit, Resize, Remove) is open, by its anchor cell.
@@ -213,11 +214,13 @@ internal fun SpanningBoardGrid(
     val verticalGapPx = with(density) { verticalGapDp.roundToPx() }
     val touchExitEnabled = touchExit != null
     val touchExitController = remember { TouchExitController() }
-    var touchExitActiveButtonId by remember(items, touchExitEnabled) { mutableStateOf<String?>(null) }
-    DisposableEffect(items, touchExitEnabled) {
+    var touchExitActiveButtonId by remember(gestureKey, items, touchExitEnabled) { mutableStateOf<String?>(null) }
+    val currentTouchExit by rememberUpdatedState(touchExit)
+    DisposableEffect(gestureKey, items, touchExitEnabled) {
         onDispose {
             touchExitController.cancel()
             touchExitActiveButtonId = null
+            currentTouchExit?.onCancel?.invoke()
         }
     }
 
@@ -556,12 +559,13 @@ internal fun SpanningBoardGrid(
     } else {
         Modifier
     }
-    val currentTouchExit by rememberUpdatedState(touchExit)
     val currentItems by rememberUpdatedState(items)
     val currentHorizontalGapPx by rememberUpdatedState(horizontalGapPx)
     val currentVerticalGapPx by rememberUpdatedState(verticalGapPx)
     val touchExitModifier = if (touchExitEnabled && onMove == null) {
-        Modifier.pointerInput(rows, columns) {
+        // Key by gestureKey (Page identity) as well as grid dimensions so a held finger
+        // never carries across a Page transition onto an identically shaped destination grid.
+        Modifier.pointerInput(gestureKey, rows, columns) {
             fun selectableItemAt(position: Offset): BoardGridItem? {
                 val activeTouchExit = currentTouchExit ?: return null
                 if (gridSizePx.width <= 0 || gridSizePx.height <= 0) return null

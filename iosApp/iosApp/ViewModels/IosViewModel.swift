@@ -204,7 +204,7 @@ final class IosViewModel: ObservableObject {
     var lookedUpPageIds: Set<String> = []
     @Published var pendingPhraseUndo: PendingPhraseUndo? = nil
     var pendingPhraseUndoTask: Task<Void, Never>? = nil
-    var handledPhraseUndoIds: Set<Int64> = []
+    var dismissedPhraseUndoIds: Set<Int64> = []
 
     init() {
         accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
@@ -284,6 +284,7 @@ final class IosViewModel: ObservableObject {
 struct PendingPhraseUndo: Equatable {
     let id: Int64
     let includesSubItems: Bool
+    var isRestoring: Bool = false
 }
 
 /// The OpenSymbols proxy from Info.plist, or the environment in development builds.

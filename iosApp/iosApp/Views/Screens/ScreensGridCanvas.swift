@@ -54,10 +54,11 @@ extension SymbolBoardWorkspaceView {
                 )
                 let gridGap = CGFloat(min(effectiveSpacing.horizontalGapDp, effectiveSpacing.verticalGapDp))
                 let gridInset = CGFloat(effectiveSpacing.outerMarginDp)
+                let effectiveFraction = CGFloat(effectiveSpacing.effectiveHeightFraction)
                 let availableHeight = max(0, geometry.size.height - (gridInset * 2))
                 let availableWidth = max(0, geometry.size.width - (gridInset * 2))
 
-                let contentHeight = max(0, availableHeight * fraction)
+                let contentHeight = max(0, availableHeight * effectiveFraction)
                 let contentWidth = max(0, availableWidth)
                 let foldLayout = BoardFoldLayout.compute(
                     rows: rows,

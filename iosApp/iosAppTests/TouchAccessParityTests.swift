@@ -162,9 +162,41 @@ final class TouchAccessParityTests: XCTestCase {
             constrainHeight: true
         )
         let halfGap = min(halfHeight.horizontalGapDp, halfHeight.verticalGapDp)
-        let halfContentHeight = (400 - halfHeight.outerMarginDp * 2) * 0.5
+        let halfContentHeight = (400 - halfHeight.outerMarginDp * 2) * halfHeight.effectiveHeightFraction
         let halfCellHeight = (halfContentHeight - halfGap * 5) / 6
         XCTAssertGreaterThanOrEqual(halfCellHeight, BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP - 0.001)
+
+        // Small saved fraction (0.30 on 400pt with 6 rows) lifts effectiveHeightFraction so cells stay >= 24pt.
+        let tinyFraction = BoardSettingsKt.effectiveKeyguardSpacing(
+            viewportWidthDp: 400,
+            viewportHeightDp: 400,
+            columns: 4,
+            rows: 6,
+            desiredHorizontalGapDp: 16,
+            desiredVerticalGapDp: 16,
+            desiredOuterMarginDp: 8,
+            minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP,
+            heightFraction: 0.30,
+            constrainHeight: true
+        )
+        let tinyGap = min(tinyFraction.horizontalGapDp, tinyFraction.verticalGapDp)
+        let tinyContentHeight = (400 - tinyFraction.outerMarginDp * 2) * tinyFraction.effectiveHeightFraction
+        let tinyCellHeight = (tinyContentHeight - tinyGap * 5) / 6
+        XCTAssertGreaterThanOrEqual(tinyCellHeight, BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP - 0.001)
+
+        let tabletFraction = BoardSettingsKt.effectiveKeyguardSpacing(
+            viewportWidthDp: 1000,
+            viewportHeightDp: 1000,
+            columns: 4,
+            rows: 6,
+            desiredHorizontalGapDp: 16,
+            desiredVerticalGapDp: 16,
+            desiredOuterMarginDp: 8,
+            minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP,
+            heightFraction: 0.30,
+            constrainHeight: true
+        )
+        XCTAssertEqual(tabletFraction.effectiveHeightFraction, 0.30, accuracy: 0.001)
 
         // Explicit 0 pt on a Page overrides a non-zero Screen keyguard spacing.
         let screen = BoardSettingsOverrides(
@@ -203,5 +235,55 @@ final class TouchAccessParityTests: XCTestCase {
         XCTAssertEqual(model.accessInput.rearmDelayMillis, ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
         model.setDwellRearmDelayMillis(250)
         XCTAssertEqual(model.accessInput.rearmDelayMillis, 250)
+    }
+
+    @MainActor
+    func testIosPhraseUndoRemainsRecoverableAfterFailedRestore() {
+        let model = IosViewModel()
+        let undo = Shared.PhraseListStoreDeletedPhraseUndo(
+            id: 42,
+            phrases: [],
+            originalIndices: [],
+            includesSubItems: false
+        )
+        let deletedState = Shared.PhraseListStoreState(
+            phrases: [],
+            categories: [],
+            selectedCategoryId: nil,
+            isLoading: false,
+            error: nil,
+            lastDeletedUndo: undo
+        )
+        model.syncPhraseUndo(from: deletedState)
+        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
+
+        // Tapping Undo disables the Undo button while restore is in flight and keeps the banner visible.
+        model.undoPendingPhraseDeletion()
+        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
+
+        // A failed restore keeps the same undo entry and re-enables Undo so the Communicator can retry.
+        let failedState = Shared.PhraseListStoreState(
+            phrases: [],
+            categories: [],
+            selectedCategoryId: nil,
+            isLoading: false,
+            error: "disk full",
+            lastDeletedUndo: undo
+        )
+        model.syncPhraseUndo(from: failedState)
+        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
+
+        // Retrying and succeeding clears lastDeletedUndo and hides the banner.
+        model.undoPendingPhraseDeletion()
+        let restoredState = Shared.PhraseListStoreState(
+            phrases: [],
+            categories: [],
+            selectedCategoryId: nil,
+            isLoading: false,
+            error: nil,
+            lastDeletedUndo: nil
+        )
+        model.syncPhraseUndo(from: restoredState)
+        XCTAssertNil(model.pendingPhraseUndo)
     }
 }
