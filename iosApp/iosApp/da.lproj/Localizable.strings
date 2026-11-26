@@ -613,7 +613,7 @@
 "settings.accessibility.touch_down" = "Vælg ved berøring";
 "settings.accessibility.touch_down.footer" = "Vælg én gang ved første berøring. Bevægelse bagefter kan ikke fortryde valget. Hold for at vælge har forrang. Ordforrådsgitre stopper med at rulle, og sidestrygning slås fra.";
 "settings.accessibility.touch_exit" = "Berøringsslip (glid for at rette)";
-"settings.accessibility.touch_exit.footer" = "Glid fingeren hen over knapper for at fremhæve og lytte til dem, slip på en knap for at vælge den, eller glid væk for at annullere. Gitre stopper med at rulle, og sidestrygning slås fra.";
+"settings.accessibility.touch_exit.footer" = "Glid fingeren hen over knapper for at fremhæve og lytte til dem, slip på en knap for at vælge den, eller glid væk for at annullere. På skærme stopper gitre med at rulle, og sidestrygning slås fra.";
 "settings.accessibility.dwell_rearm" = "Dwell-forsinkelse efter målskift";
 "settings.accessibility.dwell_rearm.footer" = "Vent så længe efter skift til et nyt mål, før dwell-timing starter. Højere værdier filtrerer rystelser.";
 "board_settings.keyguard_spacing" = "Afstand til skærmgitter";
@@ -628,7 +628,7 @@
 "action.undo" = "Fortryd";
 "common.close" = "Luk";
 "settings.accessibility.swipe_pages" = "Stryg mellem sider";
-"settings.accessibility.swipe_pages.footer" = "Stryg vandret til nabosiden i skærmens rækkefølge. Første og sidste side går ikke rundt. Hold for at vælge, valg ved berøring og berøringsslip deaktiverer sidestrygning.";
+"settings.accessibility.swipe_pages.footer" = "Stryg vandret til nabosiden i skærmens rækkefølge. Første og sidste side går ikke rundt. Hold for at vælge og valg ved berøring deaktiverer sidestrygning, og berøringsslip deaktiverer sidestrygning på skærme.";
 "boardset.background_image" = "Sidens baggrundsbillede";
 "boardset.background_choose" = "Vælg eller erstat billede";
 "boardset.background_fit" = "Tilpas";

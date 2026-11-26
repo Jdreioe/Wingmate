@@ -618,12 +618,13 @@ class ObfBoardContentTest {
             }
         }
 
-        val grid = composeRule.onNodeWithTag("board-grid")
-        val bounds = grid.fetchSemanticsNode().boundsInRoot
+        composeRule.onNodeWithTag("board-grid").assertDoesNotExist()
+        val emptyPage = composeRule.onNodeWithTag("board-empty")
+        val bounds = emptyPage.fetchSemanticsNode().boundsInRoot
         val start = Offset(bounds.width * 0.8f, bounds.height * 0.5f)
         val end = Offset(bounds.width * 0.2f, bounds.height * 0.5f)
 
-        grid.performTouchInput {
+        emptyPage.performTouchInput {
             down(start)
             moveTo(end)
             up()

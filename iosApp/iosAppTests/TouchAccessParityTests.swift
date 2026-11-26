@@ -514,13 +514,14 @@ final class TouchAccessParityTests: XCTestCase {
         XCTAssertTrue(model.boardCellsReady(for: pageId))
         XCTAssertFalse(observedLoadedIds.contains(nil), "Same-Page reload must not clear readiness")
 
-        // A missing/failed Page load must mark boardCellsLoadFailedPageId so retry UI appears.
+        // A missing/failed Page load must mark boardCellsLoadFailedPageId so retry UI appears
+        // without polluting the shared workspace status banner.
         let missingPageId = "missing-page-\(UUID().uuidString)"
         model.selectedBoardId = missingPageId
         await model.loadSelectedBoard()
         XCTAssertFalse(model.boardCellsReady(for: missingPageId))
         XCTAssertEqual(model.boardCellsLoadFailedPageId, missingPageId)
-        XCTAssertNotNil(model.boardStatusMessage)
+        XCTAssertNil(model.boardStatusMessage)
 
         try? await model.boardsFacade.deleteBoardSet(id: createdSet.id)
     }

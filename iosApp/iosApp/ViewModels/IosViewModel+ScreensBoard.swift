@@ -64,27 +64,31 @@ extension IosViewModel {
         }
     }
 
+    private func resetSelectedBoardState(failedPageId: String? = nil) {
+        selectedBoard = nil
+        loadedBoardCellsPageId = nil
+        boardCellsLoadFailedPageId = failedPageId
+        boardCells = []
+        boardFieldItems = []
+        selectedBoardKeyboardLayout = nil
+        selectedBoardUsesSpellingMode = false
+        boardPredictionsByButtonId = [:]
+        resolvedBoardShowLabels = nil
+        resolvedBoardShowSymbols = nil
+        resolvedBoardLabelAtTop = nil
+        resolvedBoardShowMessageBar = nil
+        resolvedBoardShowSpeakButton = nil
+        resolvedBoardMessageBarActions = nil
+        resolvedBoardActivationBehavior = nil
+        resolvedBoardSpeechPolicy = nil
+        resolvedBoardReturnBehavior = nil
+        resolvedBoardCellGapDp = nil
+        resolvedBoardOuterMarginDp = nil
+    }
+
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
-            loadedBoardCellsPageId = nil
-            boardCellsLoadFailedPageId = nil
-            selectedBoard = nil
-            boardCells = []
-            boardFieldItems = []
-            selectedBoardKeyboardLayout = nil
-            selectedBoardUsesSpellingMode = false
-            boardPredictionsByButtonId = [:]
-            resolvedBoardShowLabels = nil
-            resolvedBoardShowSymbols = nil
-            resolvedBoardLabelAtTop = nil
-            resolvedBoardShowMessageBar = nil
-            resolvedBoardShowSpeakButton = nil
-            resolvedBoardMessageBarActions = nil
-            resolvedBoardActivationBehavior = nil
-            resolvedBoardSpeechPolicy = nil
-            resolvedBoardReturnBehavior = nil
-            resolvedBoardCellGapDp = nil
-            resolvedBoardOuterMarginDp = nil
+            resetSelectedBoardState(failedPageId: nil)
             return
         }
         // Preserve readiness across same-Page reloads (settings save, lock toggle, background sync)
@@ -94,23 +98,23 @@ extension IosViewModel {
         }
         boardCellsLoadFailedPageId = nil
         do {
+            // Stage board, resolved settings, cells, and field items before publishing any of them
+            // so a same-Page reload never renders new grid geometry against stale Buttons.
             guard let loadedBoard = try await boardsFacade.getBoard(id: id) else {
                 guard selectedBoardId == id else { return }
-                selectedBoard = nil
-                loadedBoardCellsPageId = nil
-                boardCellsLoadFailedPageId = id
-                boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
-                boardCells = []
-                boardFieldItems = []
+                resetSelectedBoardState(failedPageId: id)
                 return
             }
-            guard selectedBoardId == id else { return }
-            selectedBoard = loadedBoard
-            boardBackgroundImageUrl = selectedBoard.flatMap { boardsFacade.backgroundImageUrl(board: $0) }
-            boardBackgroundImageFit = selectedBoard.map { boardsFacade.backgroundImageFit(board: $0) } ?? "Fill"
-            await refreshSelectedBoardMetadata()
             let resolved = try? await boardsFacade.resolveBoardSettings(boardId: id)
+            let cells = try await boardsFacade.listBoardCells(boardId: id)
+            let fields = try await boardsFacade.listBoardFieldItems(boardId: id)
             guard selectedBoardId == id else { return }
+
+            selectedBoard = loadedBoard
+            boardBackgroundImageUrl = boardsFacade.backgroundImageUrl(board: loadedBoard)
+            boardBackgroundImageFit = boardsFacade.backgroundImageFit(board: loadedBoard)
+            selectedBoardKeyboardLayout = boardsFacade.boardKeyboardLayout(board: loadedBoard)
+            selectedBoardUsesSpellingMode = boardsFacade.boardUsesSpellingMode(board: loadedBoard)
             resolvedBoardShowLabels = resolved?.showLabels
             resolvedBoardShowSymbols = resolved?.showSymbols
             resolvedBoardLabelAtTop = resolved?.labelAtTop
@@ -122,33 +126,49 @@ extension IosViewModel {
             resolvedBoardReturnBehavior = resolved?.returnBehavior
             resolvedBoardCellGapDp = resolved?.cellGapDp?.intValue
             resolvedBoardOuterMarginDp = resolved?.outerMarginDp?.intValue
-            let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let boardName = loadedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !boardName.isEmpty {
                 boardNamesById[id] = boardName
             }
-            await refreshBoardCells()
+            boardCells = cells.map { cell in
+                BoardCellInfo(
+                    row: Int(cell.row),
+                    col: Int(cell.col),
+                    buttonId: cell.buttonId,
+                    label: cell.label,
+                    vocalization: cell.vocalization,
+                    backgroundColor: cell.backgroundColor,
+                    resolvedBackgroundColor: cell.resolvedBackgroundColor,
+                    wordType: cell.wordType,
+                    borderColor: cell.borderColor,
+                    linkedBoardId: cell.linkedBoardId,
+                    imageId: cell.imageId,
+                    imageUrl: cell.imageUrl,
+                    hidden: cell.hidden,
+                    actions: cell.actions,
+                    soundId: cell.soundId,
+                    soundDataUrl: cell.soundDataUrl,
+                    soundPath: cell.soundPath,
+                    shape: cell.shape,
+                    language: cell.language,
+                    mathMode: cell.mathMode
+                )
+            }
+            boardFieldItems = fields.map { field in
+                BoardFieldItem(
+                    row: Int(field.row),
+                    column: Int(field.column),
+                    rowSpan: Int(field.rowSpan),
+                    columnSpan: Int(field.columnSpan),
+                    buttonId: field.buttonId
+                )
+            }
+            loadedBoardCellsPageId = id
+            boardCellsLoadFailedPageId = nil
+            rememberScreenButtonLooks()
         } catch {
             guard selectedBoardId == id else { return }
-            selectedBoard = nil
-            loadedBoardCellsPageId = nil
-            boardCellsLoadFailedPageId = id
-            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
-            boardCells = []
-            boardFieldItems = []
-            selectedBoardKeyboardLayout = nil
-            selectedBoardUsesSpellingMode = false
-            boardPredictionsByButtonId = [:]
-            resolvedBoardShowLabels = nil
-            resolvedBoardShowSymbols = nil
-            resolvedBoardLabelAtTop = nil
-            resolvedBoardShowMessageBar = nil
-            resolvedBoardShowSpeakButton = nil
-            resolvedBoardMessageBarActions = nil
-            resolvedBoardActivationBehavior = nil
-            resolvedBoardSpeechPolicy = nil
-            resolvedBoardReturnBehavior = nil
-            resolvedBoardCellGapDp = nil
-            resolvedBoardOuterMarginDp = nil
+            resetSelectedBoardState(failedPageId: id)
         }
     }
 
@@ -215,7 +235,6 @@ extension IosViewModel {
             guard selectedBoardId == boardId else { return }
             loadedBoardCellsPageId = nil
             boardCellsLoadFailedPageId = boardId
-            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
             boardCells = []
             boardFieldItems = []
         }

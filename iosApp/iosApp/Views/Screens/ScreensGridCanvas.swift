@@ -146,7 +146,7 @@ extension SymbolBoardWorkspaceView {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .scrollDisabled((model.selectOnTouchDown || touchExitActive) && !isEditMode)
                 .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
-                    guard !isEditMode, !touchExitActive, abs(value.translation.width) >= 64,
+                    guard !isEditMode, abs(value.translation.width) >= 64,
                           abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
                     Task {
                         await model.swipePage(
@@ -170,6 +170,12 @@ extension SymbolBoardWorkspaceView {
                 .onChange(of: model.loadedBoardCellsPageId) { _, _ in
                     if !model.boardCellsReady(for: board.id) { cancelTouchExit() }
                 }
+                .onChange(of: model.boardFieldItems) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.boardCells) { _, _ in
+                    cancelTouchExit()
+                }
                 .onDisappear {
                     cancelTouchExit()
                 }
@@ -179,7 +185,7 @@ extension SymbolBoardWorkspaceView {
             .transition(.opacity)
         } else if let pageId = model.selectedBoardId, model.boardCellsLoadFailedPageId == pageId {
             VStack(spacing: 12) {
-                Text(model.boardStatusMessage ?? NSLocalizedString("board_sets.error.load_failed", comment: ""))
+                Text(NSLocalizedString("board_sets.error.load_failed", comment: ""))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

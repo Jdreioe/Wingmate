@@ -508,7 +508,7 @@
 "settings.accessibility.touch_down" = "Bei Berührung auswählen";
 "settings.accessibility.touch_down.footer" = "Einmal beim ersten Kontakt auswählen. Eine spätere Bewegung kann dies nicht rückgängig machen. Gedrückthalten hat Vorrang. Vokabularraster werden nicht gescrollt und Seitenwischen ist deaktiviert.";
 "settings.accessibility.touch_exit" = "Beim Loslassen auswählen (Wischen zum Korrigieren)";
-"settings.accessibility.touch_exit.footer" = "Fahre mit dem Finger über Tasten, um sie hervorzuheben und anzuhören, hebe auf einer Taste ab zum Auswählen oder wische weg zum Abbrechen. Raster werden nicht gescrollt und Seitenwischen ist deaktiviert.";
+"settings.accessibility.touch_exit.footer" = "Fahre mit dem Finger über Tasten, um sie hervorzuheben und anzuhören, hebe auf einer Taste ab zum Auswählen oder wische weg zum Abbrechen. Auf Bildschirmen werden Raster nicht gescrollt und Seitenwischen ist deaktiviert.";
 "settings.accessibility.dwell_rearm" = "Verweil-Verzögerung nach Zielwechsel";
 "settings.accessibility.dwell_rearm.footer" = "Warte nach einem Zielwechsel so lange, bis die Verweilzeit startet. Höhere Werte filtern Zittern.";
 "board_settings.keyguard_spacing" = "Fingerführungs-Abstände";
@@ -523,7 +523,7 @@
 "action.undo" = "Rückgängig";
 "common.close" = "Schließen";
 "settings.accessibility.swipe_pages" = "Zwischen Seiten wischen";
-"settings.accessibility.swipe_pages.footer" = "Horizontal zur Nachbarseite in Bildschirmreihenfolge wischen. Die erste und letzte Seite bilden keinen Umlauf. Gedrückthalten, Auswahl bei Berührung und Auswahl beim Loslassen deaktivieren das Wischen.";
+"settings.accessibility.swipe_pages.footer" = "Horizontal zur Nachbarseite in Bildschirmreihenfolge wischen. Die erste und letzte Seite bilden keinen Umlauf. Gedrückthalten und Auswahl bei Berührung deaktivieren das Wischen, und Auswahl beim Loslassen deaktiviert das Wischen auf Bildschirmen.";
 "boardset.background_image" = "Seitenhintergrundbild";
 "boardset.background_choose" = "Bild auswählen oder ersetzen";
 "boardset.background_fit" = "Einpassen";

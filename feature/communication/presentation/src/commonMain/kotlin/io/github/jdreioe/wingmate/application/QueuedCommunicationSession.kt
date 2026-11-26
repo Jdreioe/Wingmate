@@ -66,8 +66,7 @@ class QueuedCommunicationSession(
     private val stopGeneration = MutableStateFlow(0L)
     private val previewGeneration = MutableStateFlow(0L)
     private val pauseRequested = MutableStateFlow(false)
-    private val pendingStop = MutableStateFlow<Job?>(null)
-    private val activeSpeech = MutableStateFlow<ActiveSpeech?>(null)
+    private val speechControl = MutableStateFlow(SpeechControlState())
     private var initialLoadFailed = false
     private var speechRequestSequence = 0L
     private var failureSequence = 0L
@@ -86,21 +85,34 @@ class QueuedCommunicationSession(
         }
         scope.launch {
             for (request in speechRequests) {
-                pendingStop.value?.join()
-                if (isStale(request)) {
-                    mutableState.update { current ->
-                        current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
-                    }
-                    continue
-                }
                 // Native Stop may cancel its caller. Give each request its own job so
                 // cancellation cannot terminate the consumer of future speech requests.
                 supervisorScope {
                     val playback = async(start = CoroutineStart.LAZY) { play(request) }
                     val active = ActiveSpeech(request, playback)
-                    activeSpeech.value = active
+                    var claimed = false
+                    while (true) {
+                        val current = speechControl.value
+                        val stopJob = current.pendingStop
+                        if (stopJob != null && !stopJob.isCompleted) {
+                            stopJob.join()
+                            continue
+                        }
+                        if (isStale(request)) {
+                            playback.cancel()
+                            mutableState.update { state ->
+                                state.copy(queuedSpeechCount = (state.queuedSpeechCount - 1).coerceAtLeast(0))
+                            }
+                            break
+                        }
+                        if (speechControl.compareAndSet(current, SpeechControlState(active = active, pendingStop = null))) {
+                            claimed = true
+                            break
+                        }
+                    }
+                    if (!claimed) return@supervisorScope
                     if (isStale(request)) {
-                        activeSpeech.compareAndSet(active, null)
+                        releaseActiveSpeech(active)
                         playback.cancel()
                         mutableState.update { current ->
                             current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
@@ -119,7 +131,7 @@ class QueuedCommunicationSession(
                         } catch (cancelled: CancellationException) {
                             if (!currentCoroutineContext().isActive) throw cancelled
                         } finally {
-                            activeSpeech.compareAndSet(active, null)
+                            releaseActiveSpeech(active)
                             mutableState.update { current ->
                                 if (current.currentSpeechRequestId == request.id) {
                                     current.copy(
@@ -543,14 +555,23 @@ class QueuedCommunicationSession(
         }
     }
 
+    private fun releaseActiveSpeech(active: ActiveSpeech) {
+        while (true) {
+            val current = speechControl.value
+            if (current.active !== active) return
+            if (speechControl.compareAndSet(current, current.copy(active = null))) return
+        }
+    }
+
     private fun stop() {
         stopGeneration.update { it + 1 }
-        val active = activeSpeech.getAndUpdate { null }
-        // Publish the stop barrier BEFORE cancelling active.job so the consumer loop
-        // cannot advance to a subsequent request before native speechService.stop() finishes.
+        // Atomically clear active speech and publish the stop barrier in one transition so
+        // the consumer loop cannot claim the next request before native speechService.stop() finishes.
         val stopReady = CompletableDeferred<Unit>()
-        val previousStop = pendingStop.getAndUpdate { stopReady }
-        active?.job?.cancel()
+        val previous = speechControl.getAndUpdate {
+            SpeechControlState(active = null, pendingStop = stopReady)
+        }
+        previous.active?.job?.cancel()
         pauseRequested.value = false
         var drained = 0
         while (speechRequests.tryReceive().isSuccess) drained++
@@ -563,8 +584,8 @@ class QueuedCommunicationSession(
         }
         scope.launch {
             try {
-                previousStop?.join()
-                active?.job?.join()
+                previous.pendingStop?.join()
+                previous.active?.job?.join()
                 runCatching { speechService.stop() }.onFailure { markPlaybackFailure() }
             } finally {
                 stopReady.complete(Unit)
@@ -574,13 +595,23 @@ class QueuedCommunicationSession(
 
     private fun cancelPreviews() {
         previewGeneration.update { it + 1 }
-        val active = activeSpeech.value ?: return
-        if (!active.request.isPreview) return
-        if (!activeSpeech.compareAndSet(active, null)) return
-        // Publish the stop barrier BEFORE cancelling active.job so a following committed
-        // speech request always waits for the preview's native stop() to complete first.
+        // Atomically claim the active preview and publish its stop barrier in a single CAS so
+        // natural preview completion cannot race into starting a queued committed utterance
+        // before native speechService.stop() finishes.
         val stopReady = CompletableDeferred<Unit>()
-        val previousStop = pendingStop.getAndUpdate { stopReady }
+        var cancelledPreview: ActiveSpeech? = null
+        var previousStop: Job? = null
+        while (true) {
+            val current = speechControl.value
+            val active = current.active
+            if (active == null || !active.request.isPreview) return
+            if (speechControl.compareAndSet(current, SpeechControlState(active = null, pendingStop = stopReady))) {
+                cancelledPreview = active
+                previousStop = current.pendingStop
+                break
+            }
+        }
+        val active = cancelledPreview ?: return
         active.job.cancel()
         mutableState.update { state ->
             if (state.currentSpeechRequestId == active.request.id) {
@@ -633,6 +664,11 @@ class QueuedCommunicationSession(
 private data class ActiveSpeech(
     val request: SpeechRequest,
     val job: Job,
+)
+
+private data class SpeechControlState(
+    val active: ActiveSpeech? = null,
+    val pendingStop: Job? = null,
 )
 
 private data class SpeechRequest(
