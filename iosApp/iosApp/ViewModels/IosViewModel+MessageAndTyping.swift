@@ -372,14 +372,28 @@ extension IosViewModel {
             return
         }
         if let current = pendingPhraseUndo, current.id == undo.id {
-            // If an in-flight restore failed, re-enable Undo so the Communicator can retry or dismiss.
-            if current.isRestoring, storeState.error != nil {
-                AccessHaptics.perform(.reject)
-                pendingPhraseUndo = PendingPhraseUndo(
-                    id: undo.id,
-                    includesSubItems: undo.includesSubItems,
-                    isRestoring: false
-                )
+            // Drive banner state from the undo entry's own restoreStatus so unrelated store errors
+            // cannot prematurely re-enable Undo or play a reject haptic while restore is queued.
+            switch undo.restoreStatus {
+            case .restoring:
+                if !current.isRestoring {
+                    pendingPhraseUndo = PendingPhraseUndo(
+                        id: undo.id,
+                        includesSubItems: undo.includesSubItems,
+                        isRestoring: true
+                    )
+                }
+            case .failed:
+                if current.isRestoring {
+                    AccessHaptics.perform(.reject)
+                    pendingPhraseUndo = PendingPhraseUndo(
+                        id: undo.id,
+                        includesSubItems: undo.includesSubItems,
+                        isRestoring: false
+                    )
+                }
+            default:
+                break
             }
             return
         }
@@ -387,7 +401,11 @@ extension IosViewModel {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
 
-        let entry = PendingPhraseUndo(id: undo.id, includesSubItems: undo.includesSubItems)
+        let entry = PendingPhraseUndo(
+            id: undo.id,
+            includesSubItems: undo.includesSubItems,
+            isRestoring: undo.restoreStatus == .restoring
+        )
         pendingPhraseUndo = entry
 
         let messageKey = entry.includesSubItems ? "phrase.deleted_with_subitems" : "phrase.deleted"
@@ -410,7 +428,7 @@ extension IosViewModel {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
         guard let pending = pendingPhraseUndo, !pending.isRestoring else { return }
-        // Keep the banner visible with Undo disabled until the store confirms restore or reports an error.
+        // Keep the banner visible with Undo disabled until the store confirms restore or reports failure.
         pendingPhraseUndo = PendingPhraseUndo(
             id: pending.id,
             includesSubItems: pending.includesSubItems,
@@ -422,7 +440,7 @@ extension IosViewModel {
     func dismissPendingPhraseUndo() {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
-        guard let pending = pendingPhraseUndo else { return }
+        guard let pending = pendingPhraseUndo, !pending.isRestoring else { return }
         dismissedPhraseUndoIds.insert(pending.id)
         pendingPhraseUndo = nil
         store?.accept(intent: Shared.PhraseListStoreIntent.DismissDeletionUndo(undoId: pending.id))

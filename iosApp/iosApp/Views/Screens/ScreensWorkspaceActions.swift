@@ -44,8 +44,8 @@ extension SymbolBoardWorkspaceView {
             Task { await model.activateSelectedBoardCell(row: row, col: col, checkDebounce: false) }
             return
         }
-        // #118 / #405: enforce per-target debounce and confirm/reject haptics for every non-link Button.
-        guard model.acceptActivation(targetId: cell.buttonId) else { return }
+        // #118 / #405: enforce per-Page, per-Button debounce and confirm/reject haptics for every non-link Button.
+        guard model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: cell.buttonId)) else { return }
         if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
         if cell.actions.isEmpty {
             let behavior = model.boardActivationBehavior

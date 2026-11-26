@@ -77,7 +77,9 @@ import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -562,6 +564,7 @@ internal fun SpanningBoardGrid(
     val currentItems by rememberUpdatedState(items)
     val currentHorizontalGapPx by rememberUpdatedState(horizontalGapPx)
     val currentVerticalGapPx by rememberUpdatedState(verticalGapPx)
+    val currentLayoutDirection by rememberUpdatedState(LocalLayoutDirection.current)
     val touchExitModifier = if (touchExitEnabled && onMove == null) {
         // Key by gestureKey (Page identity) as well as grid dimensions so a held finger
         // never carries across a Page transition onto an identically shaped destination grid.
@@ -572,8 +575,8 @@ internal fun SpanningBoardGrid(
                 if (position.x < 0f || position.y < 0f || position.x >= gridSizePx.width || position.y >= gridSizePx.height) {
                     return null
                 }
-                // Match Layout's integer pixel math and half-open bounds so hit boxes never
-                // bleed into the visible keyguard gaps between Buttons.
+                // Match Layout's integer pixel math, half-open bounds, and RTL placeRelative
+                // mirroring so hit boxes match rendered cells in every locale direction.
                 val hGapPx = currentHorizontalGapPx
                 val vGapPx = currentVerticalGapPx
                 val availableWidth = (gridSizePx.width - hGapPx * (columns - 1)).coerceAtLeast(0)
@@ -581,13 +584,17 @@ internal fun SpanningBoardGrid(
                 val cellWidth = availableWidth / columns
                 val cellHeight = availableHeight / rows
                 if (cellWidth <= 0 || cellHeight <= 0) return null
+                val isRtl = currentLayoutDirection == LayoutDirection.Rtl
                 return currentItems.firstOrNull { item ->
                     val button = item.button ?: return@firstOrNull false
                     if (!activeTouchExit.isButtonSelectable(button)) return@firstOrNull false
-                    val left = item.column * (cellWidth + hGapPx)
+                    val itemWidth = cellWidth * item.columnSpan + hGapPx * (item.columnSpan - 1)
+                    val itemHeight = cellHeight * item.rowSpan + vGapPx * (item.rowSpan - 1)
+                    val ltrLeft = item.column * (cellWidth + hGapPx)
+                    val left = if (isRtl) gridSizePx.width - ltrLeft - itemWidth else ltrLeft
                     val top = item.row * (cellHeight + vGapPx)
-                    val right = left + cellWidth * item.columnSpan + hGapPx * (item.columnSpan - 1)
-                    val bottom = top + cellHeight * item.rowSpan + vGapPx * (item.rowSpan - 1)
+                    val right = left + itemWidth
+                    val bottom = top + itemHeight
                     position.x >= left && position.x < right && position.y >= top && position.y < bottom
                 }
             }

@@ -263,6 +263,8 @@ internal fun TypingScreenTray(
                     // below the Communicator's preferred minimum button size.
                     scrollingMinimumCellHeight = phraseRowHeight ?: (72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)),
                     scrollingMaximumCellHeight = phraseRowHeight,
+                    // Keep the Typing Phrase tray scrollable with finger-only long-press Edit/Delete/Reorder menus.
+                    allowTouchExit = false,
                     settings = settings,
                     focusedCell = focusedCell,
                     highlightedButtonId = selectionHighlight.buttonId,

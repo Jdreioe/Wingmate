@@ -1,10 +1,13 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -507,6 +510,58 @@ class ObfBoardContentTest {
         composeRule.runOnIdle {
             assertEquals(emptyList<String>(), clicked)
             assert(cancelCount > 0)
+        }
+    }
+
+    @Test
+    fun touchExitActivatesVisibleButtonInRtlLayout() {
+        val clicked = mutableListOf<String>()
+        val previews = mutableListOf<String>()
+        val twoButtonBoard = ObfBoard(
+            format = "open-board-0.1",
+            id = "rtl-test",
+            buttons = listOf(yes, no),
+            grid = ObfGrid(rows = 1, columns = 2, order = listOf(listOf("yes", "no"))),
+        )
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AppTheme {
+                    ObfBoardContent(
+                        state = ObfBoardUiState(
+                            board = twoButtonBoard,
+                            settings = Settings(selectOnTouchExit = true, auditoryFishingEnabled = true),
+                        ),
+                        onButtonClick = { clicked += it.id },
+                        feedback = BoardFeedback(onAuditoryCue = { _, label -> previews += label }),
+                    )
+                }
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesBounds = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot
+        val noBounds = composeRule.onNodeWithText("No").fetchSemanticsNode().boundsInRoot
+        // In RTL, column 0 ("Yes") renders on the right of column 1 ("No").
+        assert(yesBounds.center.x > noBounds.center.x)
+
+        val yesLocal = yesBounds.center - gridBounds.topLeft
+        val noLocal = noBounds.center - gridBounds.topLeft
+
+        grid.performTouchInput {
+            down(yesLocal)
+            up()
+        }
+        composeRule.waitForIdle()
+        grid.performTouchInput {
+            down(noLocal)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(listOf("Yes", "No"), previews)
+            assertEquals(listOf("yes", "no"), clicked)
         }
     }
 

@@ -10,12 +10,13 @@ extension SymbolBoardWorkspaceView {
             let cols = max(1, Int(board.grid?.columns ?? 1))
             let desiredGap = Double(model.resolvedBoardCellGapDp ?? 8)
             let desiredInset = Double(model.resolvedBoardOuterMarginDp ?? 8)
-            let touchExitActive = TouchExitControllerKt.touchExitIsActive(
-                isEditMode: isEditMode,
-                holdToSelectMillis: Int64(model.holdToSelectMillis),
-                selectOnTouchDown: model.selectOnTouchDown,
-                selectOnTouchExit: model.selectOnTouchExit
-            )
+            let touchExitActive = model.boardCellsReady(for: board.id) &&
+                TouchExitControllerKt.touchExitIsActive(
+                    isEditMode: isEditMode,
+                    holdToSelectMillis: Int64(model.holdToSelectMillis),
+                    selectOnTouchDown: model.selectOnTouchDown,
+                    selectOnTouchExit: model.selectOnTouchExit
+                )
 
             GeometryReader { geometry in
                 let isCompact = board.compactGrid
@@ -120,7 +121,7 @@ extension SymbolBoardWorkspaceView {
                     .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
                     .contentShape(Rectangle())
                     .highPriorityGesture(
-                        touchExitGesture(layout: foldLayout, isEditMode: isEditMode),
+                        touchExitGesture(pageId: board.id, layout: foldLayout, isEditMode: isEditMode),
                         including: touchExitActive ? .gesture : .subviews
                     )
                     .padding(gridInset)
@@ -149,6 +150,12 @@ extension SymbolBoardWorkspaceView {
                 }
                 .onChange(of: board.id) { _, _ in
                     cancelTouchExit()
+                }
+                .onChange(of: model.selectedBoardId) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.loadedBoardCellsPageId) { _, _ in
+                    if !model.boardCellsReady(for: board.id) { cancelTouchExit() }
                 }
                 .onDisappear {
                     cancelTouchExit()
@@ -536,13 +543,17 @@ extension SymbolBoardWorkspaceView {
         return nil
     }
 
-    func touchExitGesture(layout: BoardFoldLayout, isEditMode: Bool) -> some Gesture {
+    func touchExitGesture(pageId: String, layout: BoardFoldLayout, isEditMode: Bool) -> some Gesture {
         // Use .local so coordinates share the exact origin of the framed ZStack / foldLayout.
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .updating($touchExitGestureActive) { _, state, _ in
                 state = true
             }
             .onChanged { value in
+                guard model.boardCellsReady(for: pageId) else {
+                    cancelTouchExit()
+                    return
+                }
                 let previousTargetId = touchExitController.state.activeTargetId
                 let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
                 let effect: (any TouchExitEffect)?
@@ -567,6 +578,10 @@ extension SymbolBoardWorkspaceView {
             }
             .onEnded { value in
                 model.cancelPreviewSpeech()
+                guard model.boardCellsReady(for: pageId) else {
+                    cancelTouchExit()
+                    return
+                }
                 let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
                 let effect = touchExitController.release(targetId: hit?.cell.buttonId)
                 touchExitHighlightedButtonId = touchExitController.state.activeTargetId

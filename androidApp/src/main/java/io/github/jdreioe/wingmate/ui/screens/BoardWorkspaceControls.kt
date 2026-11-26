@@ -393,6 +393,7 @@ internal fun GridHeightResizeHandle(
     var dragFraction by remember { mutableFloatStateOf(currentFraction) }
     var dragStartFraction by remember { mutableFloatStateOf(currentFraction) }
     val latestCurrentFraction by rememberUpdatedState(currentFraction)
+    val latestAvailableHeightPx by rememberUpdatedState(availableHeightPx)
     val latestOnFractionPreview by rememberUpdatedState(onFractionPreview)
     val latestOnFractionCommit by rememberUpdatedState(onFractionCommit)
 
@@ -400,7 +401,7 @@ internal fun GridHeightResizeHandle(
         modifier = modifier
             .fillMaxWidth()
             .height(32.dp)
-            .pointerInput(availableHeightPx) {
+            .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = {
                         dragStartFraction = latestCurrentFraction
@@ -410,7 +411,7 @@ internal fun GridHeightResizeHandle(
                     onDragCancel = { latestOnFractionPreview(dragStartFraction) },
                     onVerticalDrag = { change, dragAmount ->
                         change.consume()
-                        dragFraction = (dragFraction - dragAmount / availableHeightPx).coerceIn(0.15f, 1f)
+                        dragFraction = (dragFraction - dragAmount / latestAvailableHeightPx).coerceIn(0.15f, 1f)
                         latestOnFractionPreview(dragFraction)
                     }
                 )

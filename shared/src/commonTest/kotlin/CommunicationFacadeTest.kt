@@ -239,6 +239,59 @@ class CommunicationFacadeTest {
         assertEquals(listOf(category, phrase), base.getAll())
     }
 
+    @Test
+    fun undoRestoreStatusIsScopedAndUnrelatedErrorsDoNotFailPendingUndo() = withFakeMain {
+        val base = InMemoryPhraseRepository()
+        val p1 = Phrase(id = "p-1", text = "Keep", createdAt = 1L)
+        val p2 = Phrase(id = "p-2", text = "Remove", createdAt = 2L)
+        base.add(p1)
+        base.add(p2)
+        var failRestore = true
+        val repo = object : PhraseRepository by base {
+            override suspend fun update(phrase: Phrase): Phrase {
+                throw IllegalStateException("unrelated update failure")
+            }
+
+            override suspend fun restoreAtIndices(entries: List<Pair<Phrase, Int>>) {
+                if (failRestore) throw IllegalStateException("restore failed")
+                base.restoreAtIndices(entries)
+            }
+        }
+        val store = facade(phraseRepository = repo).phraseListStore()
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.DeletePhrase(phraseId = "p-2"))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo == null) delay(10)
+        }
+        val undoId = store.state.lastDeletedUndo!!.id
+        assertEquals(PhraseListStore.UndoRestoreStatus.Idle, store.state.lastDeletedUndo?.restoreStatus)
+
+        // An unrelated UpdatePhrase failure sets store.error without flipping lastDeletedUndo.restoreStatus.
+        store.accept(PhraseListStore.Intent.UpdatePhrase(id = "p-1", text = "Broken", name = null))
+        withTimeout(5_000) {
+            while (store.state.error == null) delay(10)
+        }
+        assertEquals(PhraseListStore.UndoRestoreStatus.Idle, store.state.lastDeletedUndo?.restoreStatus)
+
+        // A failing restore marks this specific undo entry as Failed while retaining it for retry.
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo?.restoreStatus != PhraseListStore.UndoRestoreStatus.Failed) delay(10)
+        }
+        assertEquals(undoId, store.state.lastDeletedUndo?.id)
+
+        // Retrying once storage recovers restores the phrase and clears lastDeletedUndo.
+        failRestore = false
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo != null) delay(10)
+        }
+        assertEquals(listOf("p-1", "p-2"), base.getAll().map { it.id })
+    }
+
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */
     private suspend fun awaitRecordingPath(
         phraseRepo: PhraseRepository,

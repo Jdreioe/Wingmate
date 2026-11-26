@@ -229,6 +229,11 @@ internal data class ObfBoardUiState(
      * Buttons are added or the keyboard opens. Used by the wide Typing layout.
      */
     val scrollingMaximumCellHeight: Dp? = null,
+    /**
+     * Whether Touch Exit (slide-to-correct) may take over touch input on this board.
+     * Typing Phrase trays keep scrolling and finger-only long-press Edit/Delete menus.
+     */
+    val allowTouchExit: Boolean = true,
     val settings: Settings = Settings(),
     val focusedCell: Pair<Int, Int>? = null,
 )
@@ -574,7 +579,7 @@ internal fun ObfBoardContent(
         val desiredHorizontalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 4.0
         val desiredVerticalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 8.0
         val desiredOuterMarginDp = effectiveBoardSettings.outerMarginDp?.toDouble() ?: 8.0
-        val touchExitEligible = touchExitIsActive(
+        val touchExitEligible = state.allowTouchExit && touchExitIsActive(
             isEditMode = isEditMode,
             holdToSelectMillis = settings.holdToSelectMillis,
             selectOnTouchDown = settings.selectOnTouchDown,

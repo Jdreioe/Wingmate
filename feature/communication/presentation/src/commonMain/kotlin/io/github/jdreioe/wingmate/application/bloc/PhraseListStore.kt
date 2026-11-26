@@ -41,12 +41,15 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
     data class DismissDeletionUndo(val undoId: Long) : Intent()
     }
 
+    enum class UndoRestoreStatus { Idle, Restoring, Failed }
+
     /** A confirmed deletion captured with original repository indices for ordered undo. */
     data class DeletedPhraseUndo(
         val id: Long,
         val phrases: List<Phrase>,
         val originalIndices: List<Int>,
         val includesSubItems: Boolean,
+        val restoreStatus: UndoRestoreStatus = UndoRestoreStatus.Idle,
     )
 
     data class State(

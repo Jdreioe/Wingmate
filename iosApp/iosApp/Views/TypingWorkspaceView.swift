@@ -161,6 +161,7 @@ struct TypingWorkspaceView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(undo.isRestoring)
                     .accessibilityLabel(Text("common.close"))
                 }
                 .padding(.horizontal, 16)

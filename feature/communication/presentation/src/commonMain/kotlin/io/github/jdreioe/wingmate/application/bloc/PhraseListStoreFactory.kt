@@ -48,6 +48,8 @@ class PhraseListStoreFactory(
             val categories: List<Phrase>,
             val undo: PhraseListStore.DeletedPhraseUndo?,
         ) : Msg()
+        data class UndoRestoreStarted(val undoId: Long) : Msg()
+        data class UndoRestoreFailed(val undoId: Long, val error: String) : Msg()
         data class UndoRestored(val phrases: List<Phrase>, val categories: List<Phrase>) : Msg()
         data class UndoDismissed(val undoId: Long) : Msg()
         data class CategorySelected(val categoryId: String?) : Msg()
@@ -242,11 +244,14 @@ class PhraseListStoreFactory(
         }
 
         private fun undoLastDeletion(undoId: Long) {
+            if (state().lastDeletedUndo?.id == undoId) {
+                dispatch(Msg.UndoRestoreStarted(undoId))
+            }
             scope.launch {
                 mutationMutex.withLock {
                     val undo = state().lastDeletedUndo ?: return@withLock
                     if (undo.id != undoId) return@withLock
-                    restorePhrasesUnlocked(undo.phrases, undo.originalIndices)
+                    restorePhrasesUnlocked(undo.phrases, undo.originalIndices, undoId = undoId)
                 }
             }
         }
@@ -255,12 +260,16 @@ class PhraseListStoreFactory(
             if (phrases.isEmpty()) return
             scope.launch {
                 mutationMutex.withLock {
-                    restorePhrasesUnlocked(phrases, originalIndices)
+                    restorePhrasesUnlocked(phrases, originalIndices, undoId = null)
                 }
             }
         }
 
-        private suspend fun restorePhrasesUnlocked(phrases: List<Phrase>, originalIndices: List<Int>) {
+        private suspend fun restorePhrasesUnlocked(
+            phrases: List<Phrase>,
+            originalIndices: List<Int>,
+            undoId: Long?,
+        ) {
             try {
                 val baseIndex = phraseRepository.getAll().size
                 val entries = phrases.mapIndexed { index, phrase ->
@@ -272,7 +281,12 @@ class PhraseListStoreFactory(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
-                dispatch(Msg.ErrorOccurred(e.message ?: "Failed to restore phrase"))
+                val message = e.message ?: "Failed to restore phrase"
+                if (undoId != null) {
+                    dispatch(Msg.UndoRestoreFailed(undoId, message))
+                } else {
+                    dispatch(Msg.ErrorOccurred(message))
+                }
             }
         }
     }
@@ -294,6 +308,26 @@ class PhraseListStoreFactory(
                     error = null,
                     lastDeletedUndo = msg.undo,
                 )
+                is Msg.UndoRestoreStarted -> if (lastDeletedUndo?.id == msg.undoId) {
+                    copy(
+                        lastDeletedUndo = lastDeletedUndo.copy(
+                            restoreStatus = PhraseListStore.UndoRestoreStatus.Restoring
+                        ),
+                    )
+                } else {
+                    this
+                }
+                is Msg.UndoRestoreFailed -> if (lastDeletedUndo?.id == msg.undoId) {
+                    copy(
+                        error = msg.error,
+                        isLoading = false,
+                        lastDeletedUndo = lastDeletedUndo.copy(
+                            restoreStatus = PhraseListStore.UndoRestoreStatus.Failed
+                        ),
+                    )
+                } else {
+                    copy(error = msg.error, isLoading = false)
+                }
                 is Msg.UndoRestored -> copy(
                     phrases = msg.phrases,
                     categories = msg.categories,
@@ -301,7 +335,14 @@ class PhraseListStoreFactory(
                     error = null,
                     lastDeletedUndo = null,
                 )
-                is Msg.UndoDismissed -> if (lastDeletedUndo?.id == msg.undoId) copy(lastDeletedUndo = null) else this
+                is Msg.UndoDismissed -> if (
+                    lastDeletedUndo?.id == msg.undoId &&
+                    lastDeletedUndo.restoreStatus != PhraseListStore.UndoRestoreStatus.Restoring
+                ) {
+                    copy(lastDeletedUndo = null)
+                } else {
+                    this
+                }
                 is Msg.CategorySelected -> copy(selectedCategoryId = msg.categoryId)
                 is Msg.ErrorOccurred -> copy(error = msg.error, isLoading = false)
                 is Msg.PhraseUpdated -> copy(phrases = phrases.map { if (it.id == msg.phrase.id) msg.phrase else it })

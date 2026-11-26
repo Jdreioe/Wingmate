@@ -340,8 +340,7 @@ extension IosViewModel {
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = board.id
-            selectedBoard = board
-            await refreshBoardCells()
+            await loadSelectedBoard()
             boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.create_failed")
@@ -364,9 +363,7 @@ extension IosViewModel {
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = board.id
-            selectedBoard = board
-            await refreshSelectedBoardMetadata()
-            await refreshBoardCells()
+            await loadSelectedBoard()
             boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.create_failed")
@@ -391,6 +388,7 @@ extension IosViewModel {
             return
         }
         if resetStack { boardStack = [] }
+        loadedBoardCellsPageId = nil
         selectedBoardId = id
         await loadSelectedBoard()
     }

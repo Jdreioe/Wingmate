@@ -26,7 +26,21 @@ extension IosViewModel {
     }
 
 
+    /// True only when the rendered board and its loaded cells both belong to the currently selected Page.
+    func boardCellsReady(for pageId: String) -> Bool {
+        selectedBoardId == pageId &&
+            selectedBoard?.id == pageId &&
+            loadedBoardCellsPageId == pageId
+    }
+
+    /// Scopes Screen Button debounce to `(pageId, buttonId)` so Pages that reuse the same
+    /// OBF Button ID do not wrongly debounce legitimate selections after navigation.
+    func screenButtonDebounceKey(pageId: String? = nil, buttonId: String) -> String {
+        "board:\(pageId ?? selectedBoardId ?? ""):\(buttonId)"
+    }
+
     func loadSelectedBoard() async {
+        loadedBoardCellsPageId = nil
         guard let id = selectedBoardId else {
             selectedBoard = nil
             boardCells = []
@@ -48,11 +62,14 @@ extension IosViewModel {
             return
         }
         do {
-            selectedBoard = try await boardsFacade.getBoard(id: id)
+            let loadedBoard = try await boardsFacade.getBoard(id: id)
+            guard selectedBoardId == id else { return }
+            selectedBoard = loadedBoard
             boardBackgroundImageUrl = selectedBoard.flatMap { boardsFacade.backgroundImageUrl(board: $0) }
             boardBackgroundImageFit = selectedBoard.map { boardsFacade.backgroundImageFit(board: $0) } ?? "Fill"
             await refreshSelectedBoardMetadata()
             let resolved = try? await boardsFacade.resolveBoardSettings(boardId: id)
+            guard selectedBoardId == id else { return }
             resolvedBoardShowLabels = resolved?.showLabels
             resolvedBoardShowSymbols = resolved?.showSymbols
             resolvedBoardLabelAtTop = resolved?.labelAtTop
@@ -70,7 +87,9 @@ extension IosViewModel {
             }
             await refreshBoardCells()
         } catch {
+            guard selectedBoardId == id else { return }
             selectedBoard = nil
+            loadedBoardCellsPageId = nil
             boardCells = []
             boardFieldItems = []
             selectedBoardKeyboardLayout = nil
@@ -102,6 +121,7 @@ extension IosViewModel {
 
     func refreshBoardCells() async {
         guard let boardId = selectedBoardId else {
+            loadedBoardCellsPageId = nil
             boardCells = []
             boardFieldItems = []
             return
@@ -110,6 +130,7 @@ extension IosViewModel {
         do {
             let cells = try await boardsFacade.listBoardCells(boardId: boardId)
             let fields = try await boardsFacade.listBoardFieldItems(boardId: boardId)
+            guard selectedBoardId == boardId else { return }
             boardCells = cells.map { cell in
                 BoardCellInfo(
                     row: Int(cell.row),
@@ -143,8 +164,11 @@ extension IosViewModel {
                     buttonId: field.buttonId
                 )
             }
+            loadedBoardCellsPageId = boardId
             rememberScreenButtonLooks()
         } catch {
+            guard selectedBoardId == boardId else { return }
+            loadedBoardCellsPageId = nil
             boardCells = []
             boardFieldItems = []
         }
@@ -253,8 +277,8 @@ extension IosViewModel {
             return
         }
 
-        // #118: navigation is an explicit action; speech insertion is debounced per cell.
-        if checkDebounce && !acceptActivation(targetId: cell.buttonId) { return }
+        // #118: navigation is an explicit action; speech insertion is debounced per Page and Button.
+        if checkDebounce && !acceptActivation(targetId: screenButtonDebounceKey(buttonId: cell.buttonId)) { return }
 
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)

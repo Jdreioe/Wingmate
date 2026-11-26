@@ -240,11 +240,12 @@ final class TouchAccessParityTests: XCTestCase {
     @MainActor
     func testIosPhraseUndoRemainsRecoverableAfterFailedRestore() {
         let model = IosViewModel()
-        let undo = Shared.PhraseListStoreDeletedPhraseUndo(
+        let idleUndo = Shared.PhraseListStoreDeletedPhraseUndo(
             id: 42,
             phrases: [],
             originalIndices: [],
-            includesSubItems: false
+            includesSubItems: false,
+            restoreStatus: .idle
         )
         let deletedState = Shared.PhraseListStoreState(
             phrases: [],
@@ -252,23 +253,53 @@ final class TouchAccessParityTests: XCTestCase {
             selectedCategoryId: nil,
             isLoading: false,
             error: nil,
-            lastDeletedUndo: undo
+            lastDeletedUndo: idleUndo
         )
         model.syncPhraseUndo(from: deletedState)
         XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
 
-        // Tapping Undo disables the Undo button while restore is in flight and keeps the banner visible.
+        // Tapping Undo disables Undo and Dismiss while restore is in flight and keeps the banner visible.
         model.undoPendingPhraseDeletion()
         XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
 
-        // A failed restore keeps the same undo entry and re-enables Undo so the Communicator can retry.
+        // Dismiss is ignored while restore is in flight.
+        model.dismissPendingPhraseUndo()
+        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
+
+        // An unrelated store error while restoreStatus is still .restoring must NOT re-enable Undo.
+        let restoringUndo = Shared.PhraseListStoreDeletedPhraseUndo(
+            id: 42,
+            phrases: [],
+            originalIndices: [],
+            includesSubItems: false,
+            restoreStatus: .restoring
+        )
+        let unrelatedErrorState = Shared.PhraseListStoreState(
+            phrases: [],
+            categories: [],
+            selectedCategoryId: nil,
+            isLoading: false,
+            error: "unrelated update error",
+            lastDeletedUndo: restoringUndo
+        )
+        model.syncPhraseUndo(from: unrelatedErrorState)
+        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
+
+        // A restore failure scoped to this undo entry re-enables Undo so the Communicator can retry.
+        let failedUndo = Shared.PhraseListStoreDeletedPhraseUndo(
+            id: 42,
+            phrases: [],
+            originalIndices: [],
+            includesSubItems: false,
+            restoreStatus: .failed
+        )
         let failedState = Shared.PhraseListStoreState(
             phrases: [],
             categories: [],
             selectedCategoryId: nil,
             isLoading: false,
             error: "disk full",
-            lastDeletedUndo: undo
+            lastDeletedUndo: failedUndo
         )
         model.syncPhraseUndo(from: failedState)
         XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
@@ -285,5 +316,77 @@ final class TouchAccessParityTests: XCTestCase {
         )
         model.syncPhraseUndo(from: restoredState)
         XCTAssertNil(model.pendingPhraseUndo)
+    }
+
+    @MainActor
+    func testIosTouchExitBlocksStalePageHandoffUntilNewPageCellsLoad() {
+        let model = IosViewModel()
+        let pageA = ObfBoard(
+            format: "open-board-0.1",
+            id: "page-a",
+            locale: "en",
+            url: nil,
+            name: "Page A",
+            descriptionHtml: nil,
+            backgroundColor: nil,
+            buttons: [],
+            images: [],
+            grid: ObfGrid(rows: 1, columns: 2, order: [["b1", "b2"]]),
+            sounds: [],
+            strings: [:],
+            license: nil,
+            extensions: [:]
+        )
+        let pageB = ObfBoard(
+            format: "open-board-0.1",
+            id: "page-b",
+            locale: "en",
+            url: nil,
+            name: "Page B",
+            descriptionHtml: nil,
+            backgroundColor: nil,
+            buttons: [],
+            images: [],
+            grid: ObfGrid(rows: 1, columns: 2, order: [["b1", "b2"]]),
+            sounds: [],
+            strings: [:],
+            license: nil,
+            extensions: [:]
+        )
+
+        model.selectedBoardId = "page-a"
+        model.selectedBoard = pageA
+        model.loadedBoardCellsPageId = "page-a"
+        XCTAssertTrue(model.boardCellsReady(for: "page-a"))
+        XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+
+        // Starting navigation to page-b immediately invalidates page-a before page-b loads.
+        model.loadedBoardCellsPageId = nil
+        model.selectedBoardId = "page-b"
+        XCTAssertFalse(model.boardCellsReady(for: "page-a"))
+        XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+
+        // Rendering page-b before its cells arrive still keeps Touch Exit gated.
+        model.selectedBoard = pageB
+        XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+
+        // Once page-b's cells finish loading, Touch Exit becomes active on page-b.
+        model.loadedBoardCellsPageId = "page-b"
+        XCTAssertTrue(model.boardCellsReady(for: "page-b"))
+    }
+
+    @MainActor
+    func testIosScreenButtonDebounceIsScopedByPageId() {
+        let model = IosViewModel()
+        model.selectionDebounceMillis = 500
+        model.selectedBoardId = "page-a"
+
+        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
+        // Immediate repeat on the same Page is debounced.
+        XCTAssertFalse(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
+
+        // Navigating to another Page with the same Button ID allows legitimate activation immediately.
+        model.selectedBoardId = "page-b"
+        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
     }
 }
