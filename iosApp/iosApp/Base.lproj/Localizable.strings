@@ -92,8 +92,7 @@
 "welcome_flow.help.play_phrases" = "Tap phrases to hear them spoken";
 "welcome_flow.help.organize" = "Organize with categories";
 "welcome_flow.system_tts_info" = "You're using System Text-to-Speech";
-"welcome_flow.system_tts_settings_info" = "Voice options are managed in iOS Settings under Accessibility > Spoken Content > Voices";
-"welcome_flow.open_settings" = "Open iOS Settings";
+"welcome_flow.system_tts_settings_info" = "Pick the voice Wingmate uses for each language, including enhanced, premium and Personal Voices. To download more voices, go to iOS Settings > Accessibility > Spoken Content > Voices.";
 "welcome_flow.test_voice" = "Test Your Voice";
 "welcome_flow.azure_voices_subtitle" = "Choose from high-quality Azure voices";
 "welcome_flow.google_voices_subtitle" = "Choose from Google Cloud voices";

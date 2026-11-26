@@ -95,7 +95,9 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
    <img src="images/ios/iphone-welcome-stemmemotor.png" alt="Vælg din stemmemodel i den første opsætning (iPhone)" width="300">
 
 4. På siden **Vælg din stemme**:
-   - Har du valgt **System Tekst-til-Tale**, så tryk bare **Næste**. Du behøver ikke trykke **Åbn iOS Indstillinger**. Du kan vælge en anden stemme senere i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**.
+   - Har du valgt **System Tekst-til-Tale**, viser siden den stemme, Wingmate bruger til dit sprog. Står der **Systemstandard**, bruger Wingmate enhedens standardstemme til sproget. Tryk på højttaleren for at høre den. VoiceOver kalder den **Afspil prøve**.
+     Vil du have en anden stemme, så tryk **Vælg stemme** eller **Skift stemme**. Listen viser stemmerne på enheden, delt op efter sprog, med dit sprog øverst. Tryk på en stemme for at vælge den. Tryk på afspil-knappen ved siden af for at høre den. Har du lavet en personlig stemme på enheden, så tryk først **Tillad personlig stemme** øverst, hvis knappen vises. Tryk **Luk**, og tryk **Næste**.
+     Du kan også bare trykke **Næste** og vælge stemmen senere under **Indstillinger → Tale og sprog → Valgt stemme**. Mangler en stemme på listen, så se [Fejlfinding](#fejlfinding).
    - Har du valgt en stemme på nettet, så tryk **Vælg stemme**, vælg en stemme, og tryk **Vælg**. Tryk derefter **Næste**. Spørger appen om sprog, så tryk på et sprog. Så går appen selv videre.
 5. På siden **Test din stemme** trykker du **Afspil** for at høre en prøve. Tryk **Næste**.
 6. Vælg, om du vil slå **Del anonym analysedata** til. Det er slukket fra start. Tryk **Næste**.

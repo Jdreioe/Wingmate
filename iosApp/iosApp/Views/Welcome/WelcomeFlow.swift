@@ -15,6 +15,8 @@ struct WelcomeFlow: View {
     @State var showGoogleSetup = false
     @State var showElevenLabsSetup = false
     @State var selectedVoice: Shared.Voice? = nil
+    /// The per-language system voice choices, reloaded when the voice picker closes.
+    @State var systemVoiceChoices: [String: String] = SystemVoicePreferences.all
     @State var selectedTtsEngine: String? = nil
     @State var pendingLanguageSelection = false
     @State var languageOptions: [String] = []
@@ -98,8 +100,12 @@ struct WelcomeFlow: View {
             }
             .navigationBarHidden(true)
         }
-        .sheet(isPresented: $showVoicePicker) {
-            VoiceSelectionSheet(selected: selectedVoice, onClose: { showVoicePicker = false }) { voice in
+        .sheet(isPresented: $showVoicePicker, onDismiss: { systemVoiceChoices = SystemVoicePreferences.all }) {
+            VoiceSelectionSheet(
+                selected: selectedVoice,
+                primaryLanguage: speech.primaryLanguage,
+                onClose: { showVoicePicker = false }
+            ) { voice in
                 Task {
                     await speech.chooseVoice(voice)
                     let langs = availablePrimaryLanguages(for: voice)

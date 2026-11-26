@@ -1,5 +1,6 @@
 import SwiftUI
 import Shared
+import AVFoundation
 
 extension WelcomeFlow {
     // MARK: - Step 0: Welcome Intro
@@ -179,6 +180,9 @@ extension WelcomeFlow {
                 .fontWeight(.bold)
 
             if speech.useSystemTts {
+                let chosenSystemVoice = systemVoiceChoices[SystemVoicePreferences.languageCode(of: speech.primaryLanguage)]
+                    .flatMap { AVSpeechSynthesisVoice(identifier: $0) }
+
                 VStack(spacing: 16) {
                     Text(NSLocalizedString("welcome_flow.system_tts_info", comment: ""))
                         .font(.headline)
@@ -190,14 +194,16 @@ extension WelcomeFlow {
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
 
-                    Button(action: {
-                        if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(settingsUrl)
-                        }
-                    }) {
+                    SelectedSystemVoiceCard(
+                        voice: chosenSystemVoice,
+                        language: speech.primaryLanguage,
+                        onSpeak: { model.communication.speak(previewText) }
+                    )
+
+                    Button(action: { showVoicePicker = true }) {
                         HStack {
-                            Image(systemName: "gear")
-                            Text(NSLocalizedString("welcome_flow.open_settings", comment: ""))
+                            Image(systemName: "person.2.fill")
+                            Text(chosenSystemVoice == nil ? NSLocalizedString("welcome_flow.choose_voice", comment: "") : NSLocalizedString("welcome_flow.change_voice", comment: ""))
                         }
                         .font(.headline)
                         .foregroundColor(.white)
