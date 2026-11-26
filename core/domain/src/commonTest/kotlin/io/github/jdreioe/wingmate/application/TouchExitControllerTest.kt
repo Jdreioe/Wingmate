@@ -95,6 +95,9 @@ class TouchExitControllerTest {
         assertFalse(pageSwipeIsActive(isEditMode = false, swipeBetweenPages = true, holdToSelectMillis = 0, selectOnTouchDown = false, selectOnTouchExit = true))
         assertFalse(pageSwipeIsActive(isEditMode = false, swipeBetweenPages = true, holdToSelectMillis = 0, selectOnTouchDown = true, selectOnTouchExit = false))
         assertFalse(pageSwipeIsActive(isEditMode = false, swipeBetweenPages = true, holdToSelectMillis = 200, selectOnTouchDown = false, selectOnTouchExit = false))
+        assertTrue(pageSwipeIsActive(isEditMode = false, swipeBetweenPages = true, holdToSelectMillis = 200, selectOnTouchDown = false, selectOnTouchExit = false, disableOnHoldToSelect = false))
+        assertTrue(pageSwipeIsActive(isEditMode = false, swipeBetweenPages = true, holdToSelectMillis = 200, selectOnTouchDown = false, selectOnTouchExit = true, disableOnHoldToSelect = false))
+        assertFalse(pageSwipeIsActive(isEditMode = false, swipeBetweenPages = true, holdToSelectMillis = 0, selectOnTouchDown = false, selectOnTouchExit = true, disableOnHoldToSelect = false))
         assertFalse(pageSwipeIsActive(isEditMode = true, swipeBetweenPages = true, holdToSelectMillis = 0, selectOnTouchDown = false, selectOnTouchExit = false))
     }
 }

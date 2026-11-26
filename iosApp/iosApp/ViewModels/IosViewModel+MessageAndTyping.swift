@@ -148,14 +148,14 @@ extension IosViewModel {
         return !secondary.isEmpty && secondary != primaryLanguage
     }
 
-    /// Appends a Button of the current Page to the Message.
-    func appendScreenPart(text: String, buttonId: String, languageTag: String? = nil, mathMode: Bool = false) {
+    /// Appends a Button of the given Page (defaulting to the current Page) to the Message.
+    func appendScreenPart(text: String, buttonId: String, pageId: String? = nil, languageTag: String? = nil, mathMode: Bool = false) {
         rememberScreenButtonLooks()
         editMessage {
             session.appendScreenPart(
                 text: text,
                 screenId: selectedBoardSetId ?? "",
-                pageId: selectedBoardId ?? "",
+                pageId: pageId ?? selectedBoardId ?? "",
                 buttonId: buttonId,
                 spellingMode: selectedBoardUsesSpellingMode,
                 languageTag: languageTag,

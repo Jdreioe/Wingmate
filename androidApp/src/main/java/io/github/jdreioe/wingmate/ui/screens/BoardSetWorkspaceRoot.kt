@@ -658,11 +658,13 @@ internal fun BoardSetWorkspaceRoot(
                         swipeBetweenPages = settings.swipeBetweenPages,
                         holdToSelectMillis = settings.holdToSelectMillis,
                         selectOnTouchDown = settings.selectOnTouchDown,
-                        // Only suppress swipe when the active Page actually installs the Touch Exit grid.
+                        // Only suppress swipe when Touch Exit actually owns the active Page's grid;
+                        // preserve Android's hold-to-select + horizontal Page swipe behavior.
                         selectOnTouchExit = settings.selectOnTouchExit &&
                             activeBoard.grid != null &&
                             !activeBoard.isAbsoluteLayout &&
                             activeBoard.hasVisibleButton(showHiddenButtons),
+                        disableOnHoldToSelect = false,
                     ),
                     onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
                     modifier = Modifier.weight(1f).fillMaxWidth(),

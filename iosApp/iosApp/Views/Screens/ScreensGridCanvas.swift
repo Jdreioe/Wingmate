@@ -89,6 +89,7 @@ extension SymbolBoardWorkspaceView {
                             // Use mode leaves empty cells blank. They are not buttons.
                             if occupied || isEditMode {
                                 boardCellButton(
+                                    pageId: board.id,
                                     row: field.row,
                                     col: field.column,
                                     isEditMode: isEditMode,
@@ -171,7 +172,7 @@ extension SymbolBoardWorkspaceView {
         }
     }
 
-    func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1, metrics: BoardGridMetrics = BoardGridMetrics()) -> some View {
+    func boardCellButton(pageId: String, row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1, metrics: BoardGridMetrics = BoardGridMetrics()) -> some View {
         let cell = model.cellAt(row: row, col: col)
         let cornerRadius = boardCellCornerRadius(cell, width: width, height: height)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
@@ -206,7 +207,7 @@ extension SymbolBoardWorkspaceView {
                     }
                 } else {
                     guard model.holdToSelectMillis <= 0, !touchExitActive else { return }
-                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                    activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                 }
             } label: {
                 // One view in both states, so starting the fly-in does not rebuild
@@ -222,7 +223,7 @@ extension SymbolBoardWorkspaceView {
                 LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
                     .onEnded { _ in
                         guard !isEditMode, model.holdToSelectMillis > 0 else { return }
-                        activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                        activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                     }
             )
             .onHover { hovering in
@@ -244,7 +245,7 @@ extension SymbolBoardWorkspaceView {
                 guard !isEditMode, cell != nil else { return }
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
                 model.registerAccessTarget(targetId, handlesHaptics: true) {
-                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                    activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
             .onDisappear { model.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
@@ -276,7 +277,7 @@ extension SymbolBoardWorkspaceView {
                 if isEditMode && model.canEditSelectedBoardSet {
                     openCellEditor(row: row, col: col, existing: cell)
                 } else if cell != nil {
-                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                    activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
             .modifier(FieldEditActions(
@@ -588,6 +589,7 @@ extension SymbolBoardWorkspaceView {
                 if effect is TouchExitEffectActivate, let hit {
                     activateBoardCell(
                         hit.cell,
+                        pageId: pageId,
                         row: hit.field.row,
                         col: hit.field.column,
                         sourceCellId: "\(hit.field.row):\(hit.field.column)"

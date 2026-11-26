@@ -204,8 +204,8 @@ internal fun TypingScreenTray(
                     val targetPhrase = target.projectedPhraseId()?.let(currentPhrasesById::get)
                     if (movedPhrase != null && targetPhrase != null) currentMovePhrase(movedPhrase, targetPhrase)
                 },
-                // Hold-to-select and touch-down own touch gestures; Touch Exit is gated per-grid
-                // in SpanningBoardGrid so large scrollable Phrase libraries keep reorder.
+                // Hold-to-select and touch-down own touch gestures; Touch Exit is disabled on the
+                // Typing Phrase tray (allowTouchExit = false) so finger-only Edit/Delete/Reorder stay available.
                 gesturesEnabled = settings.holdToSelectMillis <= 0 && !settings.selectOnTouchDown,
                 menu = { button, dismiss ->
                     val phrase = button.projectedPhraseId()?.let(currentPhrasesById::get)

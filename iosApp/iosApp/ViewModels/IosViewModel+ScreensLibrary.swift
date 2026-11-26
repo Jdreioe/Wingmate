@@ -232,6 +232,7 @@ extension IosViewModel {
         } else {
             selectedBoardId = nil
             selectedBoard = nil
+            loadedBoardCellsPageId = nil
             boardCells = []
             boardFieldItems = []
             boardNamesById = [:]

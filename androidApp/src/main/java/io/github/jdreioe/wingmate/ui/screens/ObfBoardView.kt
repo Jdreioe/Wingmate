@@ -689,12 +689,12 @@ internal fun ObfBoardContent(
                                     )
                                     previewJobHolder.job?.cancel()
                                     previewJobHolder.job = null
+                                    // Stop any currently playing cue immediately before resolving the next Button's voice.
+                                    feedback.onCancelAuditoryCue()
                                     if (label.isNotBlank()) {
                                         previewJobHolder.job = previewScope.launch {
                                             feedback.onAuditoryCue(button, label)
                                         }
-                                    } else {
-                                        feedback.onCancelAuditoryCue()
                                     }
                                 }
                             },

@@ -548,15 +548,13 @@ class ObfBoardContentTest {
         val yesLocal = yesBounds.center - gridBounds.topLeft
         val noLocal = noBounds.center - gridBounds.topLeft
 
-        grid.performTouchInput {
-            down(yesLocal)
-            up()
-        }
+        grid.performTouchInput { down(yesLocal) }
         composeRule.waitForIdle()
-        grid.performTouchInput {
-            down(noLocal)
-            up()
-        }
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+        grid.performTouchInput { down(noLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
         composeRule.waitForIdle()
 
         composeRule.runOnIdle {

@@ -268,7 +268,8 @@ struct TypingTrayView: View {
                     swipeBetweenPages: model.swipeBetweenPages,
                     holdToSelectMillis: Int64(model.holdToSelectMillis),
                     selectOnTouchDown: model.selectOnTouchDown,
-                    selectOnTouchExit: false
+                    selectOnTouchExit: false,
+                    disableOnHoldToSelect: true
                   ),
                   abs(value.translation.width) >= 64, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
             var pages: [TypingPage] = [.all] + model.state.categories.map { .category($0.id) }

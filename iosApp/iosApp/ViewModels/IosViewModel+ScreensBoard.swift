@@ -18,7 +18,8 @@ extension IosViewModel {
                 swipeBetweenPages: swipeBetweenPages,
                 holdToSelectMillis: Int64(holdToSelectMillis),
                 selectOnTouchDown: selectOnTouchDown,
-                selectOnTouchExit: selectOnTouchExit
+                selectOnTouchExit: selectOnTouchExit,
+                disableOnHoldToSelect: true
               ),
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
               let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
@@ -268,7 +269,16 @@ extension IosViewModel {
     }
 
     func activateSelectedBoardCell(row: Int, col: Int, checkDebounce: Bool = true) async {
-        guard let cell = cellAt(row: row, col: col) else { return }
+        guard let pageId = selectedBoardId,
+              boardCellsReady(for: pageId),
+              let cell = cellAt(row: row, col: col) else { return }
+        await activateBoardCell(cell, onPageId: pageId, checkDebounce: checkDebounce)
+    }
+
+    /// Executes a resolved Screen Button's deferred navigation or speech only while [pageId]
+    /// still owns the active loaded cells, preventing stale-Page activations during async handoff.
+    func activateBoardCell(_ cell: BoardCellInfo, onPageId pageId: String, checkDebounce: Bool = true) async {
+        guard boardCellsReady(for: pageId) else { return }
 
         if let linkedBoardId = normalizedOptionalText(cell.linkedBoardId),
            let set = selectedBoardSet,
@@ -278,7 +288,9 @@ extension IosViewModel {
         }
 
         // #118: navigation is an explicit action; speech insertion is debounced per Page and Button.
-        if checkDebounce && !acceptActivation(targetId: screenButtonDebounceKey(buttonId: cell.buttonId)) { return }
+        if checkDebounce && !acceptActivation(targetId: screenButtonDebounceKey(pageId: pageId, buttonId: cell.buttonId)) {
+            return
+        }
 
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)

@@ -82,8 +82,9 @@ fun touchExitIsActive(
 ): Boolean = !isEditMode && holdToSelectMillis <= 0L && !selectOnTouchDown && selectOnTouchExit
 
 /**
- * Shared rule for horizontal Page swipe: disabled while editing or when any
- * direct-touch timing mode owns touch drags.
+ * Shared rule for horizontal Page swipe: disabled while editing, under select-on-touch-down,
+ * when Touch Exit actively owns touch drags on the grid, and (on platforms where hold owns
+ * drag gestures) under hold-to-select.
  */
 fun pageSwipeIsActive(
     isEditMode: Boolean,
@@ -91,4 +92,14 @@ fun pageSwipeIsActive(
     holdToSelectMillis: Long,
     selectOnTouchDown: Boolean,
     selectOnTouchExit: Boolean,
-): Boolean = !isEditMode && swipeBetweenPages && holdToSelectMillis <= 0L && !selectOnTouchDown && !selectOnTouchExit
+    disableOnHoldToSelect: Boolean = true,
+): Boolean {
+    if (isEditMode || !swipeBetweenPages || selectOnTouchDown) return false
+    if (disableOnHoldToSelect && holdToSelectMillis > 0L) return false
+    return !touchExitIsActive(
+        isEditMode = isEditMode,
+        holdToSelectMillis = holdToSelectMillis,
+        selectOnTouchDown = selectOnTouchDown,
+        selectOnTouchExit = selectOnTouchExit,
+    )
+}

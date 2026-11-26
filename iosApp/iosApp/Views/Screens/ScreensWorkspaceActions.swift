@@ -33,19 +33,19 @@ extension SymbolBoardWorkspaceView {
         return "\(model.selectedBoardId ?? "")|\(predictors)|\(boardSentenceText)"
     }
 
-    func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
-        guard let cell else { return }
+    func activateBoardCell(_ cell: BoardCellInfo?, pageId: String, row: Int, col: Int, sourceCellId: String) {
+        // Gate every activation route (Touch Exit, tap, hold, dwell, switch, accessibility)
+        // on the rendered Page still owning the active loaded cells.
+        guard let cell, model.boardCellsReady(for: pageId) else { return }
         if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
             if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
             AccessHaptics.perform(.confirm)
-            if let current = model.selectedBoardId {
-                model.pushBoardNavigationStack(current)
-            }
-            Task { await model.activateSelectedBoardCell(row: row, col: col, checkDebounce: false) }
+            model.pushBoardNavigationStack(pageId)
+            Task { await model.activateBoardCell(cell, onPageId: pageId, checkDebounce: false) }
             return
         }
         // #118 / #405: enforce per-Page, per-Button debounce and confirm/reject haptics for every non-link Button.
-        guard model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: cell.buttonId)) else { return }
+        guard model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: pageId, buttonId: cell.buttonId)) else { return }
         if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
         if cell.actions.isEmpty {
             let behavior = model.boardActivationBehavior
@@ -54,11 +54,11 @@ extension SymbolBoardWorkspaceView {
             // A Button's own sound replaces its spoken text, so it is said once.
             if shouldSpeak { playCellSound(cell) }
             if shouldAdd {
-                appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
+                appendCellToSentenceIfNeeded(cell, pageId: pageId, sourceCellId: sourceCellId)
             }
             Task {
                 if shouldSpeak && trimmed(cell.soundPath) == nil && trimmed(cell.soundDataUrl) == nil {
-                    await model.activateSelectedBoardCell(row: row, col: col, checkDebounce: false)
+                    await model.activateBoardCell(cell, onPageId: pageId, checkDebounce: false)
                 }
                 await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
             }
@@ -71,7 +71,7 @@ extension SymbolBoardWorkspaceView {
             switch action.lowercased() {
             case ":space":
                 isContentActivation = true
-                appendCellToSentenceIfNeeded(cell, textOverride: " ", sourceCellId: sourceCellId)
+                appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: " ", sourceCellId: sourceCellId)
             case ":backspace":
                 backspaceBoardSentence()
             case ":clear":
@@ -99,17 +99,17 @@ extension SymbolBoardWorkspaceView {
                 if let suggestion = model.boardPrediction(for: cell.buttonId) {
                     isContentActivation = true
                     let insertion = predictionInsertion(sentence: boardSentenceText, suggestion: suggestion)
-                    appendCellToSentenceIfNeeded(cell, textOverride: insertion, sourceCellId: sourceCellId)
+                    appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: insertion, sourceCellId: sourceCellId)
                 }
             case ":spell":
                 isContentActivation = true
                 if let text = trimmed(cell.vocalization) ?? trimmed(cell.label) {
-                    appendCellToSentenceIfNeeded(cell, textOverride: text, sourceCellId: sourceCellId)
+                    appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: text, sourceCellId: sourceCellId)
                 }
             default:
                 if action.hasPrefix("+") {
                     isContentActivation = true
-                    appendCellToSentenceIfNeeded(cell, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
+                    appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
                 }
             }
         }
@@ -120,7 +120,7 @@ extension SymbolBoardWorkspaceView {
         }
     }
 
-    func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?, textOverride: String? = nil, sourceCellId: String? = nil) {
+    func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?, pageId: String, textOverride: String? = nil, sourceCellId: String? = nil) {
         guard let cell else { return }
         let text = textOverride ?? trimmed(cell.vocalization) ?? trimmed(cell.label)
         guard let text, !text.isEmpty else { return }
@@ -131,7 +131,7 @@ extension SymbolBoardWorkspaceView {
         placement.disablesAnimations = true
         var tokenId = ""
         withTransaction(placement) {
-            model.appendScreenPart(text: text, buttonId: cell.buttonId, languageTag: cell.language, mathMode: cell.mathMode)
+            model.appendScreenPart(text: text, buttonId: cell.buttonId, pageId: pageId, languageTag: cell.language, mathMode: cell.mathMode)
             // Read after appending: in spelling mode a letter may join the last part.
             tokenId = "part-\(model.messageParts.count - 1)"
             activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)

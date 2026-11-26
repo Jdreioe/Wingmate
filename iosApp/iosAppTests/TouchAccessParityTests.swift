@@ -126,7 +126,18 @@ final class TouchAccessParityTests: XCTestCase {
                 swipeBetweenPages: true,
                 holdToSelectMillis: 0,
                 selectOnTouchDown: false,
-                selectOnTouchExit: true
+                selectOnTouchExit: true,
+                disableOnHoldToSelect: true
+            )
+        )
+        XCTAssertTrue(
+            TouchExitControllerKt.pageSwipeIsActive(
+                isEditMode: false,
+                swipeBetweenPages: true,
+                holdToSelectMillis: 200,
+                selectOnTouchDown: false,
+                selectOnTouchExit: true,
+                disableOnHoldToSelect: false
             )
         )
     }
@@ -319,8 +330,9 @@ final class TouchAccessParityTests: XCTestCase {
     }
 
     @MainActor
-    func testIosTouchExitBlocksStalePageHandoffUntilNewPageCellsLoad() {
+    func testIosTouchExitBlocksStalePageHandoffUntilNewPageCellsLoad() async {
         let model = IosViewModel()
+        model.selectionDebounceMillis = 500
         let pageA = ObfBoard(
             format: "open-board-0.1",
             id: "page-a",
@@ -353,6 +365,28 @@ final class TouchAccessParityTests: XCTestCase {
             license: nil,
             extensions: [:]
         )
+        let staleCell = BoardCellInfo(
+            row: 0,
+            col: 0,
+            buttonId: "b1",
+            label: "Old Button",
+            vocalization: nil,
+            backgroundColor: nil,
+            resolvedBackgroundColor: nil,
+            wordType: nil,
+            borderColor: nil,
+            linkedBoardId: nil,
+            imageId: nil,
+            imageUrl: nil,
+            hidden: false,
+            actions: [],
+            soundId: nil,
+            soundDataUrl: nil,
+            soundPath: nil,
+            shape: "rectangle",
+            language: nil,
+            mathMode: false
+        )
 
         model.selectedBoardId = "page-a"
         model.selectedBoard = pageA
@@ -366,9 +400,17 @@ final class TouchAccessParityTests: XCTestCase {
         XCTAssertFalse(model.boardCellsReady(for: "page-a"))
         XCTAssertFalse(model.boardCellsReady(for: "page-b"))
 
-        // Rendering page-b before its cells arrive still keeps Touch Exit gated.
+        // Attempting activation of an old cell during handoff must be ignored before debounce/speech.
+        await model.activateBoardCell(staleCell, onPageId: "page-a", checkDebounce: true)
+
+        // Rendering page-b before its cells arrive still keeps activation gated.
         model.selectedBoard = pageB
         XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+        await model.activateBoardCell(staleCell, onPageId: "page-b", checkDebounce: true)
+
+        // Neither stale attempt consumed the debounce slot for page-a or page-b.
+        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: "page-a", buttonId: "b1")))
+        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: "page-b", buttonId: "b1")))
 
         // Once page-b's cells finish loading, Touch Exit becomes active on page-b.
         model.loadedBoardCellsPageId = "page-b"

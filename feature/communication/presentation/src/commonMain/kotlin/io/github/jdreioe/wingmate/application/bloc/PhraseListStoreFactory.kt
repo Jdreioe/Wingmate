@@ -277,7 +277,11 @@ class PhraseListStoreFactory(
                 }
                 phraseRepository.restoreAtIndices(entries)
                 val (loadedPhrases, categories) = reloadUnlocked()
-                dispatch(Msg.UndoRestored(loadedPhrases, categories))
+                if (undoId != null) {
+                    dispatch(Msg.UndoRestored(loadedPhrases, categories))
+                } else {
+                    dispatch(Msg.PhrasesAndCategoriesLoaded(loadedPhrases, categories))
+                }
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
