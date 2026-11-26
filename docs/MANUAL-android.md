@@ -1,6 +1,6 @@
 # Wingmate til Android – manual til nye brugere
 
-Manualen passer til Wingmate **1.9.0** på Android (november 2026). Bruger du iPhone eller iPad, så læs [manualen til iPhone og iPad](MANUAL-ios.md).
+Manualen passer til Wingmate **1.10.0** på Android (november 2026). Bruger du iPhone eller iPad, så læs [manualen til iPhone og iPad](MANUAL-ios.md).
 
 ## Sådan bruger du manualen
 
@@ -24,6 +24,7 @@ Manualen er til dig, der bruger Wingmate, og til familie, hjælpere, lærere og 
   - [Symboler, billeder, farver og størrelse](#symboler-billeder-farver-og-størrelse)
   - [Sider og navigation](#sider-og-navigation)
   - [Skærm- og sideindstillinger](#skærm--og-sideindstillinger)
+  - [Del skærme](#del-skærme)
 - [Låsning af redigering](#låsning-af-redigering)
 - [Stemmer](#stemmer)
 - [Import og eksport](#import-og-eksport)
@@ -51,14 +52,16 @@ Beskeden, du er i gang med, bliver liggende. Den følger med, når du skifter me
 
 Du behøver ikke skifte app, når dine behov ændrer sig. Wingmate kan vokse med dig – uanset om du altid bruger skærme, skriver med tastatur eller bruger begge dele:
 
-- **Kommunikation med skærme** – byg **Skærme** med symboler, billeder og tekst, fra de første ord til et stort ordforråd i hverdagen. Familie, hjælpere og pædagoger vil også kunne fjernredigere skærme (kommer snart).
-- **Skolen** – lærere kan lave skærme til deres elever og dele dem med alle, der bruger Wingmate, via Google Drive, OneDrive eller iCloud (kommer snart). Brugere kan også dele skærme med hinanden som filer (se [Import og eksport](#import-og-eksport)).
+- **Kommunikation med skærme** – byg **Skærme** med symboler, billeder og tekst, fra de første ord til et stort ordforråd i hverdagen. Familie, hjælpere og pædagoger kan rette skærmene fra deres egen enhed (se [Del skærme](#del-skærme)).
+- **Skolen** – lærere kan lave skærme til deres elever og dele dem med alle, der bruger Wingmate, via Google Drev eller OneDrive (se [Del skærme](#del-skærme)). Brugere kan også dele skærme med hinanden som filer (se [Import og eksport](#import-og-eksport)).
 - **Skrivning med tastatur** – hvis du vil stave med et tastatur, kan du bruge **Skrivning**, enten alene eller sammen med dine skærme. Dine skærme er altid bare et par tryk væk (se [De to arbejdsområder](#de-to-arbejdsområder)).
 - **Oplæg og taler** – skriv teksten i et andet program, og sæt den ind i **Importér tale**. Så laver Wingmate en skærm med talen delt op i bider (se [Opret eller importér en skærm](#opret-eller-importér-en-skærm)).
 
 ### Dine data
 
-Wingmate gemmer dine beskeder, fraser og skærme på enheden. Der er ingen konto, og appen kopierer ikke selv dine ting til en anden enhed.
+Wingmate gemmer dine beskeder, fraser og skærme på enheden. Der er ingen konto. Beskeder og fraser bliver på enheden, medmindre du selv laver en sikkerhedskopi.
+
+Skærme kan du vælge at synkronisere, så en hjælper kan rette dem. Der ligger stadig en kopi på enheden, så skærmene virker uden internet. Se [Del skærme](#del-skærme).
 
 Wingmate sender kun noget ud af enheden i disse tilfælde. Bruger du enhedens egen stemme, kan nogle af stemmerne alligevel bruge internettet.
 
@@ -98,17 +101,17 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
 
 Når opsætningen er færdig, åbner Wingmate det sted, du valgte. Du kan skifte, når du vil:
 
-- Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **Skift til skærme**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet, så de tre prikker kommer frem. På en bred skærm, fx en tablet, trykker du på gitter-ikonet i panelet til højre.
+- Fra Skrivning: tryk på de tre prikker øverst til højre, og vælg **Skift til Skærme**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet, så de tre prikker kommer frem. På en bred skærm, fx en tablet, trykker du på gitter-ikonet i panelet til højre.
 
-  <!-- SCREENSHOT: Typing workspace in communication use: message bar with some text, phrase grid or Typing Screen visible, and the control to switch to Screens visible in the toolbar or menu. -->
-  <img src="images/skrivning-oversigt.png" alt="Skrivning med beskedlinje og fraser" width="300">
+  <!-- SCREENSHOT: Typing workspace with a short message, phrases, and the Danish expression buttons (Parkér, Sprog and pauses) visible. -->
+  <img src="images/skrivning-oversigt.png" alt="Skrivning med beskedlinje, fraser og udtryksknapper" width="300">
 
-- Fra oversigten **Skærme**: tryk på tastatur-ikonet øverst (**Skift til tastatur og fraser**).
+- Fra oversigten **Skærme**: tryk på tastatur-ikonet øverst (**Skift til Skriv**).
 
-  <!-- SCREENSHOT: Screens library (Skærme) with the title “Skærme”, at least one screen card, and actions such as Ny skærm / Opret skærm and Importer skærm / Importér tale visible. -->
-  <img src="images/skaerme-bibliotek.png" alt="Oversigten Skærme" width="300">
+  <!-- SCREENSHOT: Screens library (Skærme) with preview cards of the start page, a Rediger button, and Ny skærm / Importér tale. -->
+  <img src="images/skaerme-bibliotek.png" alt="Oversigten Skærme med forhåndsvisning af startsiden" width="300">
 
-- Fra en åben skærm på en telefon: tryk på de tre prikker øverst til højre, og vælg **Skift til tastatur og fraser**. På en bred skærm er der et tastatur-ikon øverst. Vil du tilbage til oversigten **Skærme**, så tryk på pilen øverst til venstre.
+- Fra en åben skærm: tryk **Menu** øverst til venstre, og vælg **Skift til Skriv**. Vil du tilbage til oversigten, så vælg **Tilbage til skærme** i samme menu.
 
 Du kan også vælge, hvor appen skal starte. Gå til **Indstillinger → System og data**, og vælg under **Åbn ved opstart**: **Tastatur** eller **Skærme**. Vælger du Skærme, kan du også vælge en bestemt skærm eller **Skærmoversigt**.
 
@@ -159,11 +162,21 @@ Du kan også markere frasen som **Skjult**, så den ikke vises blandt knapperne.
 
 ### Læg en besked til side
 
-Du kan lægge den besked, du er i gang med, til side og starte på en ny. Tryk **Hold** ved bogmærket, nederst på skriveskærmen på en telefon og i panelet til højre på en tablet. Knappen står på engelsk i denne version. Den gemte tekst vises som **Parkeret:**. Tryk **Byt** for at bytte om på den nye besked og den, der ligger til side.
+Du kan lægge den besked, du er i gang med, til side og starte på en ny. Tryk **Parkér** nederst på skriveskærmen. Den gemte tekst vises som **Parkeret:**. Tryk **Byt** for at bytte om på den nye besked og den, der ligger til side.
+
+### Knapper, der ændrer stemmen
+
+Nederst i Skrivning er der knapper, der ændrer, hvordan beskeden bliver sagt. De står på dansk. Du ser kun de knapper, din stemme kan bruge:
+
+- **Parkér** og **Sprog** er der altid, sammen med pauser (**0.5 s**, **1.0 s** og **2.0 s**).
+- Har du valgt **ElevenLabs**, kommer der også **Hvisk**, **Grin**, **Suk**, **Glad**, **Trist**, **Begejstret**, **Vred** og **Sarkastisk**. Tryk på en af dem, før du læser op. Så siger stemmen det med den tone.
+- Har du valgt **Azure**, kommer der også **Svag**, **Moderat**, **Stærk**, **Stav**, **Tal**, **Dato**, **Klokkeslæt**, **Telefon** og **Valuta**. De fortæller Azure, hvordan et stykke af teksten skal siges, for eksempel som et tal eller en dato.
+
+Enhedens egen stemme og Google viser ikke de særlige knapper. De kan ikke bruge dem, så de bliver ikke læst op som almindelige ord.
 
 ## Skærme
 
-En **skærm** er et sæt sider med et navn. Der er knapper på siderne, og én side er startsiden. Oversigten hedder **Skærme** («Vælg en skærm til kommunikation»).
+En **skærm** er et sæt sider med et navn. Der er knapper på siderne, og én side er startsiden. Oversigten hedder **Skærme**.
 
 ### Opret eller importér en skærm
 
@@ -173,7 +186,7 @@ Sådan laver du en ny skærm:
 2. Skriv et **Skærmnavn**.
 3. Vælg en skabelon: **Tom**, **Lommeregner** eller **Tastatur** (layout **QWERTY** eller **Alfabetisk**).
 4. Til en tom skærm vælger du, hvor mange **Rækker** og **Kolonner** der skal være.
-5. Tryk **Opret**.
+5. Tryk **Opret**. Startsiden på en ny, tom skærm hedder **Hjem**.
 
 <!-- SCREENSHOT: New screen dialog on Android, showing template choices Tom, Lommeregner and Tastatur, plus name and grid size fields for a blank screen. -->
 <img src="images/ny-skaerm-skabelon.png" alt="Dialog til ny skærm med skabeloner" width="300">
@@ -194,7 +207,7 @@ Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele 
 <!-- SCREENSHOT: Importér tale sheet with sample pasted text, paragraph-per-page control, and a preview of generated pages. -->
 <img src="images/importer-tale.png" alt="Importér tale med forhåndsvisning" width="300">
 
-Tryk på en skærms navn i oversigten for at åbne den. Ikonerne til højre på kortet er: blyant (**Rediger**), to ark (**Dupliker**), hængelås (**Lås** / **Lås op**) og skraldespand (**Slet**).
+Tryk på en skærms navn eller på forhåndsvisningen for at åbne den. Kortet viser startsiden, navnet og hvor mange sider der er. **Rediger** åbner skærmen, så du kan rette den. Under **Mere** (de tre prikker) finder du **Dupliker**, **Lås** / **Lås op** og **Slet**. Skyen på kortet er fjernlagring (se [Del skærme](#del-skærme)).
 
 > [!WARNING]
 > En slettet skærm kan ikke hentes tilbage.
@@ -203,51 +216,55 @@ Tryk på en skærms navn i oversigten for at åbne den. Ikonerne til højre på 
 
 Åbn en skærm, og tryk på knapperne. En knap kan læse op, lægge tekst i beskedlinjen eller åbne en anden side. Det afhænger af, hvordan knappen er sat op.
 
-Er **Beskedlinje** vist, har den knapper med ikoner. På en bred skærm står navnet ved siden af ikonet:
+Skærmen fylder siden. Øverst til venstre er **Menu**. Her finder du **Rediger skærm**, **Vis skjulte knapper midlertidigt**, **Eksportér**, **Udskriv (PDF)**, **Tilbage til skærme**, **Skift til Skriv** og **App-indstillinger**.
 
-- ▶ (**Afspil**) læser beskeden op.
-- ⌫ (**Slet ord**) fjerner den sidste del af beskeden, fx hele teksten fra den sidste knap, du trykkede på. På en staveside fjerner den det sidste tegn.
-- ✕ (**Ryd**) sletter hele beskeden.
+Har skærmen flere sider, står **Forrige side** og **Startside** øverst til højre. På en bred skærm står navnet ved siden af ikonet.
 
-Har skærmen flere sider, er der også to knapper til venstre i beskedlinjen:
+Er **Beskedlinje** vist, ligger ordene under menuen. Hvert ord står for sig, med symbolet ved siden af, hvis knappen har et. Tryk på ordet for at høre det igen. Krydset ved ordet fjerner det.
 
-- ← går en side tilbage (**Forrige side**).
-- ⌂ går til startsiden (**Startside**).
+Ved siden af beskeden er der knapper, du selv kan vælge. Fra start er det ofte kun ▶ (**Afspil**). De andre lægger du på, mens du redigerer. Se [Rediger sider og knapper](#rediger-sider-og-knapper).
 
-Bruger du TalkBack, hører du **Læs sætningen op**, **Slet sidste ord** og **Ryd sætningen**.
+- ▶ (**Afspil**) læser beskeden op. Mens den læser, kan du trykke **Stop**. TalkBack siger **Læs sætningen op**.
+- Bogmærket (**Parkér beskeden**) lægger beskeden til side. Ligger der en besked til side, hedder knappen **Skift med parkeret besked**.
+- ⌫ (**Slet sidste**) fjerner den sidste del af beskeden. På en staveside fjerner den det sidste tegn. TalkBack siger **Slet sidste ord**.
+- Skraldespanden (**Slet alt**) sletter hele beskeden. TalkBack siger **Ryd sætningen**.
 
 Er **Stryg mellem sider** tændt under **Tilgængelighed**, kan du også stryge: mod venstre for at gå til næste side, og mod højre for at gå til forrige side. Fra den sidste side kommer du ikke til den første ved at stryge, og omvendt. Strygning virker ikke, mens **Vælg ved berøring** er tændt.
 
-Vil du se de skjulte knapper et øjeblik, så tryk på de tre prikker øverst til højre, og vælg **Vis skjulte knapper midlertidigt**. Ser du et øje øverst i stedet, så tryk på øjet.
+Vil du se de skjulte knapper et øjeblik, så tryk **Menu**, og vælg **Vis skjulte knapper midlertidigt**.
 
-<!-- SCREENSHOT: An open Screen in communication (not editing) mode: a grid of symbol buttons, message bar with a short composed message, and page navigation (Forrige side / Startside) visible. -->
-<img src="images/skaerm-kommunikation.png" alt="En skærm i brug med beskedlinje og symbolknapper" width="300">
+<!-- SCREENSHOT: An open Screen filling the page: Menu at the top, a grid of buttons, and a message bar with a symbol chip you can tap to say that word again, plus Afspil beside it. -->
+<img src="images/skaerm-kommunikation.png" alt="En skærm i brug med symboler i beskedlinjen" width="300">
 
 ### Rediger sider og knapper
 
 > [!TIP]
 > Er du bange for at ødelægge noget? Tryk **Dupliker** i oversigten først. Så har du en kopi af skærmen, som den var.
 
-Er skærmen låst, så tryk først på den åbne hængelås til højre på kortet (**Lås op**) i oversigten **Skærme**. Er der sat en redigeringskode, så tast den. Se [Låsning af redigering](#låsning-af-redigering).
+Er skærmen låst, så tryk først **Mere** og **Lås op** i oversigten **Skærme**. Er der sat en redigeringskode, så tast den. Se [Låsning af redigering](#låsning-af-redigering).
 
 Sådan åbner du en skærm til redigering:
 
-- I oversigten **Skærme**: tryk på blyanten (**Rediger**).
-- På en åben skærm: tryk på de tre prikker øverst til højre, og vælg **Rediger skærm**. Ser du en blyant øverst i stedet, så tryk på blyanten.
+- I oversigten **Skærme**: tryk **Rediger**.
+- På en åben skærm: tryk **Menu**, og vælg **Rediger skærm**.
 
-Mens du redigerer:
+Mens du redigerer, retter du direkte på siden:
 
 - Tryk på et tomt felt for at lave en ny knap. Skriv fx `Ja` under **Etiket**, og tryk **Gem**.
-- Tryk på en knap for at vælge den, og tryk **Rediger** eller **Fjern** øverst. Du kan også holde fingeren på knappen og vælge **Rediger**, **Tilpas størrelse** eller **Fjern**, eller trække knappen til et andet felt.
-- Tryk på de tre prikker øverst til højre for at se flere valg: **Tilføj side**, **Brug som startside**, **Tilpas sidens størrelse**, **Slet side**, **Skærmindstillinger** og **Sideindstillinger**. På en bred skærm, fx en tablet, står de fleste som ikoner øverst, og under de tre prikker finder du kun **Tilføj side**.
+- Tryk én gang på en knap for at vælge den. Så kan du trække i kanten for at ændre størrelsen, eller trykke på skraldespanden (**Fjern**). Tryk på knappen igen for at åbne **Rediger felt**.
+- Du kan også holde fingeren på knappen og vælge **Rediger**, **Tilpas størrelse** eller **Fjern**, eller trække knappen til et andet felt.
+- Øverst står **Redigerer:** og skærmens navn. Tryk på navnet for at vælge **Omdøb skærm** eller **Skærmindstillinger**.
+- Under navnet ligger siderne. Tryk på en side for at vise den. Tryk igen på den side, du allerede er på, for at vælge **Sideindstillinger**, **Tilpas sidens størrelse**, **Brug som startside** eller **Slet side**. Startsiden har et lille hus.
+- Tryk **Tilføj side** for at lave en ny side.
 - **Tilpas sidens størrelse** ændrer antal rækker og kolonner. Skal siden gøres mindre, skal de knapper, der ikke kan være der, først flyttes.
 - Den buede pil øverst (**Fortryd**) tager det sidste trin tilbage.
 - Skjulte knapper vises, mens du redigerer.
+- Ved siden af beskedlinjen vælger du, hvilke knapper der skal være der, når du bruger skærmen. Tryk på en knap for at skifte den eller fjerne den. Tryk på plusset (**Tilføj knap til beskedlinjen**) for at lægge en til. Du kan have op til fire: **Afspil**, **Parkér beskeden**, **Slet sidste** og **Slet alt**.
 
-Når du er færdig, trykker du **Afslut redigering**. Vælg **Gem ændringer**, **Kassér** eller **Fortsæt redigering**.
+Når du er færdig, trykker du **Færdig**. Vælg **Gem ændringer**, **Kassér** eller **Fortsæt redigering**.
 
-<!-- SCREENSHOT: A Screen in edit mode (banner or title “Redigerer: …”). One button is selected or a context menu shows Rediger, Tilpas størrelse and Fjern. Empty cells and the finish-editing action are visible. -->
-<img src="images/skaerm-redigering.png" alt="Skærm i redigeringstilstand" width="300">
+<!-- SCREENSHOT: A Screen in edit mode, title “Redigerer: …”, page chips, empty cells with a selected button or the add control, and Færdig. -->
+<img src="images/skaerm-redigering.png" alt="Skærm i redigering direkte på siden" width="300">
 
 ### Symboler, billeder, farver og størrelse
 
@@ -278,7 +295,7 @@ Sådan får du en knap til at åbne en anden side:
 
 1. Mangler siden, så vælg **Tilføj side**, giv siden et navn, og tryk **Opret**. Wingmate viser nu den nye side.
 2. Tryk på navnet på den side, hvor knappen skal ligge, i rækken med sider øverst.
-3. Tryk på knappen, og vælg **Rediger**. Vælg **Åbn side** under **Felthandling**.
+3. Tryk én gang på knappen, og tryk igen for at åbne den. Vælg **Åbn side** under **Felthandling**.
 4. Tryk **Vælg en side** under **Målside**, vælg siden, og tryk **Gem**.
 
 **Særlige handlinger** kan lægges på en knap. De hedder blandt andet:
@@ -297,7 +314,7 @@ Du kan også bestemme, hvad der sker, når du har trykket på en almindelig knap
 
 ### Skærm- og sideindstillinger
 
-Åbn skærmen til redigering (se [Rediger sider og knapper](#rediger-sider-og-knapper)). Tryk på de tre prikker øverst til højre, og vælg **Skærmindstillinger** eller **Sideindstillinger**. På en bred skærm står de som ikoner øverst: tandhjulet åbner **Skærmindstillinger**, og blyanten åbner **Sideindstillinger**. Her kan du blandt andet:
+Åbn skærmen til redigering (se [Rediger sider og knapper](#rediger-sider-og-knapper)). Tryk på **Redigerer:** og skærmens navn øverst, og vælg **Skærmindstillinger**. Til **Sideindstillinger** trykker du på den side, du allerede er på, og vælger **Sideindstillinger**. Her kan du blandt andet:
 
 - give skærmen eller siden et nyt navn
 - slå **Vis etiketter** og **Vis symboler** til eller fra, og vælge **Etikettens placering** (**Øverst** eller **Nederst**), når begge vises
@@ -311,6 +328,31 @@ En skærm kan følge appen med **Brug appstandard**, og en side kan følge skær
 
 <!-- SCREENSHOT: Screen settings page (Skærmindstillinger) showing appearance and communication options such as Vis etiketter, Vis symboler, Beskedlinje and Aktivering af knap. -->
 <img src="images/skaerm-indstillinger.png" alt="Skærmindstillinger" width="300">
+
+### Del skærme
+
+En hjælper, lærer eller en i familien kan rette dine skærme fra sin egen telefon eller tablet. Wingmate gemmer stadig en kopi på din enhed, så skærmene virker, også når du er offline. Ændringer sendes videre, når der er internet.
+
+Sådan forbinder du et drev:
+
+1. Gå til **Indstillinger → Synkronisering**.
+2. Tryk **Google Drev** eller **OneDrive**, og log ind.
+3. Wingmate laver en mappe, der hedder Wingmate, og holder skærmene der synkroniseret.
+
+Du kan også trykke **Vælg synkroniseringsmappe**, hvis skærmene skal ligge i en mappe, du allerede synkroniserer med et andet program.
+
+<!-- SCREENSHOT: Settings → Synkronisering, with Google Drev and OneDrive, and the note that screens still work offline. -->
+<img src="images/indstillinger-synkronisering.png" alt="Synkronisering under Indstillinger" width="300">
+
+Vil du lægge én skærm op, så tryk på skyen på skærmens kort. Vælg **Google Drev** eller **OneDrive**, tryk **Log ind**, og tryk **Gem i Google Drev** eller **Gem i OneDrive**. Del derefter filen i Google Drev eller OneDrive med den, der skal kunne rette den. Wingmate kan kun åbne filer, som Wingmate selv har lavet, eller som du åbner med Wingmate.
+
+På den anden enhed: gå til oversigten **Skærme**, tryk på skyen med pilen ned (**Åbn fjernskærm**), log ind, vælg filen, og tryk **Åbn**.
+
+Ændringer synkroniseres af sig selv, når der er forbindelse. Du kan også trykke **Synkroniser nu**.
+
+Er der ændret begge steder på én gang, står der **Synkroniseringskonflikt**. Så kan du vælge **Erstat denne skærm med fjernkopi**, **Overskriv fjernkopi med denne skærm** eller **Gem fjernkopi som ny skærm**.
+
+Sletter du en skærm, der ligger i skyen, spørger Wingmate, om filen også skal væk: **Slet her og i Google Drev** (eller OneDrive) eller **Slet kun på denne enhed**.
 
 ## Låsning af redigering
 
@@ -338,9 +380,9 @@ Bagefter kan du trykke **Skift redigeringskode**, **Deaktivér redigeringskode**
 
 ### Lås på en enkelt skærm
 
-**Lås** fryser sider og knapper på en skærm. De kan ikke ændres, før du trykker **Lås op**. Er redigeringskoden tændt, skal den tastes for at låse eller låse op. En låst skærm har en lukket hængelås foran navnet i oversigten. TalkBack læser den som **Låst**. Du kan stadig åbne den og tale.
+**Lås** fryser sider og knapper på en skærm. Du finder **Lås** og **Lås op** under **Mere** på kortet. Sider og knapper kan ikke ændres, før du trykker **Lås op**. Er redigeringskoden tændt, skal den tastes for at låse eller låse op. En låst skærm har en hængelås på forhåndsvisningen, og **Rediger** er slået fra. TalkBack læser den som **Låst**. Du kan stadig åbne den og tale.
 
-<!-- SCREENSHOT: Screens library showing a screen marked Låst, with the unlock action (Lås op) visible and the Edit action disabled or unavailable. -->
+<!-- SCREENSHOT: Screens library showing a screen with a lock badge on the preview and Rediger disabled. Lås op is under Mere. -->
 <img src="images/laast-skaerm.png" alt="En låst skærm i oversigten" width="300">
 
 ## Stemmer
@@ -395,7 +437,7 @@ Fra oversigten **Skærme**:
 ### Send en skærm ud
 
 1. Åbn skærmen.
-2. Tryk på de tre prikker øverst til højre, og vælg **Importer/eksporter data**. På en bred skærm, fx en tablet, trykker du i stedet på pilene ↑↓ øverst. Så åbner **Eksportér**.
+2. Tryk **Menu**, og vælg **Eksportér**.
 3. Vælg, hvad du vil lave:
    - **Open Board (.obz)** – skærmen i en fil, som andre ASK-apps også kan læse.
    - **Eksportér til Grid** – en fil til Smartbox Grid 3. I Grid Explorer vælger du **Add Grid Set → Grid set file**. Se [Smartbox’ vejledning til Grid Explorer](https://hub.smartboxaac.com/knowledgebase/grid-explorer-in-grid-3/) (på engelsk).
@@ -403,7 +445,7 @@ Fra oversigten **Skærme**:
    <!-- SCREENSHOT: The Eksportér dialog, showing Open Board (.obz) and Eksportér til Grid. -->
    <img src="images/eksport-menu.png" alt="Dialogen Eksportér med Open Board (.obz) og Eksportér til Grid" width="300">
 
-Vil du udskrive skærmen, laver du en PDF. Tryk på de tre prikker øverst til højre, og vælg **Udskriv (PDF)**. På en tablet, hvor der ikke er tre prikker øverst, kan du ikke udskrive i denne version. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
+Vil du udskrive skærmen, laver du en PDF. Tryk **Menu**, og vælg **Udskriv (PDF)**. Du får som regel ét liggende A4-ark pr. side. En knap, der går til en anden side, får skrevet, hvilken side den går til.
 
 ### Hvad følger med til Grid
 
@@ -438,7 +480,8 @@ Sådan åbner du **Indstillinger**:
 
 - Fra Skrivning på en telefon: tryk på de tre prikker øverst til højre, og vælg **App-indstillinger**. Er tastaturet fremme, så tryk først på plusset til venstre for tekstfeltet.
 - Fra Skrivning på en bred skærm, fx en tablet: tryk på tandhjulet i panelet til højre.
-- Fra **Skærme**: tryk på tandhjulet øverst.
+- Fra oversigten **Skærme**: tryk på tandhjulet øverst.
+- Fra en åben skærm: tryk **Menu**, og vælg **App-indstillinger**.
 
 Du kan søge med **Søg i Indstillinger**. **Udtaleordbog** er sit eget punkt på forsiden af **Indstillinger**.
 
@@ -447,6 +490,7 @@ Du kan søge med **Søg i Indstillinger**. **Udtaleordbog** er sit eget punkt p�
 | **Tale og sprog** | Hvad der taler, stemme og sprog. Hastighed for stemmer på nettet |
 | **Skærm og layout** | Etiketter og symboler, knappernes opstilling, kontrast, **Ordtypefarver**, skrift- og knapstørrelse, beskedlinje |
 | **Tilgængelighed** | Berøring og tid, betjening, lyd og markering |
+| **Synkronisering** | Google Drev, OneDrive eller en mappe til skærme. Skærmene virker stadig offline |
 | **Privatliv** | **Vis talehistorik**, **Sandsynlige næste beskeder (eksperimentel)**, gemte sætninger, anonym rapportering |
 | **System og data** | **Åbn ved opstart**, redigeringskode, sikkerhedskopi, hentning af ARASAAC-symboler, **Velkomstskærm** |
 
@@ -458,7 +502,7 @@ Andre valg, der er gode at kende:
 - **Standardiseret logning (OBL)** (under **Privatliv**): en liste over brugen, som en terapeut kan gennemgå. Listen bliver på enheden.
 - **Velkomstskærm** under **System og data** kører den første opsætning igen.
 
-<!-- SCREENSHOT: The Settings home/overview, showing the category list: Tale og sprog, Skærm og layout, Tilgængelighed, Privatliv, and System og data. -->
+<!-- SCREENSHOT: The Settings home/overview, showing Tale og sprog, Skærm og layout, Tilgængelighed, Synkronisering, Privatliv, and System og data. -->
 <img src="images/indstillinger-oversigt.png" alt="Oversigten Indstillinger" width="300">
 
 ## Tilgængelighed og betjening
@@ -513,6 +557,6 @@ Når du beskriver et problem, så skriv gerne hvilken telefon eller tablet og hv
 
 Wingmate er gratis, og koden er åben: [github.com/Jdreioe/Wingmate](https://github.com/Jdreioe/Wingmate). Licens: GPL 3.0.
 
-Manualen beskriver Wingmate, som den så ud i commit [`ab4a8e2`](https://github.com/Jdreioe/Wingmate/commit/ab4a8e242126a2dc2a978e52f5e077038a6770e2) på `main` (25. november 2026). Udgivelsen er `v1.9.0` på Google Play.
+Manualen beskriver Wingmate, som den så ud i commit [`5fb3aa2`](https://github.com/Jdreioe/Wingmate/commit/5fb3aa22b63b83fd9f21bc4deb1eb864fec7c056) (25. november 2026). Udgivelsen er `v1.10.0` på Google Play.
 
 Der er ikke en udgave til computer i denne version. Den ældre computerudgave ligger under [`desktop-archive`](https://github.com/Jdreioe/Wingmate/tree/desktop-archive).
