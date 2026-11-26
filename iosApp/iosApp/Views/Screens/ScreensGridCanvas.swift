@@ -5,12 +5,19 @@ import AudioToolbox
 extension SymbolBoardWorkspaceView {
     @ViewBuilder
     func boardPreview(isEditMode: Bool) -> some View {
-        if let board = model.selectedBoard {
+        if let board = model.selectedBoard, model.boardCellsReady(for: board.id) {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
             let desiredGap = Double(model.resolvedBoardCellGapDp ?? 8)
             let desiredInset = Double(model.resolvedBoardOuterMarginDp ?? 8)
-            let touchExitActive = model.boardCellsReady(for: board.id) &&
+            let hasVisibleButton = model.boardCells.contains {
+                model.boardButtonIsVisible(
+                    hidden: $0.hidden,
+                    isEditMode: isEditMode,
+                    showHiddenButtons: showHiddenButtons
+                )
+            }
+            let touchExitActive = hasVisibleButton &&
                 TouchExitControllerKt.touchExitIsActive(
                     isEditMode: isEditMode,
                     holdToSelectMillis: Int64(model.holdToSelectMillis),
@@ -141,7 +148,12 @@ extension SymbolBoardWorkspaceView {
                 .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
                     guard !isEditMode, !touchExitActive, abs(value.translation.width) >= 64,
                           abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                    Task { await model.swipePage(by: value.translation.width < 0 ? 1 : -1) }
+                    Task {
+                        await model.swipePage(
+                            by: value.translation.width < 0 ? 1 : -1,
+                            touchExitOwnsGrid: touchExitActive
+                        )
+                    }
                 })
                 .onChange(of: touchExitGestureActive) { _, active in
                     if !active { cancelTouchExit() }
@@ -227,7 +239,7 @@ extension SymbolBoardWorkspaceView {
                     }
             )
             .onHover { hovering in
-                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                let targetId = model.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
                 if hovering {
                     model.accessEnter(targetId)
                     if model.auditoryFishingEnabled, !model.inputIsPaused {
@@ -242,16 +254,59 @@ extension SymbolBoardWorkspaceView {
                 }
             }
             .onAppear {
-                guard !isEditMode, cell != nil else { return }
-                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                model.registerAccessTarget(targetId, handlesHaptics: true) {
-                    activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                if !isEditMode, let buttonId = cell?.buttonId {
+                    model.registerScreenButtonAccessTarget(
+                        pageId: pageId,
+                        row: row,
+                        col: col,
+                        buttonId: buttonId
+                    ) { currentCell in
+                        activateBoardCell(currentCell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                    }
                 }
             }
-            .onDisappear { model.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
-            .accessTargetFocus(model: model, targetId: "board:\(cell?.buttonId ?? sourceCellId)")
+            .onChange(of: cell?.buttonId) { oldButtonId, newButtonId in
+                if let oldButtonId {
+                    model.unregisterAccessTarget(model.screenButtonAccessTargetId(pageId: pageId, buttonId: oldButtonId))
+                }
+                if !isEditMode, let newButtonId {
+                    model.registerScreenButtonAccessTarget(
+                        pageId: pageId,
+                        row: row,
+                        col: col,
+                        buttonId: newButtonId
+                    ) { currentCell in
+                        activateBoardCell(currentCell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                    }
+                }
+            }
+            .onChange(of: isEditMode) { _, editing in
+                if let buttonId = cell?.buttonId {
+                    if editing {
+                        model.unregisterAccessTarget(model.screenButtonAccessTargetId(pageId: pageId, buttonId: buttonId))
+                    } else {
+                        model.registerScreenButtonAccessTarget(
+                            pageId: pageId,
+                            row: row,
+                            col: col,
+                            buttonId: buttonId
+                        ) { currentCell in
+                            activateBoardCell(currentCell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                model.unregisterAccessTarget(
+                    model.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
+                )
+            }
+            .accessTargetFocus(
+                model: model,
+                targetId: model.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
+            )
             .overlay {
-                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                let targetId = model.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
                 if !isEditMode && model.accessTargetId == targetId && model.pointerEmphasisStyle != "System" {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)

@@ -365,7 +365,7 @@ final class TouchAccessParityTests: XCTestCase {
             license: nil,
             extensions: [:]
         )
-        let staleCell = BoardCellInfo(
+        let pageACell = BoardCellInfo(
             row: 0,
             col: 0,
             buttonId: "b1",
@@ -387,12 +387,41 @@ final class TouchAccessParityTests: XCTestCase {
             language: nil,
             mathMode: false
         )
+        let pageBCell = BoardCellInfo(
+            row: 0,
+            col: 0,
+            buttonId: "b1",
+            label: "New Button",
+            vocalization: nil,
+            backgroundColor: nil,
+            resolvedBackgroundColor: nil,
+            wordType: nil,
+            borderColor: nil,
+            linkedBoardId: nil,
+            imageId: nil,
+            imageUrl: nil,
+            hidden: false,
+            actions: [],
+            soundId: nil,
+            soundDataUrl: nil,
+            soundPath: nil,
+            shape: "rectangle",
+            language: nil,
+            mathMode: false
+        )
 
+        var activatedTargets: [(String, String)] = []
         model.selectedBoardId = "page-a"
         model.selectedBoard = pageA
+        model.boardCells = [pageACell]
         model.loadedBoardCellsPageId = "page-a"
         XCTAssertTrue(model.boardCellsReady(for: "page-a"))
         XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+
+        let pageATargetId = model.screenButtonAccessTargetId(pageId: "page-a", buttonId: "b1")
+        model.registerScreenButtonAccessTarget(pageId: "page-a", row: 0, col: 0, buttonId: "b1") { cell in
+            activatedTargets.append(("page-a", cell.label ?? ""))
+        }
 
         // Starting navigation to page-b immediately invalidates page-a before page-b loads.
         model.loadedBoardCellsPageId = nil
@@ -400,21 +429,46 @@ final class TouchAccessParityTests: XCTestCase {
         XCTAssertFalse(model.boardCellsReady(for: "page-a"))
         XCTAssertFalse(model.boardCellsReady(for: "page-b"))
 
-        // Attempting activation of an old cell during handoff must be ignored before debounce/speech.
-        await model.activateBoardCell(staleCell, onPageId: "page-a", checkDebounce: true)
+        // Attempting activation of an old cell or registered dwell/switch target during handoff
+        // must be ignored before debounce or speech.
+        await model.activateBoardCell(pageACell, onPageId: "page-a", checkDebounce: true)
+        model.applyAccessInput(AccessInputEffectActivate(targetId: pageATargetId))
+        XCTAssertTrue(activatedTargets.isEmpty)
 
-        // Rendering page-b before its cells arrive still keeps activation gated.
+        // Rendering page-b before its cells arrive still keeps activation and registered targets gated.
         model.selectedBoard = pageB
         XCTAssertFalse(model.boardCellsReady(for: "page-b"))
-        await model.activateBoardCell(staleCell, onPageId: "page-b", checkDebounce: true)
+        let pageBTargetId = model.screenButtonAccessTargetId(pageId: "page-b", buttonId: "b1")
+        model.registerScreenButtonAccessTarget(pageId: "page-b", row: 0, col: 0, buttonId: "b1") { cell in
+            activatedTargets.append(("page-b", cell.label ?? ""))
+        }
+        await model.activateBoardCell(pageACell, onPageId: "page-b", checkDebounce: true)
+        model.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
+        XCTAssertTrue(activatedTargets.isEmpty)
 
         // Neither stale attempt consumed the debounce slot for page-a or page-b.
         XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: "page-a", buttonId: "b1")))
         XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: "page-b", buttonId: "b1")))
 
-        // Once page-b's cells finish loading, Touch Exit becomes active on page-b.
+        // Once page-b's cells finish loading with the same Button ID ("b1") and different text,
+        // page-a's old registered callback stays inert and page-b's callback resolves page-b's live Button.
+        model.boardCells = [pageBCell]
         model.loadedBoardCellsPageId = "page-b"
         XCTAssertTrue(model.boardCellsReady(for: "page-b"))
+        model.applyAccessInput(AccessInputEffectActivate(targetId: pageATargetId))
+        XCTAssertTrue(activatedTargets.isEmpty)
+        model.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
+        XCTAssertEqual(activatedTargets.count, 1)
+        XCTAssertEqual(activatedTargets.first?.0, "page-b")
+        XCTAssertEqual(activatedTargets.first?.1, "New Button")
+
+        // If the cell at (0, 0) changes Button ID, an older registered target ID must not fire it.
+        var replacedCell = pageBCell
+        replacedCell.buttonId = "b2"
+        replacedCell.label = "Replaced Button"
+        model.boardCells = [replacedCell]
+        model.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
+        XCTAssertEqual(activatedTargets.count, 1)
     }
 
     @MainActor

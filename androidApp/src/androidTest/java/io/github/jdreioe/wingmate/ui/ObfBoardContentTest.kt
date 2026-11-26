@@ -431,16 +431,34 @@ class ObfBoardContentTest {
             y = yesBounds.center.y - gridBounds.top,
         )
 
-        grid.performTouchInput {
-            down(yesLocal)
-            moveTo(gapLocal)
-            up()
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { moveTo(gapLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        var cancelCountAfterGap = 0
+        composeRule.runOnIdle {
+            assertEquals(emptyList<String>(), clicked)
+            assert(cancelCount > 0)
+            cancelCountAfterGap = cancelCount
         }
+
+        val outsideGridLocal = Offset(
+            x = -24f,
+            y = yesBounds.center.y - gridBounds.top,
+        )
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { moveTo(outsideGridLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
         composeRule.waitForIdle()
 
         composeRule.runOnIdle {
             assertEquals(emptyList<String>(), clicked)
-            assert(cancelCount > 0)
+            assert(cancelCount > cancelCountAfterGap)
         }
     }
 

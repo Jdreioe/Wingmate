@@ -12,13 +12,18 @@ extension IosViewModel {
         } catch { boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
     }
 
-    func swipePage(by offset: Int) async {
+    func swipePage(by offset: Int, touchExitOwnsGrid: Bool? = nil) async {
+        let touchExitBlocksSwipe = touchExitOwnsGrid ?? (
+            selectOnTouchExit &&
+            selectedBoardId.map { boardCellsReady(for: $0) } == true &&
+            boardCells.contains { !$0.hidden }
+        )
         guard TouchExitControllerKt.pageSwipeIsActive(
                 isEditMode: false,
                 swipeBetweenPages: swipeBetweenPages,
                 holdToSelectMillis: Int64(holdToSelectMillis),
                 selectOnTouchDown: selectOnTouchDown,
-                selectOnTouchExit: selectOnTouchExit,
+                selectOnTouchExit: touchExitBlocksSwipe,
                 disableOnHoldToSelect: true
               ),
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
@@ -38,6 +43,30 @@ extension IosViewModel {
     /// OBF Button ID do not wrongly debounce legitimate selections after navigation.
     func screenButtonDebounceKey(pageId: String? = nil, buttonId: String) -> String {
         "board:\(pageId ?? selectedBoardId ?? ""):\(buttonId)"
+    }
+
+    /// Scopes Screen Button hover, dwell, and switch access targets to `(pageId, buttonId)`.
+    func screenButtonAccessTargetId(pageId: String, buttonId: String) -> String {
+        "board:\(pageId):\(buttonId)"
+    }
+
+    /// Registers a dwell/switch access target that resolves the live Screen Button at activation
+    /// time and verifies both Page readiness and Button identity before invoking [action].
+    func registerScreenButtonAccessTarget(
+        pageId: String,
+        row: Int,
+        col: Int,
+        buttonId: String,
+        action: @escaping (BoardCellInfo) -> Void
+    ) {
+        let targetId = screenButtonAccessTargetId(pageId: pageId, buttonId: buttonId)
+        registerAccessTarget(targetId, handlesHaptics: true) { [weak self] in
+            guard let self,
+                  self.boardCellsReady(for: pageId),
+                  let current = self.cellAt(row: row, col: col),
+                  current.buttonId == buttonId else { return }
+            action(current)
+        }
     }
 
     func loadSelectedBoard() async {
@@ -266,13 +295,6 @@ extension IosViewModel {
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.cell_clear_failed")
         }
-    }
-
-    func activateSelectedBoardCell(row: Int, col: Int, checkDebounce: Bool = true) async {
-        guard let pageId = selectedBoardId,
-              boardCellsReady(for: pageId),
-              let cell = cellAt(row: row, col: col) else { return }
-        await activateBoardCell(cell, onPageId: pageId, checkDebounce: checkDebounce)
     }
 
     /// Executes a resolved Screen Button's deferred navigation or speech only while [pageId]
@@ -531,6 +553,7 @@ extension IosViewModel {
                 } else {
                     selectedBoardId = nil
                     selectedBoard = nil
+                    loadedBoardCellsPageId = nil
                     boardCells = []
                     boardFieldItems = []
                 }
