@@ -343,6 +343,61 @@ class QueuedCommunicationSessionTest {
         assertEquals(0, session.state.value.queuedSpeechCount)
     }
 
+    @Test
+    fun `auditory fishing previews replace prior previews instead of queueing stale speech`() = runTest {
+        val speech = RecordingSpeechService(blockFirstRequest = true)
+        val session = session(speechService = speech)
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("first"), null, isPreview = true))
+        runCurrent()
+        speech.firstStarted.await()
+
+        // Sliding quickly across two more Buttons cancels the active preview and drops the intermediate one.
+        session.accept(CommunicationAction.SpeakPart(MessagePart("second"), null, isPreview = true))
+        session.accept(CommunicationAction.SpeakPart(MessagePart("third"), null, isPreview = true))
+        runCurrent()
+
+        assertEquals(listOf("first", "third"), speech.spoken)
+        assertTrue(speech.stopCount >= 1)
+        assertEquals(0, session.state.value.queuedSpeechCount)
+    }
+
+    @Test
+    fun `cancel preview stops an active preview without interrupting committed speech`() = runTest {
+        val previewSpeech = RecordingSpeechService(blockFirstRequest = true)
+        val previewSession = session(speechService = previewSpeech)
+        runCurrent()
+
+        previewSession.accept(CommunicationAction.SpeakPart(MessagePart("cue"), null, isPreview = true))
+        runCurrent()
+        previewSpeech.firstStarted.await()
+
+        previewSession.accept(CommunicationAction.CancelPreview)
+        runCurrent()
+        assertEquals(1, previewSpeech.stopCount)
+        assertEquals(CommunicationPlaybackStatus.Idle, previewSession.state.value.playbackStatus)
+
+        // Committed speech is untouched by CancelPreview and by queued preview cancellation.
+        val committedSpeech = RecordingSpeechService(blockFirstRequest = true)
+        val committedSession = session(speechService = committedSpeech)
+        runCurrent()
+
+        committedSession.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        committedSession.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+        committedSpeech.firstStarted.await()
+
+        committedSession.accept(CommunicationAction.SpeakPart(MessagePart("stale"), null, isPreview = true))
+        committedSession.accept(CommunicationAction.CancelPreview)
+        runCurrent()
+
+        assertEquals(0, committedSpeech.stopCount)
+        committedSpeech.releaseFirst.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("hello"), committedSpeech.spoken)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.session(
         dataSource: FakeSessionDataSource = FakeSessionDataSource(),
         speechService: RecordingSpeechService = RecordingSpeechService(),

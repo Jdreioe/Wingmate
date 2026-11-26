@@ -8,7 +8,7 @@ final class IosViewModel: ObservableObject {
     var store: Shared.PhraseListStore?
     private var phraseSubscription: Shared.NativeSubscription?
 
-    @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
+    @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil, lastDeletedUndo: nil)
 
     // Shared feature facades, resolved from the iOS composition root after start()
     lazy var backupFacade = IosDiBridge().backupFacade()
@@ -115,7 +115,7 @@ final class IosViewModel: ObservableObject {
     @Published var inputIsPaused: Bool = false
     @Published var accessTargetId: String? = nil
     @Published var accessDwellProgress: Double = 0
-    var accessActions: [String: () -> Void] = [:]
+    var accessActions: [String: (handlesHaptics: Bool, action: () -> Void)] = [:]
     @Published var usageLoggingEnabled: Bool = false
     @Published var featureUsageReportingEnabled: Bool = false
     @Published var historyVisible: Bool = true
@@ -205,6 +205,10 @@ final class IosViewModel: ObservableObject {
     @Published var pendingPhraseUndo: PendingPhraseUndo? = nil
     var pendingPhraseUndoTask: Task<Void, Never>? = nil
 
+    init() {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
+    }
+
     /// Starts the shared Koin graph. Later calls do nothing. The app calls this at launch,
     /// before any view exists, because views such as the welcome flow resolve facades in
     /// their first `.task`, which can run before `ContentView.onAppear` calls `start()`.
@@ -226,6 +230,7 @@ final class IosViewModel: ObservableObject {
         phraseSubscription?.cancel()
         phraseSubscription = communicationFacade.observePhrases { [weak self] state in
             self?.state = state
+            self?.syncPhraseUndo(from: state)
         }
     // Load selected voice and languages for welcome gating and UI
     refreshVoiceAndLanguages()
@@ -266,7 +271,6 @@ final class IosViewModel: ObservableObject {
     }
 
     func deletePhrase(id: String) {
-        recordPhraseDeletionForUndo(rootId: id)
         store?.accept(intent: Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
 
@@ -277,14 +281,8 @@ final class IosViewModel: ObservableObject {
 }
 
 struct PendingPhraseUndo: Equatable {
-    let id = UUID()
-    let deletedPhrases: [Shared.Phrase]
-    let recordingPaths: [String]
+    let id: Int64
     let includesSubItems: Bool
-
-    static func == (lhs: PendingPhraseUndo, rhs: PendingPhraseUndo) -> Bool {
-        lhs.id == rhs.id
-    }
 }
 
 /// The OpenSymbols proxy from Info.plist, or the environment in development builds.

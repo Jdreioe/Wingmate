@@ -172,6 +172,63 @@ class CommunicationFacadeTest {
         assertEquals(listOf(category, child), phraseRepo.getAll())
     }
 
+    @Test
+    fun undoLastDeletionIsSerializedAndRestoresOriginalRepositoryOrder() = withFakeMain {
+        val phraseRepo = InMemoryPhraseRepository()
+        val first = Phrase(id = "p-0", text = "First", createdAt = 1L)
+        val category = Phrase(id = "cat-1", text = "Food", linkedBoardId = "cat-1", isGridItem = false, createdAt = 2L)
+        val childA = Phrase(id = "p-1", text = "Water", parentId = "cat-1", createdAt = 3L, recordingPath = "/tmp/water.m4a")
+        val middle = Phrase(id = "p-2", text = "Other", createdAt = 4L)
+        val childB = Phrase(id = "p-3", text = "Apple", parentId = "cat-1", createdAt = 5L)
+        listOf(first, category, childA, middle, childB).forEach { phraseRepo.add(it) }
+        val store = facade(phraseRepository = phraseRepo).phraseListStore()
+
+        // Wait for initial load before deleting.
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        // Delete the interleaved category subtree, then immediately trigger undo.
+        store.accept(PhraseListStore.Intent.DeleteCategory(categoryId = "cat-1"))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo == null) delay(10)
+        }
+        assertEquals(true, store.state.lastDeletedUndo?.includesSubItems)
+        assertEquals(listOf("p-0", "p-2"), phraseRepo.getAll().map { it.id })
+
+        store.accept(PhraseListStore.Intent.UndoLastDeletion)
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo != null || phraseRepo.getAll().size != 5) delay(10)
+        }
+        assertEquals(
+            listOf("p-0", "cat-1", "p-1", "p-2", "p-3"),
+            phraseRepo.getAll().map { it.id },
+        )
+    }
+
+    @Test
+    fun failedDeletionDoesNotEmitUndoState() = withFakeMain {
+        val base = InMemoryPhraseRepository()
+        val phrase = Phrase(id = "p-1", text = "Stay", createdAt = 1L, recordingPath = "/tmp/stay.m4a")
+        base.add(phrase)
+        val failingRepo = object : PhraseRepository by base {
+            override suspend fun delete(id: String) {
+                throw IllegalStateException("disk full")
+            }
+        }
+        val store = facade(phraseRepository = failingRepo).phraseListStore()
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.DeletePhrase(phraseId = "p-1"))
+        withTimeout(5_000) {
+            while (store.state.error == null) delay(10)
+        }
+        assertEquals(null, store.state.lastDeletedUndo)
+        assertEquals(listOf(phrase), base.getAll())
+    }
+
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */
     private suspend fun awaitRecordingPath(
         phraseRepo: PhraseRepository,

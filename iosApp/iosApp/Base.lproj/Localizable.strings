@@ -668,7 +668,7 @@
 "action.undo" = "Undo";
 "common.close" = "Close";
 "settings.accessibility.swipe_pages" = "Swipe between Pages";
-"settings.accessibility.swipe_pages.footer" = "Swipe horizontally to an adjacent Page in Screen order. The first and last Pages do not wrap. Hold-to-select and touch-down selection disable swiping.";
+"settings.accessibility.swipe_pages.footer" = "Swipe horizontally to an adjacent Page in Screen order. The first and last Pages do not wrap. Hold-to-select, touch-down selection, and Touch Exit disable swiping.";
 "boardset.background_image" = "Page background image";
 "boardset.background_choose" = "Choose or replace image";
 "boardset.background_fit" = "Fit";

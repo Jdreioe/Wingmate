@@ -358,8 +358,8 @@ extension IosViewModel {
         Task { _ = try? await settingsFacade.updatePointerEmphasis(style: pointerEmphasisStyle, scale: Float(pointerEmphasisScale)) }
     }
 
-    func registerAccessTarget(_ targetId: String, action: @escaping () -> Void) {
-        accessActions[targetId] = action
+    func registerAccessTarget(_ targetId: String, handlesHaptics: Bool = false, action: @escaping () -> Void) {
+        accessActions[targetId] = (handlesHaptics: handlesHaptics, action: action)
     }
 
     func unregisterAccessTarget(_ targetId: String) {
@@ -370,6 +370,7 @@ extension IosViewModel {
     }
 
     func accessEnter(_ targetId: String) {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
         accessInput.targetEntered(targetId: targetId, nowMillis: nowMillis())
         applyAccessInput()
     }
@@ -378,6 +379,7 @@ extension IosViewModel {
         applyAccessInput()
     }
     func accessFocus(_ targetId: String) {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
         accessInput.targetFocused(targetId: targetId, nowMillis: nowMillis())
         applyAccessInput()
     }
@@ -412,9 +414,12 @@ extension IosViewModel {
         if accessTargetId != state.currentTargetId { accessTargetId = state.currentTargetId }
         let newProgress = Double(state.dwellProgress)
         if abs(accessDwellProgress - newProgress) > 0.001 { accessDwellProgress = newProgress }
-        if let activation = effect as? AccessInputEffectActivate {
-            AccessHaptics.perform(.confirm)
-            accessActions[activation.targetId]?()
+        if let activation = effect as? AccessInputEffectActivate,
+           let target = accessActions[activation.targetId] {
+            if !target.handlesHaptics {
+                AccessHaptics.perform(.confirm)
+            }
+            target.action()
         } else if effect is AccessInputEffectPauseChanged {
             AccessHaptics.perform(.tick)
         }

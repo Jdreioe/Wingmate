@@ -63,9 +63,11 @@ class QueuedCommunicationSession(
     private val saveRequests = Channel<Unit>(Channel.CONFLATED)
     private val speechRequests = Channel<SpeechRequest>(Channel.UNLIMITED)
     private val stopGeneration = MutableStateFlow(0L)
+    private val previewGeneration = MutableStateFlow(0L)
     private val pauseRequested = MutableStateFlow(false)
     private val pendingStop = MutableStateFlow<Job?>(null)
     private val activePlayback = MutableStateFlow<Job?>(null)
+    private val activeRequest = MutableStateFlow<SpeechRequest?>(null)
     private var initialLoadFailed = false
     private var speechRequestSequence = 0L
     private var failureSequence = 0L
@@ -85,9 +87,16 @@ class QueuedCommunicationSession(
         scope.launch {
             for (request in speechRequests) {
                 pendingStop.value?.join()
+                if (isStale(request)) {
+                    mutableState.update { current ->
+                        current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
+                    }
+                    continue
+                }
                 // Native Stop may cancel its caller. Give each request its own job so
                 // cancellation cannot terminate the consumer of future speech requests.
                 supervisorScope {
+                    activeRequest.value = request
                     val playback = async(start = CoroutineStart.LAZY) { play(request) }
                     activePlayback.value = playback
                     try {
@@ -96,6 +105,7 @@ class QueuedCommunicationSession(
                         if (!currentCoroutineContext().isActive) throw cancelled
                     } finally {
                         activePlayback.compareAndSet(playback, null)
+                        activeRequest.compareAndSet(request, null)
                     }
                 }
             }
@@ -166,16 +176,22 @@ class QueuedCommunicationSession(
                 }
             }
             is CommunicationAction.SpeakActive -> {
+                cancelPreviews()
                 val message = state.value.activeMessage
                 enqueueSpeech(message, action.voice, action.cacheAudio, recordHistory = true)
             }
-            is CommunicationAction.SpeakPart -> enqueueSpeech(
-                message = Message(parts = listOf(action.part)),
-                voice = action.voice,
-                cacheAudio = action.cacheAudio,
-                recordHistory = false,
-                rateOverride = action.rateOverride,
-            )
+            is CommunicationAction.SpeakPart -> {
+                cancelPreviews()
+                enqueueSpeech(
+                    message = Message(parts = listOf(action.part)),
+                    voice = action.voice,
+                    cacheAudio = action.cacheAudio,
+                    recordHistory = false,
+                    rateOverride = action.rateOverride,
+                    isPreview = action.isPreview,
+                )
+            }
+            CommunicationAction.CancelPreview -> cancelPreviews()
             CommunicationAction.Pause -> pause()
             CommunicationAction.Resume -> resume()
             CommunicationAction.Stop -> stop()
@@ -296,12 +312,15 @@ class QueuedCommunicationSession(
         cacheAudio: Boolean,
         recordHistory: Boolean,
         rateOverride: Double? = null,
+        isPreview: Boolean = false,
     ) {
         if (message.spokenText.isBlank() && message.parts.none { it.recordingPath != null }) return
         val settings = currentSettings()
         val request = SpeechRequest(
             id = ++speechRequestSequence,
             stopGeneration = stopGeneration.value,
+            previewGeneration = previewGeneration.value,
+            isPreview = isPreview,
             message = message.immutableSnapshot(),
             voice = voice.withLanguageOverride(settings.primaryLanguage)?.copy(
                 supportedLanguages = voice?.supportedLanguages?.toList(),
@@ -325,8 +344,7 @@ class QueuedCommunicationSession(
     }
 
     private suspend fun play(request: SpeechRequest) {
-        val generation = request.stopGeneration
-        if (generation != stopGeneration.value) {
+        if (isStale(request)) {
             mutableState.update { current ->
                 current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
             }
@@ -340,9 +358,9 @@ class QueuedCommunicationSession(
             )
         }
         try {
-            awaitResume(generation)
-            playMessage(request, generation)
-            if (generation == stopGeneration.value && request.recordHistory) {
+            awaitResume(request)
+            playMessage(request)
+            if (!isStale(request) && request.recordHistory) {
                 val now = Clock.System.now().toEpochMilliseconds()
                 val saidText = SaidText(
                     date = now,
@@ -365,9 +383,9 @@ class QueuedCommunicationSession(
             }
         } catch (failure: CancellationException) {
             if (!currentCoroutineContext().isActive) throw failure
-            if (generation == stopGeneration.value) markPlaybackFailure()
+            if (!isStale(request)) markPlaybackFailure()
         } catch (_: Throwable) {
-            if (generation == stopGeneration.value) markPlaybackFailure()
+            if (!isStale(request)) markPlaybackFailure()
         } finally {
             mutableState.update { current ->
                 if (current.currentSpeechRequestId == request.id) {
@@ -382,7 +400,7 @@ class QueuedCommunicationSession(
         }
     }
 
-    private suspend fun playMessage(request: SpeechRequest, generation: Long) {
+    private suspend fun playMessage(request: SpeechRequest) {
         val pending = mutableListOf<SpeechChunk>()
         // Once the cloud fails, finish the rest of this request on the device voice.
         var engine = request.engine
@@ -412,7 +430,7 @@ class QueuedCommunicationSession(
 
         suspend fun flushPending() {
             if (pending.isEmpty()) return
-            awaitResume(generation)
+            awaitResume(request)
             val first = pending.first()
             val voice = request.voice
                 .withLanguageOverride(first.languageTag ?: request.primaryLanguage)
@@ -427,17 +445,17 @@ class QueuedCommunicationSession(
                 throw cancelled
             } catch (cloudFailure: Throwable) {
                 if (engine == TtsEngine.SYSTEM) throw cloudFailure
-                ensureNotStopped(generation)
+                ensureNotStopped(request)
                 engine = TtsEngine.SYSTEM
                 markFailure(CommunicationFailureKind.SpeechFallback)
                 speakPending(segments, voice)
             }
             pending.clear()
-            ensureNotStopped(generation)
+            ensureNotStopped(request)
         }
 
         for (chunk in request.message.speechChunks()) {
-            ensureNotStopped(generation)
+            ensureNotStopped(request)
             if (pending.isNotEmpty() && pending.first().mathMode != chunk.mathMode) flushPending()
             val recordingPath = chunk.recordingPath
             if (recordingPath == null) {
@@ -445,7 +463,7 @@ class QueuedCommunicationSession(
                 continue
             }
             flushPending()
-            awaitResume(generation)
+            awaitResume(request)
             mutableState.update { current ->
                 current.copy(playbackStatus = CommunicationPlaybackStatus.Playing)
             }
@@ -458,7 +476,7 @@ class QueuedCommunicationSession(
                 pending += chunk.copy(recordingPath = null)
             } else {
                 awaitPlayback()
-                ensureNotStopped(generation)
+                ensureNotStopped(request)
             }
         }
         flushPending()
@@ -530,6 +548,32 @@ class QueuedCommunicationSession(
         stopping.start()
     }
 
+    private fun cancelPreviews() {
+        previewGeneration.update { it + 1 }
+        val current = activeRequest.value ?: return
+        if (!current.isPreview) return
+        val playback = activePlayback.value
+        playback?.cancel()
+        mutableState.update { state ->
+            if (state.currentSpeechRequestId == current.id) {
+                state.copy(
+                    playbackStatus = CommunicationPlaybackStatus.Idle,
+                    currentSpeechRequestId = null,
+                )
+            } else {
+                state
+            }
+        }
+        val previousStop = pendingStop.value
+        val stopping = scope.launch(start = CoroutineStart.LAZY) {
+            previousStop?.join()
+            playback?.join()
+            runCatching { speechService.stop() }
+        }
+        pendingStop.value = stopping
+        stopping.start()
+    }
+
     private fun markPlaybackFailure() = markFailure(CommunicationFailureKind.Playback)
 
     private fun markFailure(kind: CommunicationFailureKind) {
@@ -537,25 +581,31 @@ class QueuedCommunicationSession(
         mutableState.update { current -> current.copy(lastFailure = failure) }
     }
 
-    private suspend fun awaitResume(generation: Long) {
+    private suspend fun awaitResume(request: SpeechRequest) {
         while (pauseRequested.value) {
-            ensureNotStopped(generation)
+            ensureNotStopped(request)
             mutableState.update { current ->
                 current.copy(playbackStatus = CommunicationPlaybackStatus.Paused)
             }
             delay(20)
         }
-        ensureNotStopped(generation)
+        ensureNotStopped(request)
     }
 
-    private fun ensureNotStopped(generation: Long) {
-        if (generation != stopGeneration.value) throw CancellationException("Speech request stopped")
+    private fun isStale(request: SpeechRequest): Boolean =
+        request.stopGeneration != stopGeneration.value ||
+            (request.isPreview && request.previewGeneration != previewGeneration.value)
+
+    private fun ensureNotStopped(request: SpeechRequest) {
+        if (isStale(request)) throw CancellationException("Speech request stopped")
     }
 }
 
 private data class SpeechRequest(
     val id: Long,
     val stopGeneration: Long,
+    val previewGeneration: Long,
+    val isPreview: Boolean,
     val message: Message,
     val voice: Voice?,
     val cacheAudio: Boolean,

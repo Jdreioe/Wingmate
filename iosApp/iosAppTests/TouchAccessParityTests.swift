@@ -130,4 +130,58 @@ final class TouchAccessParityTests: XCTestCase {
             )
         )
     }
+
+    func testEffectiveKeyguardSpacingClampsNarrowViewportAndPreservesPageZeroOverride() {
+        let narrow = BoardSettingsKt.effectiveKeyguardSpacing(
+            viewportWidthDp: 390,
+            viewportHeightDp: 600,
+            columns: 7,
+            rows: 4,
+            desiredHorizontalGapDp: Double(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP),
+            desiredVerticalGapDp: Double(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP),
+            desiredOuterMarginDp: Double(BoardSettingsKt.MAX_KEYGUARD_OUTER_MARGIN_DP),
+            minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP
+        )
+        let gap = min(narrow.horizontalGapDp, narrow.verticalGapDp)
+        let cellWidth = (390 - narrow.outerMarginDp * 2 - gap * 6) / 7
+        XCTAssertGreaterThanOrEqual(cellWidth, BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP - 0.001)
+
+        // Explicit 0 pt on a Page overrides a non-zero Screen keyguard spacing.
+        let screen = BoardSettingsOverrides(
+            showLabels: nil, showSymbols: nil, labelAtTop: nil,
+            showMessageBar: nil, showSpeakButton: nil, messageBarEditable: nil,
+            activationBehavior: nil, returnBehavior: nil, speechPolicy: nil,
+            cacheSpeech: nil, messageBarActions: nil,
+            cellGapDp: KotlinInt(int: 20), outerMarginDp: KotlinInt(int: 24)
+        )
+        let page = BoardSettingsOverrides(
+            showLabels: nil, showSymbols: nil, labelAtTop: nil,
+            showMessageBar: nil, showSpeakButton: nil, messageBarEditable: nil,
+            activationBehavior: nil, returnBehavior: nil, speechPolicy: nil,
+            cacheSpeech: nil, messageBarActions: nil,
+            cellGapDp: KotlinInt(int: 0), outerMarginDp: KotlinInt(int: 0)
+        )
+        let resolved = BoardSettingsKt.resolveBoardSettings(
+            appShowLabels: true,
+            appShowSymbols: true,
+            appLabelAtTop: false,
+            appShowMessageBar: true,
+            appShowSpeakButton: true,
+            appMessageBarEditable: true,
+            appActivationBehavior: .speakandadd,
+            appReturnBehavior: .stay,
+            screen: screen,
+            page: page
+        )
+        XCTAssertEqual(resolved.cellGapDp?.intValue, 0)
+        XCTAssertEqual(resolved.outerMarginDp?.intValue, 0)
+    }
+
+    @MainActor
+    func testIosViewModelSyncsRearmDelayAtInit() {
+        let model = IosViewModel()
+        XCTAssertEqual(model.accessInput.rearmDelayMillis, ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
+        model.setDwellRearmDelayMillis(250)
+        XCTAssertEqual(model.accessInput.rearmDelayMillis, 250)
+    }
 }

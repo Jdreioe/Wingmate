@@ -641,14 +641,14 @@ private fun BoardSettingChoicesPage(
                             enabled = explicitValue > 0,
                             modifier = Modifier.weight(1f).semantics { contentDescription = decreaseLabel },
                         ) {
-                            Text("-1 dp")
+                            Text(stringResource(R.string.board_settings_spacing_step_down))
                         }
                         OutlinedButton(
                             onClick = { updateValue(explicitValue + 1) },
                             enabled = explicitValue < maxValue,
                             modifier = Modifier.weight(1f).semantics { contentDescription = increaseLabel },
                         ) {
-                            Text("+1 dp")
+                            Text(stringResource(R.string.board_settings_spacing_step_up))
                         }
                     }
                 }

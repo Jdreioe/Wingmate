@@ -55,6 +55,68 @@ enum class MessageBarAction {
 const val MAX_MESSAGE_BAR_ACTIONS = 4
 const val MAX_KEYGUARD_CELL_GAP_DP = 48
 const val MAX_KEYGUARD_OUTER_MARGIN_DP = 64
+const val MIN_KEYGUARD_CELL_SIZE_DP = 24.0
+
+/**
+ * Viewport-constrained keyguard spacing in dp/pt.
+ *
+ * Stored Screen/Page overrides remain untouched (for tablets and OBZ exports), while
+ * narrow viewports clamp effective margin and gaps so Buttons never collapse to zero size.
+ */
+data class EffectiveKeyguardSpacing(
+    val horizontalGapDp: Double,
+    val verticalGapDp: Double,
+    val outerMarginDp: Double,
+)
+
+fun effectiveKeyguardSpacing(
+    viewportWidthDp: Double,
+    viewportHeightDp: Double,
+    columns: Int,
+    rows: Int,
+    desiredHorizontalGapDp: Double,
+    desiredVerticalGapDp: Double,
+    desiredOuterMarginDp: Double,
+    minimumCellSizeDp: Double = MIN_KEYGUARD_CELL_SIZE_DP,
+): EffectiveKeyguardSpacing {
+    val safeCols = columns.coerceAtLeast(1)
+    val safeRows = rows.coerceAtLeast(1)
+    val clampedMargin = desiredOuterMarginDp.coerceAtLeast(0.0)
+    val clampedHGap = desiredHorizontalGapDp.coerceAtLeast(0.0)
+    val clampedVGap = desiredVerticalGapDp.coerceAtLeast(0.0)
+    if (viewportWidthDp <= 0.0 || viewportHeightDp <= 0.0) {
+        return EffectiveKeyguardSpacing(
+            horizontalGapDp = clampedHGap,
+            verticalGapDp = clampedVGap,
+            outerMarginDp = clampedMargin,
+        )
+    }
+
+    val minCell = minimumCellSizeDp.coerceAtLeast(1.0)
+    val maxMarginX = ((viewportWidthDp - minCell * safeCols) / 2.0).coerceAtLeast(0.0)
+    val maxMarginY = ((viewportHeightDp - minCell * safeRows) / 2.0).coerceAtLeast(0.0)
+    val effectiveMargin = minOf(clampedMargin, maxMarginX, maxMarginY)
+
+    val availableWidth = (viewportWidthDp - effectiveMargin * 2.0).coerceAtLeast(0.0)
+    val availableHeight = (viewportHeightDp - effectiveMargin * 2.0).coerceAtLeast(0.0)
+    val effectiveHGap = if (safeCols > 1) {
+        val maxGapX = ((availableWidth - minCell * safeCols) / (safeCols - 1)).coerceAtLeast(0.0)
+        minOf(clampedHGap, maxGapX)
+    } else {
+        clampedHGap
+    }
+    val effectiveVGap = if (safeRows > 1) {
+        val maxGapY = ((availableHeight - minCell * safeRows) / (safeRows - 1)).coerceAtLeast(0.0)
+        minOf(clampedVGap, maxGapY)
+    } else {
+        clampedVGap
+    }
+    return EffectiveKeyguardSpacing(
+        horizontalGapDp = effectiveHGap,
+        verticalGapDp = effectiveVGap,
+        outerMarginDp = effectiveMargin,
+    )
+}
 
 /**
  * Nullable settings used at both inheritance levels:

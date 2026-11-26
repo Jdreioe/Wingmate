@@ -1,5 +1,6 @@
 import Foundation
 import Shared
+import UIKit
 
 extension IosViewModel {
     // MARK: - Message (shared Communication session)
@@ -199,11 +200,24 @@ extension IosViewModel {
         speakMessage(cacheAudio: boardSets.first(where: { $0.id == boardSetId })?.cacheWholeSentences ?? true)
     }
 
-    /// Speaks text on its own (previews, single Buttons) without changing the Message or History.
+    /// Speaks text on its own (single Buttons) without changing the Message or History.
     func speak(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
         session.speakText(text: text, voice: selectedVoice)
+    }
+
+    /// Speaks an auditory-fishing preview, replacing any earlier preview without
+    /// interrupting committed speech or recording History.
+    func previewSpeech(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        AudioSessionHelper.activatePlayback()
+        session.previewText(text: text, voice: selectedVoice, rateOverride: KotlinDouble(value: 0.8))
+    }
+
+    /// Stops any active or queued auditory-fishing preview without interrupting committed speech.
+    func cancelPreviewSpeech() {
+        session.cancelPreview()
     }
 
     /// Says one part of the Message again, e.g. a word the listener missed.
@@ -338,58 +352,55 @@ extension IosViewModel {
     }
 
     func deleteCategory(id: String) {
-        recordPhraseDeletionForUndo(rootId: id)
         store?.accept(intent: Shared.PhraseListStoreIntent.DeleteCategory(categoryId: id))
     }
 
-    /// Captures a Phrase (or Category and all its children) in parent-first order so
-    /// the Communicator or Supporter can undo a destructive deletion before recordings are cleaned up.
-    func recordPhraseDeletionForUndo(rootId: String) {
-        finalizePendingPhraseUndoRecordings()
+    /// Mirrors confirmed deletion undo state from `PhraseListStore` so the banner only
+    /// appears after persistence succeeds, and never unlinks recordings still referenced
+    /// by active/held Messages or History.
+    func syncPhraseUndo(from storeState: Shared.PhraseListStoreState) {
+        guard let undo = storeState.lastDeletedUndo else {
+            pendingPhraseUndoTask?.cancel()
+            pendingPhraseUndoTask = nil
+            if pendingPhraseUndo != nil {
+                pendingPhraseUndo = nil
+            }
+            return
+        }
+        guard pendingPhraseUndo?.id != undo.id else { return }
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
 
-        let combined = state.categories + state.phrases
-        let removed = PhraseTreeKt.phraseSubtree(phrases: combined, rootId: rootId)
-        guard !removed.isEmpty else {
-            pendingPhraseUndo = nil
-            return
-        }
-        let paths = removed.compactMap { $0.recordingPath }.filter { !$0.isEmpty }
-        let entry = PendingPhraseUndo(
-            deletedPhrases: removed,
-            recordingPaths: paths,
-            includesSubItems: removed.count > 1
-        )
+        let entry = PendingPhraseUndo(id: undo.id, includesSubItems: undo.includesSubItems)
         pendingPhraseUndo = entry
-        pendingPhraseUndoTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
-            guard !Task.isCancelled, let self, self.pendingPhraseUndo?.id == entry.id else { return }
-            self.dismissPendingPhraseUndo()
+
+        let messageKey = entry.includesSubItems ? "phrase.deleted_with_subitems" : "phrase.deleted"
+        UIAccessibility.post(notification: .announcement, argument: NSLocalizedString(messageKey, comment: ""))
+
+        // Keep the undo banner visible for assistive-technology users until they choose Undo or Close.
+        if !UIAccessibility.isVoiceOverRunning && !UIAccessibility.isSwitchControlRunning {
+            pendingPhraseUndoTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                guard !Task.isCancelled, let self, self.pendingPhraseUndo?.id == entry.id else { return }
+                self.dismissPendingPhraseUndo()
+            }
         }
     }
 
     func undoPendingPhraseDeletion() {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
-        guard let pending = pendingPhraseUndo else { return }
+        guard pendingPhraseUndo != nil else { return }
         pendingPhraseUndo = nil
         AccessHaptics.perform(.confirm)
-        store?.accept(intent: Shared.PhraseListStoreIntent.RestorePhrases(phrases: pending.deletedPhrases))
+        store?.accept(intent: Shared.PhraseListStoreIntent.UndoLastDeletion())
     }
 
     func dismissPendingPhraseUndo() {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
-        finalizePendingPhraseUndoRecordings()
         pendingPhraseUndo = nil
-    }
-
-    private func finalizePendingPhraseUndoRecordings() {
-        guard let pending = pendingPhraseUndo else { return }
-        for path in pending.recordingPaths {
-            try? FileManager.default.removeItem(atPath: path)
-        }
+        store?.accept(intent: Shared.PhraseListStoreIntent.DismissDeletionUndo())
     }
 
     func updatePhrase(id: String, text: String?, name: String?, imageUrl: String? = nil) {

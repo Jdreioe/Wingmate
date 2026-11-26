@@ -168,7 +168,6 @@ struct TypingWorkspaceView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityAddTraits(.updatesFrequently)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.pendingPhraseUndo)

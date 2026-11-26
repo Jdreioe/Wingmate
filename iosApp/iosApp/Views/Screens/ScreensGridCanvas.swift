@@ -8,8 +8,8 @@ extension SymbolBoardWorkspaceView {
         if let board = model.selectedBoard {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
-            let gridGap: CGFloat = model.resolvedBoardCellGapDp.map { CGFloat($0) } ?? 8
-            let gridInset: CGFloat = model.resolvedBoardOuterMarginDp.map { CGFloat($0) } ?? 8
+            let desiredGap = Double(model.resolvedBoardCellGapDp ?? 8)
+            let desiredInset = Double(model.resolvedBoardOuterMarginDp ?? 8)
             let touchExitActive = TouchExitControllerKt.touchExitIsActive(
                 isEditMode: isEditMode,
                 holdToSelectMillis: Int64(model.holdToSelectMillis),
@@ -18,6 +18,18 @@ extension SymbolBoardWorkspaceView {
             )
 
             GeometryReader { geometry in
+                let effectiveSpacing = BoardSettingsKt.effectiveKeyguardSpacing(
+                    viewportWidthDp: Double(geometry.size.width),
+                    viewportHeightDp: Double(geometry.size.height),
+                    columns: Int32(cols),
+                    rows: Int32(rows),
+                    desiredHorizontalGapDp: desiredGap,
+                    desiredVerticalGapDp: desiredGap,
+                    desiredOuterMarginDp: desiredInset,
+                    minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP
+                )
+                let gridGap = CGFloat(min(effectiveSpacing.horizontalGapDp, effectiveSpacing.verticalGapDp))
+                let gridInset = CGFloat(effectiveSpacing.outerMarginDp)
                 let availableHeight = max(0, geometry.size.height - (gridInset * 2))
                 let availableWidth = max(0, geometry.size.width - (gridInset * 2))
                 let isCompact = board.compactGrid
@@ -203,8 +215,9 @@ extension SymbolBoardWorkspaceView {
                 if hovering {
                     model.accessEnter(targetId)
                     if model.auditoryFishingEnabled, !model.inputIsPaused,
-                       let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
-                        model.speak(preview)
+                       let cell,
+                       let preview = trimmed(cell.vocalization) ?? trimmed(boardCellDisplayLabel(cell)) {
+                        model.previewSpeech(preview)
                     }
                 } else {
                     model.accessExit(targetId)
@@ -213,7 +226,7 @@ extension SymbolBoardWorkspaceView {
             .onAppear {
                 guard !isEditMode, cell != nil else { return }
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                model.registerAccessTarget(targetId) {
+                model.registerAccessTarget(targetId, handlesHaptics: true) {
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
@@ -514,11 +527,13 @@ extension SymbolBoardWorkspaceView {
     }
 
     func touchExitGesture(layout: BoardFoldLayout, isEditMode: Bool) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named("boardGrid"))
+        // Use .local so coordinates share the exact origin of the framed ZStack / foldLayout.
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .updating($touchExitGestureActive) { _, state, _ in
                 state = true
             }
             .onChanged { value in
+                let previousTargetId = touchExitController.state.activeTargetId
                 let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
                 let effect: (any TouchExitEffect)?
                 if !touchExitController.state.isTracking {
@@ -531,11 +546,14 @@ extension SymbolBoardWorkspaceView {
                    let cell = hit?.cell,
                    model.auditoryFishingEnabled,
                    !model.inputIsPaused,
-                   let preview = trimmed(cell.vocalization) ?? trimmed(cell.label) {
-                    model.speak(preview)
+                   let preview = trimmed(cell.vocalization) ?? trimmed(boardCellDisplayLabel(cell)) {
+                    model.previewSpeech(preview)
+                } else if previousTargetId != nil && hit == nil {
+                    model.cancelPreviewSpeech()
                 }
             }
             .onEnded { value in
+                model.cancelPreviewSpeech()
                 let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
                 let effect = touchExitController.release(targetId: hit?.cell.buttonId)
                 touchExitHighlightedButtonId = touchExitController.state.activeTargetId
@@ -553,6 +571,7 @@ extension SymbolBoardWorkspaceView {
 
     func cancelTouchExit() {
         _ = touchExitController.cancel()
+        model.cancelPreviewSpeech()
         if touchExitHighlightedButtonId != nil {
             touchExitHighlightedButtonId = nil
         }

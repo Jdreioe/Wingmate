@@ -159,6 +159,8 @@
     <string name="board_settings_spacing_dp">%1$d dp</string>
     <string name="board_settings_spacing_decrease">Decrease spacing</string>
     <string name="board_settings_spacing_increase">Increase spacing</string>
+    <string name="board_settings_spacing_step_down">-1 dp</string>
+    <string name="board_settings_spacing_step_up">+1 dp</string>
     <string name="board_settings_background_color">Page background</string>
     <string name="board_settings_background_inherited">Uses the app theme</string>
     <string name="board_settings_background_custom">Custom color</string>
@@ -514,7 +516,7 @@
     <string name="ui_settings_select_on_touch_exit_title">Touch Exit (slide to correct)</string>
     <string name="ui_settings_select_on_touch_exit_desc">Slide your finger across buttons to highlight and preview them, lift on a button to select it, or slide off to cancel. Button grids stop scrolling and swipe navigation is disabled.</string>
     <string name="ui_settings_swipe_pages_title">Swipe between pages</string>
-    <string name="ui_settings_swipe_pages_desc">On Screens, swipe left or right to go to the next or previous page in the screen\'s page order. Links, Home and Back work as before. Not available with Select on touch.</string>
+    <string name="ui_settings_swipe_pages_desc">On Screens, swipe left or right to go to the next or previous page in the screen\'s page order. Links, Home and Back work as before. Not available with Select on touch or Touch Exit.</string>
     <string name="ui_settings_hold_to_select_title">Hold to select (ms)</string>
     <string name="ui_settings_hold_to_select_desc">Prevents accidental taps. Set to 0 to disable.</string>
     <string name="ui_settings_grid_columns_title">Grid columns</string>

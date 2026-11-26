@@ -35,13 +35,26 @@ interface PhraseListStore : Store<PhraseListStore.Intent, PhraseListStore.State,
     data class MovePhrase(val phraseId: String, val targetId: String) : Intent()
     /** Restores previously deleted Phrases (and Categories) in parent-first order for undo. */
     data class RestorePhrases(val phrases: List<Phrase>) : Intent()
+    /** Undoes the most recent confirmed deletion, restoring items to their original indices. */
+    data object UndoLastDeletion : Intent()
+    /** Clears the most recent deletion undo entry without deleting any recording files. */
+    data object DismissDeletionUndo : Intent()
     }
+
+    /** A confirmed deletion captured with original repository indices for ordered undo. */
+    data class DeletedPhraseUndo(
+        val id: Long,
+        val phrases: List<Phrase>,
+        val originalIndices: List<Int>,
+        val includesSubItems: Boolean,
+    )
 
     data class State(
         val phrases: List<Phrase> = emptyList(),
         val categories: List<Phrase> = emptyList(),
         val selectedCategoryId: String? = null,
         val isLoading: Boolean = false,
-        val error: String? = null
+        val error: String? = null,
+        val lastDeletedUndo: DeletedPhraseUndo? = null,
     )
 }

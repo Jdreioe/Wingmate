@@ -256,8 +256,12 @@ internal fun rememberBoardFeedback(): BoardFeedback {
                         part = MessagePart(label, languageTag = button.locale),
                         voice = voice,
                         rateOverride = 0.8,
+                        isPreview = true,
                     )
                 )
+            },
+            onCancelAuditoryCue = {
+                session.accept(CommunicationAction.CancelPreview)
             },
         )
     }
@@ -271,7 +275,12 @@ internal fun rememberBoardFeedback(): BoardFeedback {
 internal class BoardFeedback(
     val onActivated: (ObfButton, String) -> Unit = { _, _ -> },
     val onAuditoryCue: suspend (ObfButton, String) -> Unit = { _, _ -> },
+    val onCancelAuditoryCue: () -> Unit = {},
 )
+
+private class PreviewJobHolder {
+    var job: Job? = null
+}
 
 @Composable
 fun ObfBoardView(
@@ -529,10 +538,9 @@ internal fun ObfBoardContent(
     } else if (grid != null) {
         val columns = grid.columns.coerceAtLeast(1)
         val rows = grid.rows.coerceAtLeast(1)
-        val cellGapOverride = effectiveBoardSettings.cellGapDp?.dp
-        val horizontalGapDp = cellGapOverride ?: 4.dp
-        val verticalGapDp = cellGapOverride ?: 8.dp
-        val outerMarginDp = effectiveBoardSettings.outerMarginDp?.dp ?: 8.dp
+        val desiredHorizontalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 4.0
+        val desiredVerticalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 8.0
+        val desiredOuterMarginDp = effectiveBoardSettings.outerMarginDp?.toDouble() ?: 8.0
         val touchExitActive = touchExitIsActive(
             isEditMode = isEditMode,
             holdToSelectMillis = settings.holdToSelectMillis,
@@ -544,11 +552,12 @@ internal fun ObfBoardContent(
         val hapticView = LocalView.current
         val accessHost = LocalAccessInputHost.current
         val previewScope = rememberCoroutineScope()
-        var previewJob by remember(board.id) { mutableStateOf<Job?>(null) }
+        val previewJobHolder = remember(board.id) { PreviewJobHolder() }
         DisposableEffect(board.id, touchExitActive) {
             onDispose {
-                previewJob?.cancel()
-                previewJob = null
+                previewJobHolder.job?.cancel()
+                previewJobHolder.job = null
+                feedback.onCancelAuditoryCue()
             }
         }
         
@@ -594,16 +603,17 @@ internal fun ObfBoardContent(
                                     ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.vocalization)
                                     ?: ""
                                 if (label.isNotBlank()) {
-                                    previewJob?.cancel()
-                                    previewJob = previewScope.launch {
+                                    previewJobHolder.job?.cancel()
+                                    previewJobHolder.job = previewScope.launch {
                                         feedback.onAuditoryCue(button, label)
                                     }
                                 }
                             }
                         },
                         onActivate = { item, button ->
-                            previewJob?.cancel()
-                            previewJob = null
+                            previewJobHolder.job?.cancel()
+                            previewJobHolder.job = null
+                            feedback.onCancelAuditoryCue()
                             val accepted = touchExitDebouncer.tryActivate(
                                 button.id,
                                 Clock.System.now().toEpochMilliseconds(),
@@ -619,6 +629,11 @@ internal fun ObfBoardContent(
                                 feedback.onActivated(button, label)
                                 onCellClick?.invoke(item.row, item.column, button) ?: onButtonClick(button)
                             }
+                        },
+                        onCancel = {
+                            previewJobHolder.job?.cancel()
+                            previewJobHolder.job = null
+                            feedback.onCancelAuditoryCue()
                         },
                     )
                 } else {
@@ -656,12 +671,24 @@ internal fun ObfBoardContent(
                 } else {
                     Modifier.fillMaxSize()
                 }
-                BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth().padding(outerMarginDp)) {
-                    val availableGridHeight = maxHeight
+                BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    val effectiveSpacing = io.github.jdreioe.wingmate.domain.obf.effectiveKeyguardSpacing(
+                        viewportWidthDp = maxWidth.value.toDouble(),
+                        viewportHeightDp = maxHeight.value.toDouble(),
+                        columns = columns,
+                        rows = rows,
+                        desiredHorizontalGapDp = desiredHorizontalGapDp,
+                        desiredVerticalGapDp = desiredVerticalGapDp,
+                        desiredOuterMarginDp = desiredOuterMarginDp,
+                    )
+                    val horizontalGapDp = effectiveSpacing.horizontalGapDp.dp
+                    val verticalGapDp = effectiveSpacing.verticalGapDp.dp
+                    val outerMarginDp = effectiveSpacing.outerMarginDp.dp
+                    val availableGridHeight = (maxHeight - outerMarginDp * 2).coerceAtLeast(0.dp)
                     val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
                         settings.inputFieldScale.coerceIn(0.5f, 2f)
                     val minimumContentHeight = minimumCellHeight * rows + verticalGapDp * (rows - 1)
-                    val defaultHeightFraction = if (board.compactGrid) {
+                    val defaultHeightFraction = if (board.compactGrid && availableGridHeight > 0.dp) {
                         (minimumContentHeight / availableGridHeight).coerceIn(0.15f, 1f)
                     } else {
                         1f
@@ -669,7 +696,8 @@ internal fun ObfBoardContent(
                     var previewHeightFraction by remember(
                         board.id,
                         board.gridHeightFraction,
-                        availableGridHeight
+                        availableGridHeight,
+                        verticalGapDp,
                     ) {
                         mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
                     }
@@ -688,7 +716,12 @@ internal fun ObfBoardContent(
                             rowHeight * rows + gap * (rows - 1)
                         }
                         ?: fittedHeight
-                    Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState, enabled = !disableGridScroll)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(outerMarginDp)
+                            .verticalScroll(pageScrollState, enabled = !disableGridScroll)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -628,7 +628,7 @@
 "action.undo" = "Fortryd";
 "common.close" = "Luk";
 "settings.accessibility.swipe_pages" = "Stryg mellem sider";
-"settings.accessibility.swipe_pages.footer" = "Stryg vandret til nabosiden i skærmens rækkefølge. Første og sidste side går ikke rundt. Hold for at vælge og valg ved berøring deaktiverer sidestrygning.";
+"settings.accessibility.swipe_pages.footer" = "Stryg vandret til nabosiden i skærmens rækkefølge. Første og sidste side går ikke rundt. Hold for at vælge, valg ved berøring og valg ved slip deaktiverer sidestrygning.";
 "boardset.background_image" = "Sidens baggrundsbillede";
 "boardset.background_choose" = "Vælg eller erstat billede";
 "boardset.background_fit" = "Tilpas";

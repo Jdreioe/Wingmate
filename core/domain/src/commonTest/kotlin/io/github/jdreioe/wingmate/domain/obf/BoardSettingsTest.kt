@@ -263,4 +263,50 @@ class BoardSettingsTest {
         assertEquals(screen, decodeBoardSettings(encodeBoardSettings(screen)))
         assertEquals(pageZero, decodeBoardSettings(encodeBoardSettings(pageZero)))
     }
+
+    @Test
+    fun effectiveKeyguardSpacingPreservesTabletSpacingAndPreventsZeroWidthCellsOnNarrowViewports() {
+        // Wide tablet viewport keeps the exact configured spacing.
+        val tablet = effectiveKeyguardSpacing(
+            viewportWidthDp = 1024.0,
+            viewportHeightDp = 768.0,
+            columns = 4,
+            rows = 3,
+            desiredHorizontalGapDp = 24.0,
+            desiredVerticalGapDp = 24.0,
+            desiredOuterMarginDp = 32.0,
+        )
+        assertEquals(24.0, tablet.horizontalGapDp)
+        assertEquals(24.0, tablet.verticalGapDp)
+        assertEquals(32.0, tablet.outerMarginDp)
+
+        // Narrow phone viewport with max keyguard spacing and 7 columns clamps so cells remain >= 24dp.
+        val phone = effectiveKeyguardSpacing(
+            viewportWidthDp = 390.0,
+            viewportHeightDp = 600.0,
+            columns = 7,
+            rows = 4,
+            desiredHorizontalGapDp = MAX_KEYGUARD_CELL_GAP_DP.toDouble(),
+            desiredVerticalGapDp = MAX_KEYGUARD_CELL_GAP_DP.toDouble(),
+            desiredOuterMarginDp = MAX_KEYGUARD_OUTER_MARGIN_DP.toDouble(),
+        )
+        val cellWidth = (390.0 - phone.outerMarginDp * 2.0 - phone.horizontalGapDp * 6.0) / 7.0
+        val cellHeight = (600.0 - phone.outerMarginDp * 2.0 - phone.verticalGapDp * 3.0) / 4.0
+        assertTrue(cellWidth >= MIN_KEYGUARD_CELL_SIZE_DP - 0.001, "Expected cellWidth >= 24, got $cellWidth")
+        assertTrue(cellHeight >= MIN_KEYGUARD_CELL_SIZE_DP - 0.001, "Expected cellHeight >= 24, got $cellHeight")
+
+        // Extremely tight viewport falls back to zero spacing instead of negative values.
+        val tiny = effectiveKeyguardSpacing(
+            viewportWidthDp = 120.0,
+            viewportHeightDp = 100.0,
+            columns = 8,
+            rows = 6,
+            desiredHorizontalGapDp = 48.0,
+            desiredVerticalGapDp = 48.0,
+            desiredOuterMarginDp = 64.0,
+        )
+        assertEquals(0.0, tiny.outerMarginDp)
+        assertEquals(0.0, tiny.horizontalGapDp)
+        assertEquals(0.0, tiny.verticalGapDp)
+    }
 }
