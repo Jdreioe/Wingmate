@@ -50,7 +50,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                                        selected: model.speech.secondaryLanguage,
                                        onClose: { showSecondaryLanguageSheet = false }) { lang in
                     model.speech.updateSecondaryLanguage(lang) {
-                        model.applySessionState(model.session.state())
+                        model.communication.refreshSessionLanguageHighlights()
                     }
                     showSecondaryLanguageSheet = false
                 }
@@ -59,7 +59,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
             }
             .sheet(isPresented: $showAddCategory) {
                 AddCategorySheet(onClose: { showAddCategory = false }) { name in
-                    model.addCategory(name: name)
+                    model.communication.addCategory(name: name)
                     showAddCategory = false
                 }
                 .presentationDetents([.height(200), .medium])
@@ -67,8 +67,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationCornerRadius(20)
             }
             .sheet(isPresented: $showAddPhrase) {
-                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath, symbolSearch: { await model.searchSymbols(query: $0, symbolPackage: $1) }) { text, alternativeText, imageUrl, recordingPath in
-                    model.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl, recordingPath: recordingPath)
+                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath, symbolSearch: { await model.communication.searchSymbols(query: $0, symbolPackage: $1) }) { text, alternativeText, imageUrl, recordingPath in
+                    model.communication.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl, recordingPath: recordingPath)
                     showAddPhrase = false
                 }
                 .presentationDetents([.height(400), .medium, .large])
@@ -112,12 +112,12 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                         phrase: phrase,
                         onClose: { editingPhrase = nil },
                         onSave: { updatedText, updatedName, updatedImageUrl in
-                            model.updatePhrase(id: phrase.id, text: updatedText, name: updatedName, imageUrl: updatedImageUrl)
+                            model.communication.updatePhrase(id: phrase.id, text: updatedText, name: updatedName, imageUrl: updatedImageUrl)
                             editingPhrase = nil
                         },
                         recorder: recorder,
                         saveRecordingPath: saveRecordingPath,
-                        symbolSearch: { await model.searchSymbols(query: $0, symbolPackage: $1) }
+                        symbolSearch: { await model.communication.searchSymbols(query: $0, symbolPackage: $1) }
                     )
                     .presentationDetents([.height(450), .medium, .large])
                     .presentationDragIndicator(.visible)

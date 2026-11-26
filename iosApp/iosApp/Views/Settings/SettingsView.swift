@@ -176,7 +176,7 @@ struct SettingsView: View {
                 settings: model.settings,
                 speech: model.speech,
                 onSecondaryLanguageChanged: {
-                    model.applySessionState(model.session.state())
+                    model.communication.refreshSessionLanguageHighlights()
                 }
             )
         case .display:

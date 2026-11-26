@@ -366,7 +366,7 @@ struct PhraseItemView: View {
         let tile = Button(action: {
             guard model.settings.holdToSelectMillis <= 0 else { return }
             if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-            model.activateTypingPhrase(phrase)
+            model.communication.activateTypingPhrase(phrase)
         }) {
             VStack(alignment: .leading, spacing: 6) {
                 if model.settings.labelAtTop && model.settings.showButtonLabels {
@@ -417,18 +417,18 @@ struct PhraseItemView: View {
                 .onEnded { _ in
                     guard model.settings.holdToSelectMillis > 0 else { return }
                     if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                    model.activateTypingPhrase(phrase)
+                    model.communication.activateTypingPhrase(phrase)
                 }
         )
         .onHover { hovering in
             if hovering {
                 model.settings.accessEnter(accessTargetId)
-                if model.settings.auditoryFishingEnabled && !model.settings.inputIsPaused { model.speak(accessibleName) }
+                if model.settings.auditoryFishingEnabled && !model.settings.inputIsPaused { model.communication.speak(accessibleName) }
             } else {
                 model.settings.accessExit(accessTargetId)
             }
         }
-        .onAppear { model.settings.registerAccessTarget(accessTargetId) { model.activateTypingPhrase(phrase) } }
+        .onAppear { model.settings.registerAccessTarget(accessTargetId) { model.communication.activateTypingPhrase(phrase) } }
         .onDisappear { model.settings.unregisterAccessTarget(accessTargetId) }
         .accessTargetFocus(model: model, targetId: accessTargetId)
         .overlay {
@@ -452,7 +452,7 @@ struct PhraseItemView: View {
         }
         .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
         .accessibilityHint(Text("accessibility.phrase.insert_hint"))
-        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speakPhrase(phrase) }
+        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.communication.speakPhrase(phrase) }
 
         if editable && !model.settings.selectOnTouchDown {
             tile
@@ -469,7 +469,7 @@ struct PhraseItemView: View {
                 }
                 .contextMenu {
                     Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") }
-                    Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
+                    Button { model.communication.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
                     if let recordingPath {
                         Button { recorder.play(url: URL(fileURLWithPath: recordingPath)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
                         Button { requestMic(phrase.id) } label: { Label("phrase.record.replace", systemImage: "mic") }
@@ -487,7 +487,7 @@ struct PhraseItemView: View {
         } else {
             tile
                 .contextMenu {
-                    Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
+                    Button { model.communication.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
                     if let recordingPath {
                         Button { recorder.play(url: URL(fileURLWithPath: recordingPath)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
                     }

@@ -131,7 +131,12 @@ extension IosViewModel {
                     buttonId: field.buttonId
                 )
             }
-            rememberScreenButtonLooks()
+            if let pageId = selectedBoardId {
+                communication.rememberScreenButtonLooks(
+                    pageId: pageId,
+                    cells: boardCells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) }
+                )
+            }
         } catch {
             boardCells = []
             boardFieldItems = []
@@ -242,10 +247,10 @@ extension IosViewModel {
         }
 
         // #118: navigation is an explicit action; speech insertion is debounced per cell.
-        if !acceptActivation(targetId: cell.buttonId) { return }
+        if !settings.acceptActivation(targetId: cell.buttonId) { return }
 
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
-            speak(textToSpeak)
+            communication.speak(textToSpeak)
         }
     }
 
@@ -255,17 +260,7 @@ extension IosViewModel {
 
     // #118: per-target activation debounce. A zero duration disables the guard entirely.
     func acceptActivation(targetId: String) -> Bool {
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let window = Int64(settings.selectionDebounceMillis)
-        if window <= 0 {
-            lastActivationAtMillis[targetId] = nil
-            return true
-        }
-        if let last = lastActivationAtMillis[targetId], now - last < window {
-            return false
-        }
-        lastActivationAtMillis[targetId] = now
-        return true
+        settings.acceptActivation(targetId: targetId)
     }
 
     func refreshBoardPredictions(context: String) async {

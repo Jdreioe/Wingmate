@@ -57,8 +57,8 @@ struct TypingTrayView: View {
             }
         }
         .onChange(of: model.settings.historyVisible) { _, _ in leaveHistoryIfUnavailable() }
-        .onChange(of: model.historyPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
-        .onChange(of: model.likelyNextPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.communication.historyPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.communication.likelyNextPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
         .onChange(of: model.settings.likelyNextPageEnabled) { _, _ in leaveHistoryIfUnavailable() }
         .confirmationDialog(
             categoryMenu?.text ?? "",
@@ -75,7 +75,7 @@ struct TypingTrayView: View {
         ) { category in
             Button("common.delete", role: .destructive) {
                 requestMutation {
-                    model.deleteCategory(id: category.id)
+                    model.communication.deleteCategory(id: category.id)
                     if page == .category(category.id) { selectPage(.all) }
                 }
             }
@@ -102,23 +102,23 @@ struct TypingTrayView: View {
 
     // MARK: - Page navigation
 
-    private var historyAvailable: Bool { model.settings.historyVisible && !model.historyPhrases.isEmpty }
+    private var historyAvailable: Bool { model.settings.historyVisible && !model.communication.historyPhrases.isEmpty }
 
     /// History can disappear while open (turned off in Settings); fall back to All Phrases.
     private func leaveHistoryIfUnavailable() {
         if page == .history && !historyAvailable { selectPage(.all) }
-        if page == .likelyNext && !model.likelyNextAvailable { selectPage(.all) }
+        if page == .likelyNext && !model.communication.likelyNextAvailable { selectPage(.all) }
     }
 
     private func selectPage(_ newPage: TypingPage) {
         page = newPage
         // Phrases added from the tray go into the open Category.
-        if case .category(let id) = newPage { model.selectCategory(id: id) } else { model.selectCategory(id: nil) }
-        if newPage == .history { Task { await model.loadHistory() } }
+        if case .category(let id) = newPage { model.communication.selectCategory(id: id) } else { model.communication.selectCategory(id: nil) }
+        if newPage == .history { Task { await model.communication.loadHistory() } }
     }
 
     private func pageNavigation(showAdd: Bool) -> some View {
-        let categories = model.state.categories
+        let categories = model.communication.state.categories
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 CategoryChip(
@@ -150,7 +150,7 @@ struct TypingTrayView: View {
                     ) { selectPage(.history) }
                     .accessibilityFocused($focusedPage, equals: .history)
                 }
-                if model.likelyNextAvailable {
+                if model.communication.likelyNextAvailable {
                     CategoryChip(title: NSLocalizedString("typing.likely_next", comment: ""), selected: page == .likelyNext, fontSize: chipFontSize) { selectPage(.likelyNext) }
                         .accessibilityFocused($focusedPage, equals: .likelyNext)
                 }
@@ -174,15 +174,15 @@ struct TypingTrayView: View {
 
     @ViewBuilder
     private func categoryActions(_ category: Shared.Phrase) -> some View {
-        let categories = model.state.categories
+        let categories = model.communication.state.categories
         let index = categories.firstIndex(where: { $0.id == category.id })
         if let index, index > 0 {
-            Button { requestMutation { model.movePhrase(category.id, onto: categories[index - 1].id) } } label: {
+            Button { requestMutation { model.communication.movePhrase(category.id, onto: categories[index - 1].id) } } label: {
                 Label("category.move_left", systemImage: "arrow.left")
             }
         }
         if let index, index < categories.count - 1 {
-            Button { requestMutation { model.movePhrase(category.id, onto: categories[index + 1].id) } } label: {
+            Button { requestMutation { model.communication.movePhrase(category.id, onto: categories[index + 1].id) } } label: {
                 Label("category.move_right", systemImage: "arrow.right")
             }
         }
@@ -203,10 +203,10 @@ struct TypingTrayView: View {
 
     private var pagePhrases: [Shared.Phrase] {
         switch page {
-        case .all: return model.state.phrases
-        case .category(let id): return model.state.phrases.filter { $0.parentId == id }
-        case .history: return model.historyPhrases
-        case .likelyNext: return model.likelyNextPhrases
+        case .all: return model.communication.state.phrases
+        case .category(let id): return model.communication.state.phrases.filter { $0.parentId == id }
+        case .history: return model.communication.historyPhrases
+        case .likelyNext: return model.communication.likelyNextPhrases
         }
     }
 
@@ -229,16 +229,16 @@ struct TypingTrayView: View {
                         editable: editable,
                         onEdit: { requestMutation { onEditPhrase(phrase) } },
                         requestMic: { id in requestMutation { requestMic(id) } },
-                        onDelete: { id in requestMutation { model.deletePhrase(id: id) } },
+                        onDelete: { id in requestMutation { model.communication.deletePhrase(id: id) } },
                         onMoveEarlier: index > 0 ? {
-                            requestMutation { model.movePhrase(phrase.id, onto: phrases[index - 1].id) }
+                            requestMutation { model.communication.movePhrase(phrase.id, onto: phrases[index - 1].id) }
                         } : nil,
                         onMoveLater: index < phrases.count - 1 ? {
-                            requestMutation { model.movePhrase(phrase.id, onto: phrases[index + 1].id) }
+                            requestMutation { model.communication.movePhrase(phrase.id, onto: phrases[index + 1].id) }
                         } : nil,
                         onDrop: { movedId in
                             // Dropping onto a Phrase takes its place in the repository order.
-                            requestMutation { model.movePhrase(movedId, onto: phrase.id) }
+                            requestMutation { model.communication.movePhrase(movedId, onto: phrase.id) }
                         }
                     )
                     .accessibilitySortPriority(scanPriority(index: index, count: phrases.count))
@@ -264,9 +264,9 @@ struct TypingTrayView: View {
         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
             guard model.settings.swipeBetweenPages, !model.settings.selectOnTouchDown, model.settings.holdToSelectMillis <= 0,
                   abs(value.translation.width) >= 64, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-            var pages: [TypingPage] = [.all] + model.state.categories.map { .category($0.id) }
+            var pages: [TypingPage] = [.all] + model.communication.state.categories.map { .category($0.id) }
             if historyAvailable { pages.append(.history) }
-            if model.likelyNextAvailable { pages.append(.likelyNext) }
+            if model.communication.likelyNextAvailable { pages.append(.likelyNext) }
             guard let index = pages.firstIndex(of: page) else { return }
             let next = index + (value.translation.width < 0 ? 1 : -1)
             guard pages.indices.contains(next) else { return }
@@ -361,10 +361,10 @@ struct TypingActionButton: View {
         guard !action.effects.isEmpty, !unsupported else { return false }
         return action.effects.allSatisfy { effect in
             let kind = effect.kind
-            if kind.name == "Pause" { return model.playback.name == "Playing" || model.playback.name == "Preparing" }
-            if kind.name == "Resume" { return model.playback.name == "Paused" }
-            if kind.name == "Stop" { return model.playback.name != "Idle" }
-            if kind.name == "SecondaryLanguage" { return model.hasUsableSecondaryLanguage }
+            if kind.name == "Pause" { return model.communication.playback.name == "Playing" || model.communication.playback.name == "Preparing" }
+            if kind.name == "Resume" { return model.communication.playback.name == "Paused" }
+            if kind.name == "Stop" { return model.communication.playback.name != "Idle" }
+            if kind.name == "SecondaryLanguage" { return model.communication.hasUsableSecondaryLanguage }
             return true
         }
     }
@@ -437,7 +437,7 @@ struct TypingActionButton: View {
     private func perform() {
         guard enabled else { return }
         for effect in action.effects {
-            if effect.kind.name == "Keyboard" { onShowKeyboard() } else { model.performTypingEffect(effect) }
+            if effect.kind.name == "Keyboard" { onShowKeyboard() } else { model.communication.performTypingEffect(effect) }
         }
     }
 }

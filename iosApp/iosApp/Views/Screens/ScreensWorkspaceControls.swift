@@ -101,14 +101,14 @@ extension SymbolBoardWorkspaceView {
                                     showSpeakControl: false,
                                     onDelete: { index in
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                            model.removeMessagePart(at: index)
+                                            model.communication.removeMessagePart(at: index)
                                         }
                                         activeSentenceAnimation = nil
                                     },
-                                    onSpeak: { model.speakBoardMessage(boardSetId: boardSetId) },
+                                    onSpeak: { model.communication.speakBoardMessage(boardSetId: boardSetId) },
                                     animationNamespace: sentenceAnimationNamespace,
                                     animatedTokenId: activeSentenceAnimation?.tokenId,
-                                    onSpeakPart: { model.speakMessagePart(at: $0) }
+                                    onSpeakPart: { model.communication.speakMessagePart(at: $0) }
                                 )
                                 messageControls(boardSetId: boardSetId, editing: false)
                             }
@@ -344,34 +344,34 @@ extension SymbolBoardWorkspaceView {
 
     @ViewBuilder
     func messageActionButton(_ action: String, boardSetId: String, size: CGSize) -> some View {
-        let hasMessage = !model.messageParts.isEmpty
+        let hasMessage = !model.communication.messageParts.isEmpty
         let scanHidden = model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled
         switch action {
         case "Speak":
-            let speaking = ["Playing", "Preparing", "Paused"].contains(model.playback.name)
+            let speaking = ["Playing", "Preparing", "Paused"].contains(model.communication.playback.name)
             controlButton(speaking ? "playback.stop" : "playback.play", systemImage: speaking ? "stop.fill" : "play.fill", prominent: true, size: size) {
-                if speaking { model.stopSpeech() } else { model.speakBoardMessage(boardSetId: boardSetId) }
+                if speaking { model.communication.stopSpeech() } else { model.communication.speakBoardMessage(boardSetId: boardSetId) }
             }
             .disabled(!speaking && !hasMessage)
             .accessibilityHidden(scanHidden)
         case "Hold":
-            let isHolding = model.heldMessageText?.isEmpty == false
+            let isHolding = model.communication.heldMessageText?.isEmpty == false
             controlButton(isHolding ? "typing.held_message.swap" : "screens.message_bar.hold", systemImage: isHolding ? "bookmark.fill" : "bookmark", size: size) {
-                withAnimation(.easeOut(duration: 0.2)) { model.toggleHoldThatThought() }
+                withAnimation(.easeOut(duration: 0.2)) { model.communication.toggleHoldThatThought() }
             }
             .disabled(!isHolding && !hasMessage)
             .accessibilityHint(Text(LocalizedStringKey(isHolding ? "accessibility.playback.restore_thought_hint" : "")))
             .accessibilityHidden(scanHidden)
         case "DeleteLast":
             controlButton("screens.message_bar.delete_last", systemImage: "delete.left", size: size) {
-                withAnimation(.easeOut(duration: 0.2)) { model.removeLastMessagePart() }
+                withAnimation(.easeOut(duration: 0.2)) { model.communication.removeLastMessagePart() }
                 activeSentenceAnimation = nil
             }
             .disabled(!hasMessage)
             .accessibilityHidden(scanHidden)
         default:
             controlButton("screens.message_bar.clear_all", systemImage: "trash", size: size) {
-                withAnimation(.easeOut(duration: 0.2)) { model.clearMessage() }
+                withAnimation(.easeOut(duration: 0.2)) { model.communication.clearMessage() }
                 activeSentenceAnimation = nil
             }
             .disabled(!hasMessage)

@@ -9,10 +9,10 @@ extension SymbolBoardWorkspaceView {
     /// label and symbol, wherever it came from. Token ids are part indices, so deleting
     /// a token removes the matching Message part.
     var boardSentenceTokens: [SentencePhraseToken] {
-        model.messageParts.enumerated().map { index, part in
+        model.communication.messageParts.enumerated().map { index, part in
             let text = part.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
             let source = part.source as? Shared.MessagePartSourceScreenButton
-            let looks = source.flatMap { model.screenButtonLooks["\($0.pageId)|\($0.buttonId)"] }
+            let looks = source.flatMap { model.communication.screenButtonLooks["\($0.pageId)|\($0.buttonId)"] }
             return SentencePhraseToken(
                 id: "part-\(index)",
                 phraseId: source?.buttonId ?? "",
@@ -23,7 +23,7 @@ extension SymbolBoardWorkspaceView {
         }
     }
 
-    var boardSentenceText: String { model.input }
+    var boardSentenceText: String { model.communication.input }
 
     var boardPredictionTaskId: String {
         let predictors = model.boardCells
@@ -70,21 +70,21 @@ extension SymbolBoardWorkspaceView {
             case ":backspace":
                 backspaceBoardSentence()
             case ":clear":
-                model.clearMessage()
+                model.communication.clearMessage()
             case ":speak":
                 if let boardSetId = model.selectedBoardSetId {
-                    model.speakBoardMessage(boardSetId: boardSetId)
+                    model.communication.speakBoardMessage(boardSetId: boardSetId)
                 }
             case ":home":
                 Task { await model.navigateBoardHome() }
             case ":pause":
-                model.pauseSpeech()
+                model.communication.pauseSpeech()
             case ":resume":
-                model.resumeSpeech()
+                model.communication.resumeSpeech()
             case ":stop":
-                model.stopSpeech()
+                model.communication.stopSpeech()
             case ":hold-message":
-                model.toggleHoldThatThought()
+                model.communication.toggleHoldThatThought()
             case ":secondary-language":
                 model.boardStatusMessage = NSLocalizedString("boardset.status.unsupported_action", comment: "")
             case ":native-keyboard":
@@ -126,9 +126,9 @@ extension SymbolBoardWorkspaceView {
         placement.disablesAnimations = true
         var tokenId = ""
         withTransaction(placement) {
-            model.appendScreenPart(text: text, buttonId: cell.buttonId, languageTag: cell.language, mathMode: cell.mathMode)
+            model.communication.appendScreenPart(text: text, buttonId: cell.buttonId, languageTag: cell.language, mathMode: cell.mathMode)
             // Read after appending: in spelling mode a letter may join the last part.
-            tokenId = "part-\(model.messageParts.count - 1)"
+            tokenId = "part-\(model.communication.messageParts.count - 1)"
             activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)
         }
         DispatchQueue.main.async {
@@ -141,14 +141,14 @@ extension SymbolBoardWorkspaceView {
 
     func playCellSound(_ cell: BoardCellInfo) {
         if let path = trimmed(cell.soundPath) {
-            model.playBoardButtonFile(path)
+            model.communication.playBoardButtonFile(path)
         } else if let sound = trimmed(cell.soundDataUrl) {
-            model.playBoardButtonSound(sound)
+            model.communication.playBoardButtonSound(sound)
         }
     }
 
     func backspaceBoardSentence() {
-        model.removeLastMessagePart()
+        model.communication.removeLastMessagePart()
     }
 
     func predictionInsertion(sentence: String, suggestion: String) -> String {
@@ -356,7 +356,7 @@ extension SymbolBoardWorkspaceView {
         }
 
         // Cancellation ends the search without an error.
-        guard let result = await model.searchSymbols(query: trimmed, symbolPackage: editingSymbolPackage.rawValue) else {
+        guard let result = await model.communication.searchSymbols(query: trimmed, symbolPackage: editingSymbolPackage.rawValue) else {
             await MainActor.run { isSearchingCellSymbols = false }
             return
         }

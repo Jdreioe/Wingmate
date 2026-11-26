@@ -213,7 +213,7 @@ extension WelcomeFlow {
                         .foregroundColor(.secondary)
 
                     if let voice = selectedVoice {
-                        SelectedVoiceCard(voice: voice, onSpeak: { model.speak(previewText) })
+                        SelectedVoiceCard(voice: voice, onSpeak: { model.communication.speak(previewText) })
                     }
 
                     Button(action: { showVoicePicker = true }) {
@@ -311,8 +311,8 @@ extension WelcomeFlow {
             VoicePreviewCard(
                 title: NSLocalizedString("welcome_flow.test_voice", comment: ""),
                 previewText: $previewText,
-                onSpeak: { model.speak(previewText) },
-                onStop: { model.stopSpeech() }
+                onSpeak: { model.communication.speak(previewText) },
+                onStop: { model.communication.stopSpeech() }
             )
         }
     }

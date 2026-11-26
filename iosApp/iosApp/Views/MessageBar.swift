@@ -12,11 +12,11 @@ struct SpeechControls: View {
     let onSpeak: () -> Void
 
     var body: some View {
-        let paused = model.playback.name == "Paused"
-        let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
+        let paused = model.communication.playback.name == "Paused"
+        let playing = model.communication.playback.name == "Playing" || model.communication.playback.name == "Preparing"
         HStack(alignment: .bottom, spacing: 8) {
             if paused || playing {
-                Button(action: model.stopSpeech) {
+                Button(action: model.communication.stopSpeech) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: buttonSize * 0.4, weight: .semibold))
                         .frame(width: buttonSize, height: buttonSize)
@@ -27,7 +27,7 @@ struct SpeechControls: View {
                 .transition(.scale.combined(with: .opacity))
             }
             Button(action: {
-                if paused { model.resumeSpeech() } else if playing { model.pauseSpeech() } else { onSpeak() }
+                if paused { model.communication.resumeSpeech() } else if playing { model.communication.pauseSpeech() } else { onSpeak() }
             }) {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.system(size: speakSize * 0.42, weight: .semibold))
@@ -56,7 +56,7 @@ struct TypingMessageBar: View {
     private var speakSize: CGFloat { min(max(iconSize * 1.75, 56), 88) }
 
     private var inputBinding: Binding<String> {
-        Binding(get: { model.input }, set: { model.onInputChanged($0) })
+        Binding(get: { model.communication.input }, set: { model.communication.onInputChanged($0) })
     }
 
     var body: some View {
@@ -74,7 +74,7 @@ struct TypingMessageBar: View {
 
             MultiLineInput(
                 text: inputBinding,
-                selectedRange: Binding(get: { model.inputSelectionRange }, set: { model.inputSelectionRange = $0 }),
+                selectedRange: Binding(get: { model.communication.inputSelectionRange }, set: { model.communication.inputSelectionRange = $0 }),
                 isFocused: $messageFocused,
                 placeholder: NSLocalizedString("tts.placeholder", comment: ""),
                 fontSize: fontSize,
@@ -83,13 +83,13 @@ struct TypingMessageBar: View {
                 scanEnabled: model.settings.scanningEnabled,
                 includeInScanArea: model.settings.scanInputFieldEnabled,
                 secondaryLanguage: model.speech.secondaryLanguage,
-                secondaryLanguageRanges: model.secondaryLanguageRanges,
-                allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
-                onMarkSelectionAsSecondaryLanguage: { model.markSelectionAsSecondaryLanguage(range: $0) }
+                secondaryLanguageRanges: model.communication.secondaryLanguageRanges,
+                allowsSecondaryLanguageAction: model.communication.hasUsableSecondaryLanguage,
+                onMarkSelectionAsSecondaryLanguage: { model.communication.markSelectionAsSecondaryLanguage(range: $0) }
             )
 
             SpeechControls(model: model, buttonSize: buttonSize, speakSize: speakSize) {
-                model.speakMessage()
+                model.communication.speakMessage()
             }
             .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
         }
@@ -110,7 +110,7 @@ struct HeldMessageRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button(action: model.toggleHoldThatThought) {
+            Button(action: model.communication.toggleHoldThatThought) {
                 Label("typing.held_message.swap", systemImage: "arrow.left.arrow.right")
                     .frame(minHeight: 44)
             }

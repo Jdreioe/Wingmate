@@ -255,6 +255,7 @@ final class AppSettingsModel: ObservableObject {
     private let nowMillisProvider: () -> Int64
     private let uptimeMillisProvider: () -> Int64
     private var accessActions: [String: () -> Void] = [:]
+    private var lastActivationAtMillis: [String: Int64] = [:]
     private var refreshTask: Task<AppSettingsSnapshot?, Never>?
     private var pendingMutations: [String: Task<Bool, Never>] = [:]
     private var highlightTask: Task<Void, Never>?
@@ -744,6 +745,21 @@ final class AppSettingsModel: ObservableObject {
         highlightTask = nil
         selectionHighlight.clear()
         highlightedButtonId = nil
+    }
+
+    // #118: per-target activation debounce. A zero duration disables the guard entirely.
+    func acceptActivation(targetId: String) -> Bool {
+        let now = nowMillisProvider()
+        let window = Int64(selectionDebounceMillis)
+        if window <= 0 {
+            lastActivationAtMillis[targetId] = nil
+            return true
+        }
+        if let last = lastActivationAtMillis[targetId], now - last < window {
+            return false
+        }
+        lastActivationAtMillis[targetId] = now
+        return true
     }
 
     // MARK: - Access input policy

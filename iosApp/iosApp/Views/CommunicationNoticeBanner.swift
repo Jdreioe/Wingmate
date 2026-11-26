@@ -4,10 +4,10 @@ import Shared
 /// Shows the Communication session's notice above both workspaces: a storage
 /// failure with Retry, a playback failure, or the device-voice fallback.
 struct CommunicationNoticeBanner: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var communication: CommunicationModel
 
     var body: some View {
-        if let notice = model.sessionNotice {
+        if let notice = communication.sessionNotice {
             let storageFailed = notice.name == "StorageFailed"
             // The fallback still spoke the Message, so it is a notice rather than an error.
             let isError = notice.name != "SpeechFallback"
@@ -19,11 +19,11 @@ struct CommunicationNoticeBanner: View {
                     .font(.subheadline)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if storageFailed {
-                    Button("common.retry") { model.retrySessionStorage() }
+                    Button("common.retry") { communication.retrySessionStorage() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(model.sessionIsSaving)
+                        .disabled(communication.sessionIsSaving)
                 } else {
-                    Button("common.dismiss") { model.dismissSessionNotice() }
+                    Button("common.dismiss") { communication.dismissSessionNotice() }
                         .buttonStyle(.bordered)
                 }
             }

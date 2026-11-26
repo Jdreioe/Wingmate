@@ -119,20 +119,19 @@ struct PrivacySettingsView: View {
                     get: { settings.historyVisible },
                     set: { visible in
                         if !visible {
-                            model.historyPhrases = []
-                            model.likelyNextPhrases = []
+                            model.communication.clearHistoryDisplay()
                         }
                         settings.setHistoryVisible(visible) {
-                            if visible { await model.loadHistory() }
+                            if visible { await model.communication.loadHistory() }
                         }
                     }
                 ))
                 Toggle("settings.likely_next", isOn: Binding(
                     get: { settings.likelyNextPageEnabled },
                     set: { enabled in
-                        if !enabled { model.likelyNextPhrases = [] }
+                        if !enabled { model.communication.clearLikelyNextDisplay() }
                         settings.setLikelyNextPageEnabled(enabled) {
-                            await model.loadHistory()
+                            await model.communication.loadHistory()
                         }
                     }
                 ))

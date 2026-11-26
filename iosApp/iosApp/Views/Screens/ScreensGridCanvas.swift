@@ -175,7 +175,7 @@ extension SymbolBoardWorkspaceView {
                     model.settings.accessEnter(targetId)
                     if model.settings.auditoryFishingEnabled, !model.settings.inputIsPaused,
                        let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
-                        model.speak(preview)
+                        model.communication.speak(preview)
                     }
                 } else {
                     model.settings.accessExit(targetId)

@@ -269,7 +269,7 @@ struct SymbolBoardWorkspaceView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("boardset.native_keyboard.return") {
-                            model.onInputChanged(nativeKeyboardDraft)
+                            model.communication.onInputChanged(nativeKeyboardDraft)
                             showNativeKeyboardSheet = false
                         }
                     }

@@ -51,7 +51,7 @@ struct ContentView: View {
 
     private var shouldShowPartnerDisplay: Bool {
         guard !partnerDisplayMuted else { return false }
-        let isSpeakingOrActive = model.playback.name != "Idle"
+        let isSpeakingOrActive = model.communication.playback.name != "Idle"
         return PartnerDisplayPolicy.shouldShow(
             mode: partnerDisplayMode,
             inWelcomeFlow: shouldShowWelcomeFlow,
@@ -59,8 +59,8 @@ struct ContentView: View {
             isEditingScreen: isEditingScreen,
             inputIsPaused: model.settings.inputIsPaused,
             hingePosture: hingePosture,
-            messageText: model.input,
-            hasMessageParts: !model.messageParts.isEmpty,
+            messageText: model.communication.input,
+            hasMessageParts: !model.communication.messageParts.isEmpty,
             isSpeakingOrActive: isSpeakingOrActive,
             isFullscreenMessage: isMessageFullscreen
         )
@@ -114,7 +114,7 @@ struct ContentView: View {
             uiPlayIconSize: $uiPlayIconSize,
             recorder: recorder,
             saveRecordingPath: { phraseId, path in
-                model.setRecordingPath(path, for: phraseId)
+                model.communication.setRecordingPath(path, for: phraseId)
             }
         ) {
             NavigationStack {
@@ -147,7 +147,7 @@ struct ContentView: View {
                             let widePadding = WindowLayoutClass.of(width: proxy.size.width).isLarge
 
                             VStack(spacing: model.boardModeEnabled ? 0 : 8) {
-                                CommunicationNoticeBanner(model: model)
+                                CommunicationNoticeBanner(communication: model.communication)
                                     .padding(.horizontal, (model.boardModeEnabled || widePadding) ? 16 : 0)
                                     .padding(.top, model.boardModeEnabled ? 8 : 0)
                                 mainContent
@@ -291,7 +291,7 @@ struct ContentView: View {
             Task { @MainActor in
                 guard let activePhraseId = recordingForPhraseId else { return }
                 if let url = try? await recorder.stopRecording() {
-                    model.setRecordingPath(url.path, for: activePhraseId)
+                    model.communication.setRecordingPath(url.path, for: activePhraseId)
                 }
                 recordingForPhraseId = nil
             }
