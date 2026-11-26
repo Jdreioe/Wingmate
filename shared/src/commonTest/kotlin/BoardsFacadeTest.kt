@@ -6,7 +6,11 @@ import io.github.jdreioe.wingmate.application.NativeFailure
 import io.github.jdreioe.wingmate.application.NativeFailureKind
 import io.github.jdreioe.wingmate.application.NoopFeatureUsageReporter
 import io.github.jdreioe.wingmate.application.SettingsUseCase
+import io.github.jdreioe.wingmate.domain.BoardRepository
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfImage
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.backgroundImage
 import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
@@ -307,7 +311,8 @@ class BoardsFacadeTest {
 
     @Test
     fun boardSnapshotDerivesSettingsButtonsAndSpansFromOnePageRead() = runBlocking {
-        val facade = facade()
+        val boards = RevisingBoardRepository(InMemoryBoardRepository())
+        val facade = facade(boards = boards)
         val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home")
         val boardId = boardSet.rootBoardId
         facade.upsertBoardCellButton(
@@ -315,22 +320,18 @@ class BoardsFacadeTest {
             backgroundColor = null, borderColor = null, linkedBoardId = null,
             imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
         )
-        facade.updateBoardSettings(
-            boardSetId = boardSet.id, boardId = boardId, forPage = true,
-            showLabels = "inherit", showSymbols = "inherit", labelAtTop = "inherit",
-            showMessageBar = "inherit", showSpeakButton = "inherit", messageBarEditable = "inherit",
-            activationBehavior = "inherit", returnBehavior = "inherit", cacheSpeech = "inherit",
-            cellGapDp = 6, outerMarginDp = 10,
-        )
+        val stable = assertNotNull(facade.loadBoardSnapshot(boardId))
+        assertEquals("Hi", stable.cells.single().label)
+        assertEquals(listOf(stable.cells.single().buttonId), stable.fieldItems.mapNotNull { it.buttonId })
 
+        // Every read now returns a new Page revision. A snapshot built from more than one
+        // read would mix revisions between its board, settings, and Buttons.
+        boards.revising = true
         val snapshot = assertNotNull(facade.loadBoardSnapshot(boardId))
-        assertEquals(boardId, snapshot.board.id)
-        assertEquals(facade.resolveBoardSettings(boardId), snapshot.settings)
-        assertEquals(6, snapshot.settings.cellGapDp)
-        assertEquals(10, snapshot.settings.outerMarginDp)
-        assertEquals(facade.listBoardCells(boardId), snapshot.cells)
-        assertEquals(facade.listBoardFieldItems(boardId), snapshot.fieldItems)
-        assertEquals("Hi", snapshot.cells.single().label)
+        val revision = snapshot.board.buttons.single().label
+        assertEquals(revision, snapshot.cells.single().label)
+        assertEquals(revision, "rev${snapshot.settings.cellGapDp}")
+        boards.revising = false
 
         assertNull(facade.loadBoardSnapshot("missing-page"))
     }
@@ -439,7 +440,7 @@ class BoardsFacadeTest {
     private fun facade(
         settings: InMemorySettingsRepository = InMemorySettingsRepository(),
         share: ShareService = RecordingShareService(),
-        boards: InMemoryBoardRepository = InMemoryBoardRepository(),
+        boards: BoardRepository = InMemoryBoardRepository(),
     ): BoardsFacade {
         val boardSets = InMemoryBoardSetRepository()
         val boardSetUseCase = BoardSetUseCase(boardSets, boards, NoopFeatureUsageReporter())
@@ -457,6 +458,21 @@ class BoardsFacadeTest {
             boardSetSpeechCache = speechCache,
             shareService = share,
         )
+    }
+
+    /** Returns a new Page revision (Button labels and Page gap) on every read once [revising]. */
+    private class RevisingBoardRepository(private val inner: BoardRepository) : BoardRepository by inner {
+        var revising = false
+        private var reads = 0
+
+        override suspend fun getBoard(id: String): ObfBoard? {
+            val board = inner.getBoard(id) ?: return null
+            if (!revising) return board
+            reads += 1
+            return board
+                .copy(buttons = board.buttons.map { it.copy(label = "rev$reads") })
+                .withPageSettingsOverrides(BoardSettingsOverrides(cellGapDp = reads))
+        }
     }
 
     private class RecordingShareService(var shared: Boolean = false) : ShareService {

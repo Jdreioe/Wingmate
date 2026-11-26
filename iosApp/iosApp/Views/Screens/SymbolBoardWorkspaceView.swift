@@ -95,7 +95,7 @@ struct SymbolBoardWorkspaceView: View {
     @GestureState var touchExitGestureActive = false
     /// Set when Touch Exit is cancelled while a finger is still down (Page or layout change);
     /// that finger can no longer highlight or activate anything until it lifts.
-    @State var touchExitLatchedUntilLift = false
+    @State var touchExitLatch = TouchExitLiftLatch()
     @State var useCustomBackgroundColor: Bool = false
     @State var useCustomBorderColor: Bool = false
     @State var editingLinkedBoardId: String = ""

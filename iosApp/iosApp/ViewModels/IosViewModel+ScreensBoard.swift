@@ -248,7 +248,7 @@ extension IosViewModel {
         let normalizedImageUrl = normalizedOptionalText(imageUrl)
 
         do {
-            let updatedBoard = try await boardsFacade.upsertBoardCellButton(
+            _ = try await boardsFacade.upsertBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col),
@@ -270,7 +270,7 @@ extension IosViewModel {
                 clearRecording: clearRecording
             )
 
-            selectedBoard = updatedBoard
+            // refreshBoardCells publishes the board with its cells from one snapshot.
             await refreshBoardCells()
             if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
@@ -290,13 +290,13 @@ extension IosViewModel {
         }
 
         do {
-            let updatedBoard = try await boardsFacade.clearBoardCellButton(
+            _ = try await boardsFacade.clearBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col)
             )
 
-            selectedBoard = updatedBoard
+            // refreshBoardCells publishes the board with its cells from one snapshot.
             await refreshBoardCells()
             if let setId = selectedBoardSetId { _ = try? await boardsFacade.touchBoardSet(id: setId) }
             touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
@@ -409,13 +409,14 @@ extension IosViewModel {
     func resizeSelectedBoard(rows: Int, columns: Int) async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         do {
-            let board = try await boardsFacade.resizeBoard(
+            _ = try await boardsFacade.resizeBoard(
                 boardSetId: set.id,
                 boardId: boardId,
                 rows: Int32(min(max(rows, 1), 12)),
                 columns: Int32(min(max(columns, 1), 12))
             )
-            selectedBoard = board
+            // refreshBoardCells publishes the resized board with its cells from one snapshot,
+            // so old fields never render against the new dimensions.
             await refreshBoardCells()
             await loadBoardSets()
             selectedBoardSetId = set.id

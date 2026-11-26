@@ -138,6 +138,14 @@ extension SymbolBoardWorkspaceView {
                 .background {
                     if !model.highContrastMode { PageBackgroundView(source: model.boardBackgroundImageUrl, fit: model.boardBackgroundImageFit) }
                 }
+                // Hit boxes follow the computed layout (rows, columns, gap, inset, height fraction,
+                // viewport, fold). Any change invalidates a held finger.
+                .onChange(of: foldLayout) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: gridInset) { _, _ in
+                    cancelTouchExit()
+                }
                 .background(
                     model.highContrastMode
                         ? Color(.systemBackground)
@@ -158,7 +166,7 @@ extension SymbolBoardWorkspaceView {
                 .onChange(of: touchExitGestureActive) { _, active in
                     if !active {
                         cancelTouchExit(latchUntilLift: false)
-                        touchExitLatchedUntilLift = false
+                        _ = touchExitLatch.lift()
                     }
                 }
                 .onChange(of: touchExitActive) { _, active in
@@ -179,14 +187,14 @@ extension SymbolBoardWorkspaceView {
                 .onChange(of: model.boardCells) { _, _ in
                     cancelTouchExit()
                 }
-                .onChange(of: model.resolvedBoardCellGapDp) { _, _ in
-                    cancelTouchExit()
-                }
-                .onChange(of: model.resolvedBoardOuterMarginDp) { _, _ in
-                    cancelTouchExit()
+                // A grid that mounts or unmounts cannot own a held finger: its gesture (and the
+                // observers that would clear the latch on lift) belong to that grid instance.
+                .onAppear {
+                    touchExitLatch.reset()
                 }
                 .onDisappear {
-                    cancelTouchExit()
+                    cancelTouchExit(latchUntilLift: false)
+                    touchExitLatch.reset()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -635,7 +643,7 @@ extension SymbolBoardWorkspaceView {
             }
             .onChanged { value in
                 // A finger held across a Page or layout change must lift before it can select again.
-                guard !touchExitLatchedUntilLift else { return }
+                guard !touchExitLatch.ignoresFinger else { return }
                 guard model.boardCellsReady(for: pageId) else {
                     cancelTouchExit()
                     return
@@ -664,8 +672,7 @@ extension SymbolBoardWorkspaceView {
             }
             .onEnded { value in
                 model.cancelPreviewSpeech()
-                let latched = touchExitLatchedUntilLift
-                touchExitLatchedUntilLift = false
+                let latched = touchExitLatch.lift()
                 guard !latched, model.boardCellsReady(for: pageId) else {
                     cancelTouchExit(latchUntilLift: false)
                     return
@@ -686,8 +693,8 @@ extension SymbolBoardWorkspaceView {
     }
 
     func cancelTouchExit(latchUntilLift: Bool = true) {
-        if latchUntilLift && touchExitGestureActive {
-            touchExitLatchedUntilLift = true
+        if latchUntilLift {
+            touchExitLatch.cancel(fingerDown: touchExitGestureActive)
         }
         _ = touchExitController.cancel()
         model.cancelPreviewSpeech()
@@ -917,5 +924,28 @@ extension SymbolBoardWorkspaceView {
         if let field, let match = options.first(where: { $0.rows == field.rowSpan && $0.columns == field.columnSpan }) {
             editingSpan = match.rows == 1 && match.columns == 1 ? .single : .custom(match)
         }
+    }
+}
+
+/// Keeps a finger that was down when Touch Exit was cancelled (Page, Button, or layout change)
+/// from highlighting or activating anything until it lifts. A fresh touch then works normally.
+struct TouchExitLiftLatch: Equatable {
+    private(set) var ignoresFinger = false
+
+    /// Records a cancel; latches only when a finger is currently down.
+    mutating func cancel(fingerDown: Bool) {
+        if fingerDown { ignoresFinger = true }
+    }
+
+    /// Clears the latch when the grid that owned the held finger mounts or unmounts.
+    mutating func reset() {
+        ignoresFinger = false
+    }
+
+    /// Call on lift (or gesture end). Returns true when the lifted finger was latched and
+    /// must not activate anything, and clears the latch for the next touch.
+    mutating func lift() -> Bool {
+        defer { ignoresFinger = false }
+        return ignoresFinger
     }
 }

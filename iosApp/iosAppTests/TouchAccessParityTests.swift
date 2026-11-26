@@ -34,6 +34,46 @@ final class TouchAccessParityTests: XCTestCase {
         XCTAssertFalse(controller.state.isTracking)
     }
 
+    func testTouchExitHeldFingerIsIgnoredAfterLayoutChangeUntilLift() {
+        let controller = TouchExitController()
+        var latch = TouchExitLiftLatch()
+
+        // Finger down on btn-1, then the grid layout changes under it.
+        _ = controller.begin(targetId: "btn-1")
+        _ = controller.cancel()
+        latch.cancel(fingerDown: true)
+        XCTAssertTrue(latch.ignoresFinger)
+
+        // The held finger slides onto the Button now under it: no highlight, no preview.
+        XCTAssertNil(controller.move(targetId: "btn-2"))
+        XCTAssertNil(controller.state.activeTargetId)
+
+        // Lifting is ignored and clears the latch.
+        XCTAssertTrue(latch.lift())
+        XCTAssertTrue(controller.release(targetId: "btn-2") is TouchExitEffectCancelled)
+        XCTAssertFalse(latch.ignoresFinger)
+
+        // A fresh touch works normally.
+        XCTAssertFalse(latch.lift())
+        XCTAssertEqual((controller.begin(targetId: "btn-2") as? TouchExitEffectPreview)?.targetId, "btn-2")
+        XCTAssertEqual((controller.release(targetId: "btn-2") as? TouchExitEffectActivate)?.targetId, "btn-2")
+
+        // Cancelling with no finger down never latches the next touch.
+        latch.cancel(fingerDown: false)
+        XCTAssertFalse(latch.ignoresFinger)
+
+        // Page switch while held: the old grid unmounts before its gesture ends, so the new
+        // grid resets the latch and the first touch on the new Page activates.
+        _ = controller.begin(targetId: "btn-1")
+        _ = controller.cancel()
+        latch.cancel(fingerDown: true)
+        latch.reset()
+        XCTAssertFalse(latch.ignoresFinger)
+        XCTAssertEqual((controller.begin(targetId: "page-b-btn") as? TouchExitEffectPreview)?.targetId, "page-b-btn")
+        XCTAssertFalse(latch.lift())
+        XCTAssertEqual((controller.release(targetId: "page-b-btn") as? TouchExitEffectActivate)?.targetId, "page-b-btn")
+    }
+
     func testKeyguardSpacingCustomGapLeavesGutterUnselectable() {
         let layout = BoardFoldLayout.compute(
             rows: 2,
