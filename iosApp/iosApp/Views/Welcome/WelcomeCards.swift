@@ -1,5 +1,6 @@
 import SwiftUI
 import Shared
+import AVFoundation
 
 struct TtsOptionCard: View {
     let title: String
@@ -75,6 +76,31 @@ struct SelectedVoiceCard: View {
             Spacer()
             Button(action: onSpeak) { Image(systemName: "speaker.wave.2.fill") }
                 .buttonStyle(.bordered)
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+    }
+}
+
+/// The on-device voice Wingmate uses for the primary language, or "System default" when the
+/// user has not picked one in Wingmate's system voice picker.
+struct SelectedSystemVoiceCard: View {
+    let voice: AVSpeechSynthesisVoice?
+    let language: String
+    let onSpeak: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(voice?.name ?? NSLocalizedString("voice.system.default", comment: ""))
+                    .font(.headline)
+                Text(voice?.language ?? language)
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            Button(action: onSpeak) { Image(systemName: "speaker.wave.2.fill") }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(Text("voice.system.preview"))
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))

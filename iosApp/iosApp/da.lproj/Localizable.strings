@@ -49,8 +49,7 @@
 "welcome_flow.help.play_phrases" = "Tryk på fraser for at høre dem oplæst";
 "welcome_flow.help.organize" = "Organiser med kategorier";
 "welcome_flow.system_tts_info" = "Du bruger System Tekst-til-Tale";
-"welcome_flow.system_tts_settings_info" = "Stemme indstillinger håndteres i iOS Indstillinger under Tilgængelighed > Talt indhold > Stemmer";
-"welcome_flow.open_settings" = "Åbn iOS Indstillinger";
+"welcome_flow.system_tts_settings_info" = "Vælg den stemme, Wingmate bruger til hvert sprog, også forbedrede, premium- og personlige stemmer. Hent flere stemmer under iOS Indstillinger > Tilgængelighed > Oplæst indhold > Stemmer.";
 "welcome_flow.test_voice" = "Test din stemme";
 "welcome_flow.azure_voices_subtitle" = "Vælg mellem høj-kvalitets Azure stemmer";
 "welcome_flow.google_voices_subtitle" = "Vælg mellem Google Cloud-stemmer";
@@ -145,7 +144,7 @@
 
 "voice.system_tts.enabled_info" = "System-TTS er aktiveret. Valg af stemme håndteres i iOS-indstillinger.";
 "voice.system_tts.using" = "Bruger System tekst-til-tale";
-"voice.system_tts.settings_info" = "Vælg en stemme for hvert sprog her. Hent flere stemmer under iOS Indstillinger > Tilgængelighed > Talt indhold > Stemmer, eller installer en stemme-app.";
+"voice.system_tts.settings_info" = "Vælg en stemme for hvert sprog her. Hent flere stemmer under iOS Indstillinger > Tilgængelighed > Oplæst indhold > Stemmer, eller installer en stemme-app.";
 
 "accessibility.double_tap_select_voice" = "Dobbelttryk for at vælge denne stemme";
 "accessibility.double_tap_select_language" = "Dobbelttryk for at vælge dette sprog";

@@ -49,8 +49,7 @@
 "welcome_flow.help.play_phrases" = "Phrasen antippen, um sie zu hören";
 "welcome_flow.help.organize" = "Mit Kategorien organisieren";
 "welcome_flow.system_tts_info" = "Du verwendest System Text-zu-Sprache";
-"welcome_flow.system_tts_settings_info" = "Stimm-Optionen werden in den iOS-Einstellungen unter Bedienungshilfen > Gesprochene Inhalte > Stimmen verwaltet";
-"welcome_flow.open_settings" = "iOS-Einstellungen öffnen";
+"welcome_flow.system_tts_settings_info" = "Wähle die Stimme, die Wingmate für jede Sprache verwendet, auch erweiterte, Premium- und eigene Stimmen. Weitere Stimmen lädst du unter iOS Einstellungen > Bedienungshilfen > Gesprochene Inhalte > Stimmen.";
 "welcome_flow.test_voice" = "Teste deine Stimme";
 "welcome_flow.azure_voices_subtitle" = "Wähle aus hochwertigen Azure-Stimmen";
 "welcome_flow.google_voices_subtitle" = "Wähle aus Google-Cloud-Stimmen";
