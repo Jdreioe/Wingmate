@@ -149,6 +149,16 @@
     <string name="board_settings_group_screen">Skærm</string>
     <string name="board_settings_group_page">Side</string>
     <string name="board_settings_group_appearance">Knappernes udseende</string>
+    <string name="board_settings_group_keyguard">Afstand til skærmgitter</string>
+    <string name="board_settings_cell_gap">Mellemrum mellem knapper</string>
+    <string name="board_settings_cell_gap_desc">Ekstra afstand mellem knapper, så udskæringer i et fysisk skærmgitter passer.</string>
+    <string name="board_settings_outer_margin">Ydre margen</string>
+    <string name="board_settings_outer_margin_desc">Ekstra afstand langs yderkanterne af gitteret til rammen på et fysisk skærmgitter.</string>
+    <string name="board_settings_spacing_default">Standard</string>
+    <string name="board_settings_spacing_custom">Brugerdefineret</string>
+    <string name="board_settings_spacing_dp">%1$d dp</string>
+    <string name="board_settings_spacing_decrease">Mindsk afstand</string>
+    <string name="board_settings_spacing_increase">Forøg afstand</string>
     <string name="board_settings_background_color">Sidebaggrund</string>
     <string name="board_settings_background_inherited">Bruger appens tema</string>
     <string name="board_settings_background_custom">Brugerdefineret farve</string>
@@ -478,6 +488,8 @@
     <string name="ui_settings_label_at_top_title">Placer tekst øverst på knappen</string>
     <string name="ui_settings_select_on_touch_down_title">Vælg ved berøring</string>
     <string name="ui_settings_select_on_touch_down_desc">Knapper reagerer, så snart du rører dem, i stedet for når du slipper. Knapgitre holder op med at rulle og viser alle rækker. Hold for at vælge gælder stadig, hvis det er slået til.</string>
+    <string name="ui_settings_select_on_touch_exit_title">Berøringsslip (glid for at rette)</string>
+    <string name="ui_settings_select_on_touch_exit_desc">Glid fingeren hen over knapper for at fremhæve og lytte til dem, slip på en knap for at vælge den, eller glid væk for at annullere. Knapgitre stopper med at rulle, og sidestrygning slås fra.</string>
     <string name="ui_settings_swipe_pages_title">Stryg mellem sider</string>
     <string name="ui_settings_swipe_pages_desc">På skærme kan du stryge til venstre eller højre for at gå til næste eller forrige side i skærmens siderækkefølge. Links, Hjem og Tilbage virker som før. Ikke tilgængelig med Vælg ved berøring.</string>
     <string name="ui_settings_hold_to_select_title">Hold for at vælge (ms)</string>

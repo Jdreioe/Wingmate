@@ -338,7 +338,58 @@ extension IosViewModel {
     }
 
     func deleteCategory(id: String) {
+        recordPhraseDeletionForUndo(rootId: id)
         store?.accept(intent: Shared.PhraseListStoreIntent.DeleteCategory(categoryId: id))
+    }
+
+    /// Captures a Phrase (or Category and all its children) in parent-first order so
+    /// the Communicator or Supporter can undo a destructive deletion before recordings are cleaned up.
+    func recordPhraseDeletionForUndo(rootId: String) {
+        finalizePendingPhraseUndoRecordings()
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
+
+        let combined = state.categories + state.phrases
+        let removed = PhraseTreeKt.phraseSubtree(phrases: combined, rootId: rootId)
+        guard !removed.isEmpty else {
+            pendingPhraseUndo = nil
+            return
+        }
+        let paths = removed.compactMap { $0.recordingPath }.filter { !$0.isEmpty }
+        let entry = PendingPhraseUndo(
+            deletedPhrases: removed,
+            recordingPaths: paths,
+            includesSubItems: removed.count > 1
+        )
+        pendingPhraseUndo = entry
+        pendingPhraseUndoTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !Task.isCancelled, let self, self.pendingPhraseUndo?.id == entry.id else { return }
+            self.dismissPendingPhraseUndo()
+        }
+    }
+
+    func undoPendingPhraseDeletion() {
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
+        guard let pending = pendingPhraseUndo else { return }
+        pendingPhraseUndo = nil
+        AccessHaptics.perform(.confirm)
+        store?.accept(intent: Shared.PhraseListStoreIntent.RestorePhrases(phrases: pending.deletedPhrases))
+    }
+
+    func dismissPendingPhraseUndo() {
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
+        finalizePendingPhraseUndoRecordings()
+        pendingPhraseUndo = nil
+    }
+
+    private func finalizePendingPhraseUndoRecordings() {
+        guard let pending = pendingPhraseUndo else { return }
+        for path in pending.recordingPaths {
+            try? FileManager.default.removeItem(atPath: path)
+        }
     }
 
     func updatePhrase(id: String, text: String?, name: String?, imageUrl: String? = nil) {

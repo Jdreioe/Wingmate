@@ -182,6 +182,8 @@ extension IosViewModel {
                 self.wordTypeColorScheme = settings.wordTypeColorScheme.name
                 self.holdToSelectMillis = Double(settings.holdToSelectMillis)
                 self.dwellToSelectMillis = Double(settings.dwellToSelectMillis)
+                self.dwellRearmDelayMillis = Double(settings.dwellRearmDelayMillis)
+                self.accessInput.rearmDelayMillis = settings.dwellRearmDelayMillis
                 self.selectionDebounceMillis = Double(settings.selectionDebounceMillis)
                 self.selectionSoundEnabled = settings.selectionSoundEnabled
                 self.auditoryFishingEnabled = settings.auditoryFishingEnabled
@@ -198,6 +200,7 @@ extension IosViewModel {
                 self.historyVisible = settings.historyVisible
                 self.likelyNextPageEnabled = settings.likelyNextPageEnabled
                 self.selectOnTouchDown = settings.selectOnTouchDown
+                self.selectOnTouchExit = settings.selectOnTouchExit
                 self.swipeBetweenPages = settings.swipeBetweenPages
                 self.startupUsesScreens = opensScreens
                 self.startupBoardSetId = settings.startupBoardSetId
@@ -219,7 +222,14 @@ extension IosViewModel {
 
     func setSelectOnTouchDown(_ enabled: Bool) {
         selectOnTouchDown = enabled
+        if enabled { selectOnTouchExit = false }
         Task { try? await settingsFacade.updateSelectOnTouchDown(enabled: enabled) }
+    }
+
+    func setSelectOnTouchExit(_ enabled: Bool) {
+        selectOnTouchExit = enabled
+        if enabled { selectOnTouchDown = false }
+        Task { try? await settingsFacade.updateSelectOnTouchExit(enabled: enabled) }
     }
 
     func setSwipeBetweenPages(_ enabled: Bool) {
@@ -326,6 +336,12 @@ extension IosViewModel {
         Task { _ = try? await settingsFacade.updateDwellToSelectMillis(millis: Int64(dwellToSelectMillis)) }
     }
 
+    func setDwellRearmDelayMillis(_ value: Double) {
+        dwellRearmDelayMillis = min(max(value, 0), 500)
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
+        Task { _ = try? await settingsFacade.updateDwellRearmDelayMillis(millis: Int64(dwellRearmDelayMillis)) }
+    }
+
     func setSelectKeyBinding(_ value: String) {
         selectKeyBinding = value
         Task { _ = try? await settingsFacade.updateSelectKeyBinding(binding: value) }
@@ -384,6 +400,7 @@ extension IosViewModel {
     }
 
     func tickAccessInput() {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
         applyAccessInput(accessInput.tick(nowMillis: nowMillis(), dwellMillis: Int64(dwellToSelectMillis)))
     }
     func toggleInputPause() { applyAccessInput(accessInput.togglePaused(nowMillis: nowMillis())) }
@@ -395,7 +412,12 @@ extension IosViewModel {
         if accessTargetId != state.currentTargetId { accessTargetId = state.currentTargetId }
         let newProgress = Double(state.dwellProgress)
         if abs(accessDwellProgress - newProgress) > 0.001 { accessDwellProgress = newProgress }
-        if let activation = effect as? AccessInputEffectActivate { accessActions[activation.targetId]?() }
+        if let activation = effect as? AccessInputEffectActivate {
+            AccessHaptics.perform(.confirm)
+            accessActions[activation.targetId]?()
+        } else if effect is AccessInputEffectPauseChanged {
+            AccessHaptics.perform(.tick)
+        }
     }
 
     func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }

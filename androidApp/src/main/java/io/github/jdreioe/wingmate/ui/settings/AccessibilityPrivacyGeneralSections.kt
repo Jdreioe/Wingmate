@@ -50,6 +50,8 @@ internal fun AccessibilitySection(
     onHoldToSelectChangeFinished: () -> Unit,
     selectOnTouchDown: Boolean,
     onSelectOnTouchDownChange: (Boolean) -> Unit,
+    selectOnTouchExit: Boolean,
+    onSelectOnTouchExitChange: (Boolean) -> Unit,
     swipeBetweenPages: Boolean,
     onSwipeBetweenPagesChange: (Boolean) -> Unit,
     dwellToSelectMillis: Long,
@@ -117,6 +119,13 @@ internal fun AccessibilitySection(
             onCheckedChange = onSelectOnTouchDownChange,
             title = stringResource(R.string.ui_settings_select_on_touch_down_title),
             description = stringResource(R.string.ui_settings_select_on_touch_down_desc)
+        )
+        SettingsGroupDivider()
+        SettingsSwitch(
+            checked = selectOnTouchExit,
+            onCheckedChange = onSelectOnTouchExitChange,
+            title = stringResource(R.string.ui_settings_select_on_touch_exit_title),
+            description = stringResource(R.string.ui_settings_select_on_touch_exit_desc)
         )
         SettingsGroupDivider()
         SettingsSwitch(

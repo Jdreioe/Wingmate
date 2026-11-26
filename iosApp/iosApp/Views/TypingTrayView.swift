@@ -260,9 +260,15 @@ struct TypingTrayView: View {
         }
         .id(page)
         .transition(.opacity)
-        .scrollDisabled(model.selectOnTouchDown)
+        .scrollDisabled(model.selectOnTouchDown || model.selectOnTouchExit)
         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
-            guard model.swipeBetweenPages, !model.selectOnTouchDown, model.holdToSelectMillis <= 0,
+            guard TouchExitControllerKt.pageSwipeIsActive(
+                    isEditMode: false,
+                    swipeBetweenPages: model.swipeBetweenPages,
+                    holdToSelectMillis: Int64(model.holdToSelectMillis),
+                    selectOnTouchDown: model.selectOnTouchDown,
+                    selectOnTouchExit: model.selectOnTouchExit
+                  ),
                   abs(value.translation.width) >= 64, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
             var pages: [TypingPage] = [.all] + model.state.categories.map { .category($0.id) }
             if historyAvailable { pages.append(.history) }

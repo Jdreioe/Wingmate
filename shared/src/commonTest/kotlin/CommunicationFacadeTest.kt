@@ -151,6 +151,27 @@ class CommunicationFacadeTest {
         assertEquals("/tmp/hi.m4a", added.recordingPath)
     }
 
+    @Test
+    fun restorePhrasesRebuildsDeletedCategoryAndChildrenWithOriginalIds() = withFakeMain {
+        val phraseRepo = InMemoryPhraseRepository()
+        val category = Phrase(id = "cat-1", text = "Food", linkedBoardId = "cat-1", isGridItem = false, createdAt = 1L)
+        val child = Phrase(id = "p-1", text = "Water", parentId = "cat-1", createdAt = 2L, recordingPath = "/tmp/water.m4a")
+        phraseRepo.add(category)
+        phraseRepo.add(child)
+        val store = facade(phraseRepository = phraseRepo).phraseListStore()
+
+        store.accept(PhraseListStore.Intent.DeleteCategory(categoryId = "cat-1"))
+        withTimeout(5_000) {
+            while (phraseRepo.getAll().isNotEmpty()) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.RestorePhrases(listOf(category, child)))
+        withTimeout(5_000) {
+            while (phraseRepo.getAll().size != 2) delay(10)
+        }
+        assertEquals(listOf(category, child), phraseRepo.getAll())
+    }
+
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */
     private suspend fun awaitRecordingPath(
         phraseRepo: PhraseRepository,

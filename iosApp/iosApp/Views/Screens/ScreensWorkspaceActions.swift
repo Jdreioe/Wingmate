@@ -36,12 +36,15 @@ extension SymbolBoardWorkspaceView {
     func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
         guard let cell else { return }
         if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
+            AccessHaptics.perform(.confirm)
             if let current = model.selectedBoardId {
                 model.pushBoardNavigationStack(current)
             }
-            Task { await model.activateSelectedBoardCell(row: row, col: col) }
+            Task { await model.activateSelectedBoardCell(row: row, col: col, checkDebounce: false) }
             return
         }
+        // #118 / #405: enforce per-target debounce and confirm/reject haptics for every non-link Button.
+        guard model.acceptActivation(targetId: cell.buttonId) else { return }
         if cell.actions.isEmpty {
             let behavior = model.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
@@ -53,7 +56,7 @@ extension SymbolBoardWorkspaceView {
             }
             Task {
                 if shouldSpeak && trimmed(cell.soundPath) == nil && trimmed(cell.soundDataUrl) == nil {
-                    await model.activateSelectedBoardCell(row: row, col: col)
+                    await model.activateSelectedBoardCell(row: row, col: col, checkDebounce: false)
                 }
                 await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
             }

@@ -62,6 +62,9 @@ import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.application.SelectionDebouncer
+import io.github.jdreioe.wingmate.application.touchExitIsActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
@@ -526,16 +529,42 @@ internal fun ObfBoardContent(
     } else if (grid != null) {
         val columns = grid.columns.coerceAtLeast(1)
         val rows = grid.rows.coerceAtLeast(1)
+        val cellGapOverride = effectiveBoardSettings.cellGapDp?.dp
+        val horizontalGapDp = cellGapOverride ?: 4.dp
+        val verticalGapDp = cellGapOverride ?: 8.dp
+        val outerMarginDp = effectiveBoardSettings.outerMarginDp?.dp ?: 8.dp
+        val touchExitActive = touchExitIsActive(
+            isEditMode = isEditMode,
+            holdToSelectMillis = settings.holdToSelectMillis,
+            selectOnTouchDown = settings.selectOnTouchDown,
+            selectOnTouchExit = settings.selectOnTouchExit,
+        )
+        val disableGridScroll = settings.selectOnTouchDown || touchExitActive
+        val touchExitDebouncer = remember(board.id) { SelectionDebouncer() }
+        val hapticView = LocalView.current
+        val accessHost = LocalAccessInputHost.current
+        val previewScope = rememberCoroutineScope()
+        var previewJob by remember(board.id) { mutableStateOf<Job?>(null) }
+        DisposableEffect(board.id, touchExitActive) {
+            onDispose {
+                previewJob?.cancel()
+                previewJob = null
+            }
+        }
         
         // Use Column/Row for fixed grid that fills the space
         BoxWithConstraints(modifier = modifier.fillMaxSize().pageBackground(boardBackground, pageBackgroundImage, backgroundFit)) {
             val symbolBarMaxHeight = maxHeight * symbolBarPresentation.maximumViewportFraction
             Column(
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize(),
             ) {
                 if (showMessageBar) {
-                    messageBar(Modifier.fillMaxWidth().heightIn(max = symbolBarMaxHeight))
+                    messageBar(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 8.dp, top = 8.dp, end = 8.dp)
+                            .heightIn(max = symbolBarMaxHeight)
+                    )
                 }
 
                 val gridItems = remember(grid, buttonsById) {
@@ -554,6 +583,46 @@ internal fun ObfBoardContent(
                             onCellClick?.invoke(cell.first, cell.second, button) ?: onButtonClick(button)
                         }
                     }
+                }
+                val boardTouchExit = if (touchExitActive) {
+                    BoardTouchExit(
+                        isButtonSelectable = isVisible,
+                        onPreview = { button ->
+                            if (settings.auditoryFishingEnabled && accessHost?.state?.isPaused != true) {
+                                val label = predictionLabels[button.id]
+                                    ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.label)
+                                    ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.vocalization)
+                                    ?: ""
+                                if (label.isNotBlank()) {
+                                    previewJob?.cancel()
+                                    previewJob = previewScope.launch {
+                                        feedback.onAuditoryCue(button, label)
+                                    }
+                                }
+                            }
+                        },
+                        onActivate = { item, button ->
+                            previewJob?.cancel()
+                            previewJob = null
+                            val accepted = touchExitDebouncer.tryActivate(
+                                button.id,
+                                Clock.System.now().toEpochMilliseconds(),
+                                settings.selectionDebounceMillis,
+                            )
+                            if (!accepted) {
+                                hapticView.performAccessHaptic(AccessHaptic.REJECT)
+                            } else {
+                                hapticView.performAccessHaptic(AccessHaptic.CONFIRM)
+                                val label = predictionLabels[button.id]
+                                    ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.label)
+                                    ?: ""
+                                feedback.onActivated(button, label)
+                                onCellClick?.invoke(item.row, item.column, button) ?: onButtonClick(button)
+                            }
+                        },
+                    )
+                } else {
+                    null
                 }
                 val gridNavModifier = if (!isEditMode) {
                     Modifier
@@ -587,11 +656,11 @@ internal fun ObfBoardContent(
                 } else {
                     Modifier.fillMaxSize()
                 }
-                BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth().padding(outerMarginDp)) {
                     val availableGridHeight = maxHeight
                     val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
                         settings.inputFieldScale.coerceIn(0.5f, 2f)
-                    val minimumContentHeight = minimumCellHeight * rows + 8.dp * (rows - 1)
+                    val minimumContentHeight = minimumCellHeight * rows + verticalGapDp * (rows - 1)
                     val defaultHeightFraction = if (board.compactGrid) {
                         (minimumContentHeight / availableGridHeight).coerceIn(0.15f, 1f)
                     } else {
@@ -605,11 +674,11 @@ internal fun ObfBoardContent(
                         mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
                     }
                     val fittedHeight = availableGridHeight * previewHeightFraction
-                    // Touch-down selection turns scrolling off, so every row must fit.
+                    // Touch-down and Touch Exit turn scrolling off, so every row must fit.
                     val contentHeight = scrollingMinimumCellHeight
-                        ?.takeUnless { settings.selectOnTouchDown }
+                        ?.takeUnless { disableGridScroll }
                         ?.let { minimumHeight ->
-                            val gap = 8.dp
+                            val gap = verticalGapDp
                             val visibleRows = ((availableGridHeight + gap) / (minimumHeight + gap))
                                 .toInt().coerceIn(1, rows)
                             val rowHeight = maxOf(
@@ -619,7 +688,7 @@ internal fun ObfBoardContent(
                             rowHeight * rows + gap * (rows - 1)
                         }
                         ?: fittedHeight
-                    Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState, enabled = !settings.selectOnTouchDown)) {
+                    Box(modifier = Modifier.fillMaxSize().verticalScroll(pageScrollState, enabled = !disableGridScroll)) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -631,9 +700,12 @@ internal fun ObfBoardContent(
                                 columns = columns,
                                 items = gridItems,
                                 modifier = gridNavModifier,
+                                horizontalGapDp = horizontalGapDp,
+                                verticalGapDp = verticalGapDp,
                                 onMove = onCellMove,
                                 cellMenu = cellMenu,
                                 reorder = reorder,
+                                touchExit = boardTouchExit,
                                 selectedField = selectedFieldAnchor,
                                 selectedFieldSpans = selectedFieldSpans,
                                 onResizeField = onResizeField,

@@ -234,4 +234,33 @@ class BoardSettingsTest {
 
         assertTrue(boardSet.screenSettings.isEmpty)
     }
+
+    @Test
+    fun keyguardSpacingInheritsPageOverScreenClampsBoundsAndPreservesZero() {
+        val defaults = resolveBoardSettings(appShowLabels = true, appShowSymbols = true, appLabelAtTop = false)
+        assertNull(defaults.cellGapDp)
+        assertNull(defaults.outerMarginDp)
+
+        val screen = BoardSettingsOverrides(cellGapDp = 12, outerMarginDp = 24)
+        assertFalse(screen.isEmpty)
+        val fromScreen = resolveBoardSettings(true, true, false, screen = screen)
+        assertEquals(12, fromScreen.cellGapDp)
+        assertEquals(24, fromScreen.outerMarginDp)
+
+        // Explicit 0 dp on a Page overrides a non-zero Screen value.
+        val pageZero = BoardSettingsOverrides(cellGapDp = 0, outerMarginDp = 0)
+        assertFalse(pageZero.isEmpty)
+        val fromPage = resolveBoardSettings(true, true, false, screen = screen, page = pageZero)
+        assertEquals(0, fromPage.cellGapDp)
+        assertEquals(0, fromPage.outerMarginDp)
+
+        // Out-of-range imported values clamp cleanly.
+        val outOfRange = BoardSettingsOverrides(cellGapDp = 999, outerMarginDp = -10)
+        val clamped = resolveBoardSettings(true, true, false, page = outOfRange)
+        assertEquals(MAX_KEYGUARD_CELL_GAP_DP, clamped.cellGapDp)
+        assertEquals(0, clamped.outerMarginDp)
+
+        assertEquals(screen, decodeBoardSettings(encodeBoardSettings(screen)))
+        assertEquals(pageZero, decodeBoardSettings(encodeBoardSettings(pageZero)))
+    }
 }

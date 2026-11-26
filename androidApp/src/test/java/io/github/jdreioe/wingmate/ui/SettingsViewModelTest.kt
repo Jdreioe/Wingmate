@@ -255,6 +255,27 @@ class SettingsViewModelTest {
         assertEquals(listOf(updated), viewModel.state.value.boardSets)
     }
 
+    @Test
+    fun `touch exit and touch down stay mutually exclusive when enabled`() = runTest {
+        val operations = FakeSettingsOperations()
+        val viewModel = SettingsViewModel(SavedStateHandle(), operations)
+        viewModel.onAction(SettingsAction.Initialize)
+
+        viewModel.onAction(SettingsAction.SelectOnTouchDownChanged(true))
+        assertTrue(viewModel.state.value.settings.selectOnTouchDown)
+        assertFalse(viewModel.state.value.settings.selectOnTouchExit)
+
+        viewModel.onAction(SettingsAction.SelectOnTouchExitChanged(true))
+        assertTrue(viewModel.state.value.settings.selectOnTouchExit)
+        assertFalse(viewModel.state.value.settings.selectOnTouchDown)
+        assertTrue(operations.settings.selectOnTouchExit)
+        assertFalse(operations.settings.selectOnTouchDown)
+
+        viewModel.onAction(SettingsAction.SelectOnTouchDownChanged(true))
+        assertTrue(viewModel.state.value.settings.selectOnTouchDown)
+        assertFalse(viewModel.state.value.settings.selectOnTouchExit)
+    }
+
     private fun boardSet(id: String) = ObfBoardSet(
         id = id,
         name = "Set $id",

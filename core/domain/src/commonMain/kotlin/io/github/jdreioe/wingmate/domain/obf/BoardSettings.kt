@@ -53,6 +53,8 @@ enum class MessageBarAction {
 }
 
 const val MAX_MESSAGE_BAR_ACTIONS = 4
+const val MAX_KEYGUARD_CELL_GAP_DP = 48
+const val MAX_KEYGUARD_OUTER_MARGIN_DP = 64
 
 /**
  * Nullable settings used at both inheritance levels:
@@ -77,6 +79,10 @@ data class BoardSettingsOverrides(
      * once set; until then the speak setting decides between Speak and none.
      */
     val messageBarActions: List<MessageBarAction>? = null,
+    /** Physical keyguard gap between Buttons in dp/pt. Null inherits from Screen or default layout. */
+    val cellGapDp: Int? = null,
+    /** Physical keyguard outer margin around the Page grid in dp/pt. Null inherits from Screen or default layout. */
+    val outerMarginDp: Int? = null,
 ) {
     val isEmpty: Boolean
         get() = showLabels == null &&
@@ -89,7 +95,9 @@ data class BoardSettingsOverrides(
             returnBehavior == null &&
             speechPolicy == null &&
             cacheSpeech == null &&
-            messageBarActions == null
+            messageBarActions == null &&
+            cellGapDp == null &&
+            outerMarginDp == null
 }
 
 data class ResolvedBoardSettings(
@@ -104,6 +112,8 @@ data class ResolvedBoardSettings(
     val speechPolicy: SpeechPolicy? = null,
     val cacheSpeech: Boolean = false,
     val messageBarActions: List<MessageBarAction>,
+    val cellGapDp: Int? = null,
+    val outerMarginDp: Int? = null,
 )
 
 fun resolveBoardSettings(
@@ -148,6 +158,8 @@ fun resolveBoardSettings(
         speechPolicy = page.speechPolicy ?: screen.speechPolicy,
         cacheSpeech = page.cacheSpeech ?: screen.cacheSpeech ?: false,
         messageBarActions = messageBarActions,
+        cellGapDp = (page.cellGapDp ?: screen.cellGapDp)?.coerceIn(0, MAX_KEYGUARD_CELL_GAP_DP),
+        outerMarginDp = (page.outerMarginDp ?: screen.outerMarginDp)?.coerceIn(0, MAX_KEYGUARD_OUTER_MARGIN_DP),
     )
 }
 

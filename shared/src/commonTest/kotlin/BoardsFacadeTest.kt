@@ -238,11 +238,29 @@ class BoardsFacadeTest {
             showLabels = "inherit", showSymbols = "inherit", labelAtTop = "inherit",
             showMessageBar = "off", showSpeakButton = "inherit", messageBarEditable = "inherit",
             activationBehavior = "SpeakOnly", returnBehavior = "Previous", cacheSpeech = "on",
+            cellGapDp = 12, outerMarginDp = 24,
         )
         val screen = facade.resolveBoardSettings(set.rootBoardId)
         assertEquals(false, screen.showMessageBar)
         assertEquals("SpeakOnly", screen.activationBehavior)
         assertEquals("Previous", screen.returnBehavior)
+        assertEquals(12, screen.cellGapDp)
+        assertEquals(24, screen.outerMarginDp)
+
+        val screenDraft = facade.boardSettingsDraft(set.id, set.rootBoardId, forPage = false)
+        assertEquals(12, screenDraft.cellGapDp)
+        assertEquals(24, screenDraft.outerMarginDp)
+
+        facade.updateBoardSettings(
+            boardSetId = set.id, boardId = set.rootBoardId, forPage = true,
+            showLabels = "inherit", showSymbols = "off", labelAtTop = "on",
+            showMessageBar = "on", showSpeakButton = "inherit", messageBarEditable = "off",
+            activationBehavior = "inherit", returnBehavior = "inherit", cacheSpeech = "inherit",
+            cellGapDp = 4, outerMarginDp = null,
+        )
+        val pageResolved = facade.resolveBoardSettings(set.rootBoardId)
+        assertEquals(4, pageResolved.cellGapDp)
+        assertEquals(24, pageResolved.outerMarginDp)
 
         facade.updateBoardSettings(
             boardSetId = set.id, boardId = set.rootBoardId, forPage = true,

@@ -13,7 +13,13 @@ extension IosViewModel {
     }
 
     func swipePage(by offset: Int) async {
-        guard swipeBetweenPages, !selectOnTouchDown, holdToSelectMillis <= 0,
+        guard TouchExitControllerKt.pageSwipeIsActive(
+                isEditMode: false,
+                swipeBetweenPages: swipeBetweenPages,
+                holdToSelectMillis: Int64(holdToSelectMillis),
+                selectOnTouchDown: selectOnTouchDown,
+                selectOnTouchExit: selectOnTouchExit
+              ),
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
               let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
         await selectBoard(id: ids[index + offset])
@@ -37,6 +43,8 @@ extension IosViewModel {
             resolvedBoardActivationBehavior = nil
             resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
+            resolvedBoardCellGapDp = nil
+            resolvedBoardOuterMarginDp = nil
             return
         }
         do {
@@ -54,6 +62,8 @@ extension IosViewModel {
             resolvedBoardActivationBehavior = resolved?.activationBehavior
             resolvedBoardSpeechPolicy = resolved?.speechPolicy
             resolvedBoardReturnBehavior = resolved?.returnBehavior
+            resolvedBoardCellGapDp = resolved?.cellGapDp?.intValue
+            resolvedBoardOuterMarginDp = resolved?.outerMarginDp?.intValue
             let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !boardName.isEmpty {
                 boardNamesById[id] = boardName
@@ -75,6 +85,8 @@ extension IosViewModel {
             resolvedBoardActivationBehavior = nil
             resolvedBoardSpeechPolicy = nil
             resolvedBoardReturnBehavior = nil
+            resolvedBoardCellGapDp = nil
+            resolvedBoardOuterMarginDp = nil
         }
     }
 
@@ -231,7 +243,7 @@ extension IosViewModel {
         }
     }
 
-    func activateSelectedBoardCell(row: Int, col: Int) async {
+    func activateSelectedBoardCell(row: Int, col: Int, checkDebounce: Bool = true) async {
         guard let cell = cellAt(row: row, col: col) else { return }
 
         if let linkedBoardId = normalizedOptionalText(cell.linkedBoardId),
@@ -242,7 +254,7 @@ extension IosViewModel {
         }
 
         // #118: navigation is an explicit action; speech insertion is debounced per cell.
-        if !acceptActivation(targetId: cell.buttonId) { return }
+        if checkDebounce && !acceptActivation(targetId: cell.buttonId) { return }
 
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             speak(textToSpeak)
@@ -261,19 +273,15 @@ extension IosViewModel {
         highlightedButtonId = nil
     }
 
-    // #118: per-target activation debounce. A zero duration disables the guard entirely.
+    // #118 / #405: shared per-target activation debounce paired with UIKit confirm/reject haptics.
     func acceptActivation(targetId: String) -> Bool {
-        let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let window = Int64(selectionDebounceMillis)
-        if window <= 0 {
-            lastActivationAtMillis[targetId] = nil
-            return true
-        }
-        if let last = lastActivationAtMillis[targetId], now - last < window {
-            return false
-        }
-        lastActivationAtMillis[targetId] = now
-        return true
+        let accepted = selectionDebouncer.tryActivate(
+            targetId: targetId,
+            nowMillis: nowMillis(),
+            debounceMillis: Int64(selectionDebounceMillis)
+        )
+        AccessHaptics.perform(accepted ? .confirm : .reject)
+        return accepted
     }
 
     func refreshBoardPredictions(context: String) async {
@@ -394,7 +402,9 @@ extension IosViewModel {
         messageBarEditable: String,
         activationBehavior: String,
         returnBehavior: String,
-        cacheSpeech: String
+        cacheSpeech: String,
+        cellGapDp: Int? = nil,
+        outerMarginDp: Int? = nil
     ) async -> Bool {
         guard let setId = selectedBoardSetId, let boardId = selectedBoardId, canEditSelectedBoardSet else { return false }
         do {
@@ -410,7 +420,9 @@ extension IosViewModel {
                 messageBarEditable: messageBarEditable,
                 activationBehavior: activationBehavior,
                 returnBehavior: returnBehavior,
-                cacheSpeech: cacheSpeech
+                cacheSpeech: cacheSpeech,
+                cellGapDp: cellGapDp.map { KotlinInt(value: Int32($0)) },
+                outerMarginDp: outerMarginDp.map { KotlinInt(value: Int32($0)) }
             )
             await loadSelectedBoard()
             return true

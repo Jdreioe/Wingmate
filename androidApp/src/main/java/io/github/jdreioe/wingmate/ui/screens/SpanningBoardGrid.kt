@@ -62,6 +62,9 @@ import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.GridFieldSpan
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.application.SelectionDebouncer
+import io.github.jdreioe.wingmate.application.TouchExitController
+import io.github.jdreioe.wingmate.application.TouchExitEffect
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import kotlin.time.Clock
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
@@ -167,12 +170,20 @@ internal fun buildBoardGridItems(
  */
 internal val LocalBoardCellActions = compositionLocalOf { emptyList<CustomAccessibilityAction>() }
 
+internal class BoardTouchExit(
+    val isButtonSelectable: (ObfButton) -> Boolean,
+    val onPreview: (ObfButton) -> Unit,
+    val onActivate: (BoardGridItem, ObfButton) -> Unit,
+)
+
 @Composable
 internal fun SpanningBoardGrid(
     rows: Int,
     columns: Int,
     items: List<BoardGridItem>,
     modifier: Modifier = Modifier,
+    horizontalGapDp: Dp = 4.dp,
+    verticalGapDp: Dp = 8.dp,
     onMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
     selectedField: Pair<Int, Int>? = null,
     selectedFieldSpans: List<GridFieldSpan> = emptyList(),
@@ -181,6 +192,7 @@ internal fun SpanningBoardGrid(
     focusedCell: Pair<Int, Int>? = null,
     reorder: BoardReorder? = null,
     cellMenu: BoardCellMenu? = null,
+    touchExit: BoardTouchExit? = null,
     content: @Composable (BoardGridItem) -> Unit
 ) {
     // The Button whose launcher-style menu (Edit, Resize, Remove) is open, by its anchor cell.
@@ -194,8 +206,16 @@ internal fun SpanningBoardGrid(
     var resizeEdge by remember { mutableStateOf(ResizeEdge.Corner) }
     var resizeStatus by remember { mutableStateOf<String?>(null) }
     val density = LocalDensity.current
-    val horizontalGap = with(density) { 4.dp.toPx() }
-    val verticalGap = with(density) { 8.dp.toPx() }
+    val horizontalGap = with(density) { horizontalGapDp.toPx() }
+    val verticalGap = with(density) { verticalGapDp.toPx() }
+    val touchExitController = remember { TouchExitController() }
+    var touchExitActiveButtonId by remember(items, touchExit) { mutableStateOf<String?>(null) }
+    DisposableEffect(items, touchExit) {
+        onDispose {
+            touchExitController.cancel()
+            touchExitActiveButtonId = null
+        }
+    }
 
     LaunchedEffect(resizeStatus) {
         if (resizeStatus != null) {
@@ -531,12 +551,91 @@ internal fun SpanningBoardGrid(
     } else {
         Modifier
     }
+    val currentTouchExit by rememberUpdatedState(touchExit)
+    val currentItems by rememberUpdatedState(items)
+    val currentHorizontalGap by rememberUpdatedState(horizontalGap)
+    val currentVerticalGap by rememberUpdatedState(verticalGap)
+    val touchExitModifier = if (touchExit != null && onMove == null) {
+        Modifier.pointerInput(rows, columns) {
+            fun selectableItemAt(position: Offset): BoardGridItem? {
+                val activeTouchExit = currentTouchExit ?: return null
+                if (gridSizePx.width <= 0 || gridSizePx.height <= 0) return null
+                if (position.x < 0f || position.y < 0f || position.x >= gridSizePx.width || position.y >= gridSizePx.height) {
+                    return null
+                }
+                val hGap = currentHorizontalGap
+                val vGap = currentVerticalGap
+                val cellWidth = (gridSizePx.width - hGap * (columns - 1)).coerceAtLeast(0f) / columns
+                val cellHeight = (gridSizePx.height - vGap * (rows - 1)).coerceAtLeast(0f) / rows
+                return currentItems.firstOrNull { item ->
+                    val button = item.button ?: return@firstOrNull false
+                    if (!activeTouchExit.isButtonSelectable(button)) return@firstOrNull false
+                    val left = item.column * (cellWidth + hGap)
+                    val top = item.row * (cellHeight + vGap)
+                    val right = left + cellWidth * item.columnSpan + hGap * (item.columnSpan - 1)
+                    val bottom = top + cellHeight * item.rowSpan + vGap * (item.rowSpan - 1)
+                    position.x in left..right && position.y in top..bottom
+                }
+            }
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                if (isSecondaryPress()) return@awaitEachGesture
+                down.consume()
+                try {
+                    val startItem = selectableItemAt(down.position)
+                    val beginEffect = touchExitController.begin(startItem?.button?.id)
+                    touchExitActiveButtonId = touchExitController.state.activeTargetId
+                    if (beginEffect is TouchExitEffect.Preview && startItem?.button != null) {
+                        currentTouchExit?.onPreview(startItem.button)
+                    }
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        event.changes.forEach { it.consume() }
+                        if (change == null) {
+                            touchExitController.cancel()
+                            touchExitActiveButtonId = null
+                            break
+                        }
+                        if (!change.pressed) {
+                            if (change.changedToUpIgnoreConsumed()) {
+                                val endItem = selectableItemAt(change.position)
+                                val effect = touchExitController.release(endItem?.button?.id)
+                                touchExitActiveButtonId = touchExitController.state.activeTargetId
+                                if (effect is TouchExitEffect.Activate && endItem?.button != null) {
+                                    currentTouchExit?.onActivate(endItem, endItem.button)
+                                }
+                            } else {
+                                touchExitController.cancel()
+                                touchExitActiveButtonId = null
+                            }
+                            break
+                        }
+                        val hovered = selectableItemAt(change.position)
+                        val effect = touchExitController.move(hovered?.button?.id)
+                        touchExitActiveButtonId = touchExitController.state.activeTargetId
+                        if (effect is TouchExitEffect.Preview && hovered?.button != null) {
+                            currentTouchExit?.onPreview(hovered.button)
+                        }
+                    }
+                } finally {
+                    if (touchExitController.state.isTracking) {
+                        touchExitController.cancel()
+                        touchExitActiveButtonId = null
+                    }
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
     Box(modifier = modifier) {
         Layout(
             modifier = Modifier
                 .fillMaxSize()
                 .then(dragModifier)
                 .then(reorderModifier)
+                .then(touchExitModifier)
                 .onSizeChanged { gridSizePx = it },
             content = {
                 items.forEach { item ->
@@ -639,6 +738,16 @@ internal fun SpanningBoardGrid(
                             }
                             CompositionLocalProvider(LocalBoardCellActions provides cellActions) {
                                 content(item)
+                            }
+                            if (item.button != null && item.button.id == touchExitActiveButtonId) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .testTag("touch-exit-highlight")
+                                        .clip(ringShape)
+                                        .background(selectionColor.copy(alpha = 0.16f))
+                                        .border(4.dp, selectionColor, ringShape)
+                                )
                             }
                             if (isSelected && onRemoveField != null && item.button != null) {
                                 val removeLabel = stringResource(R.string.board_cell_menu_remove)
@@ -756,8 +865,8 @@ internal fun SpanningBoardGrid(
             }
         }
     ) { measurables, constraints ->
-        val horizontalGapPx = 4.dp.roundToPx()
-        val verticalGapPx = 8.dp.roundToPx()
+        val horizontalGapPx = horizontalGapDp.roundToPx()
+        val verticalGapPx = verticalGapDp.roundToPx()
         val availableWidth = (constraints.maxWidth - horizontalGapPx * (columns - 1)).coerceAtLeast(0)
         val availableHeight = (constraints.maxHeight - verticalGapPx * (rows - 1)).coerceAtLeast(0)
         val cellWidth = availableWidth / columns

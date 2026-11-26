@@ -11,6 +11,8 @@ import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_CELL_GAP_DP
+import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_OUTER_MARGIN_DP
 import io.github.jdreioe.wingmate.domain.obf.MAX_MESSAGE_BAR_ACTIONS
 import io.github.jdreioe.wingmate.domain.obf.MessageBarAction
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -72,6 +74,8 @@ data class IosResolvedBoardSettings(
     val speechPolicy: String? = null,
     /** [MessageBarAction] names, in order: `Speak`, `Hold`, `DeleteLast`, `Clear`. */
     val messageBarActions: List<String> = emptyList(),
+    val cellGapDp: Int? = null,
+    val outerMarginDp: Int? = null,
 )
 
 data class IosBoardCell(
@@ -130,6 +134,8 @@ data class IosBoardSettingsDraft(
     val activationBehavior: String = "inherit",
     val returnBehavior: String = "inherit",
     val cacheSpeech: String = "inherit",
+    val cellGapDp: Int? = null,
+    val outerMarginDp: Int? = null,
 )
 
 /**
@@ -365,6 +371,8 @@ class BoardsFacade(
             returnBehavior = resolved.returnBehavior.name,
             speechPolicy = resolved.speechPolicy?.name,
             messageBarActions = resolved.messageBarActions.map { it.name },
+            cellGapDp = resolved.cellGapDp,
+            outerMarginDp = resolved.outerMarginDp,
         )
     }
 
@@ -657,6 +665,8 @@ class BoardsFacade(
         activationBehavior: String,
         returnBehavior: String,
         cacheSpeech: String,
+        cellGapDp: Int? = null,
+        outerMarginDp: Int? = null,
     ) = nativeCall {
         val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
         if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
@@ -678,6 +688,8 @@ class BoardsFacade(
             cacheSpeech = cacheSpeech.toOptionalBoolean(),
             // Edited on the Screen itself, not in this form.
             messageBarActions = current.messageBarActions,
+            cellGapDp = cellGapDp?.coerceIn(0, MAX_KEYGUARD_CELL_GAP_DP),
+            outerMarginDp = outerMarginDp?.coerceIn(0, MAX_KEYGUARD_OUTER_MARGIN_DP),
         )
         val updated = if (forPage) {
             val board = graph.boardsById[boardId] ?: throw NativeFailure(NativeFailureKind.NotFound)
@@ -754,6 +766,8 @@ private fun BoardSettingsOverrides.toDraft(): IosBoardSettingsDraft = IosBoardSe
     activationBehavior = activationBehavior?.name ?: "inherit",
     returnBehavior = returnBehavior?.name ?: "inherit",
     cacheSpeech = cacheSpeech.choice(),
+    cellGapDp = cellGapDp,
+    outerMarginDp = outerMarginDp,
 )
 
 private fun Boolean?.choice(): String = when (this) {

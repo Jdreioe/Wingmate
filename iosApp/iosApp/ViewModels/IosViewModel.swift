@@ -24,6 +24,7 @@ final class IosViewModel: ObservableObject {
     // Shared access and highlight policies; Swift only supplies events and the clock.
     let accessInput = AccessInputController()
     let selectionHighlight = SelectionHighlight()
+    let selectionDebouncer = SelectionDebouncer()
     var sessionSubscription: Shared.NativeSubscription?
 
     // The shared Message (#306). Kotlin's Communication session owns it; these mirror its
@@ -61,6 +62,7 @@ final class IosViewModel: ObservableObject {
         phraseSubscription?.cancel()
         sessionSubscription?.cancel()
         boardPredictionSubscription?.cancel()
+        pendingPhraseUndoTask?.cancel()
         #if DEBUG
         predictionJob?.cancel()
         predictionSubscription?.cancel()
@@ -72,6 +74,7 @@ final class IosViewModel: ObservableObject {
     @Published var likelyNextPhrases: [Shared.Phrase] = []
     @Published var likelyNextPageEnabled = false
     @Published var selectOnTouchDown = false
+    @Published var selectOnTouchExit = false
     @Published var swipeBetweenPages = false
     @Published var boardBackgroundImageUrl: String? = nil
     @Published var boardBackgroundImageFit = "Fill"
@@ -99,6 +102,7 @@ final class IosViewModel: ObservableObject {
     @Published var wordTypeColorScheme: String = "None"
     @Published var holdToSelectMillis: Double = 0
     @Published var dwellToSelectMillis: Double = 0
+    @Published var dwellRearmDelayMillis: Double = Double(ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
     @Published var selectionDebounceMillis: Double = 0
     @Published var selectionSoundEnabled: Bool = false
     @Published var auditoryFishingEnabled: Bool = false
@@ -167,6 +171,8 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardSpeechPolicy: String? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
+    @Published var resolvedBoardCellGapDp: Int? = nil
+    @Published var resolvedBoardOuterMarginDp: Int? = nil
     @Published var boardStack: [String] = []
 
     var boardShowLabels: Bool { resolvedBoardShowLabels ?? showButtonLabels }
@@ -196,7 +202,8 @@ final class IosViewModel: ObservableObject {
 
     // Relocated stored state shared by extensions
     var lookedUpPageIds: Set<String> = []
-    var lastActivationAtMillis: [String: Int64] = [:]
+    @Published var pendingPhraseUndo: PendingPhraseUndo? = nil
+    var pendingPhraseUndoTask: Task<Void, Never>? = nil
 
     /// Starts the shared Koin graph. Later calls do nothing. The app calls this at launch,
     /// before any view exists, because views such as the welcome flow resolve facades in
@@ -259,15 +266,24 @@ final class IosViewModel: ObservableObject {
     }
 
     func deletePhrase(id: String) {
-        if let path = recordingPath(for: id) {
-            try? FileManager.default.removeItem(atPath: path)
-        }
+        recordPhraseDeletionForUndo(rootId: id)
         store?.accept(intent: Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
 
     /// Selects the Category that Phrases added from the tray go into.
     func selectCategory(id: String?) {
         store?.accept(intent: Shared.PhraseListStoreIntent.SelectCategory(categoryId: id))
+    }
+}
+
+struct PendingPhraseUndo: Equatable {
+    let id = UUID()
+    let deletedPhrases: [Shared.Phrase]
+    let recordingPaths: [String]
+    let includesSubItems: Bool
+
+    static func == (lhs: PendingPhraseUndo, rhs: PendingPhraseUndo) -> Bool {
+        lhs.id == rhs.id
     }
 }
 

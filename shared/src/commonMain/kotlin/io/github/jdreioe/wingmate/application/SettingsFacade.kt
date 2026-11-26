@@ -76,13 +76,27 @@ class SettingsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateHoldToSelectMillis(millis: Long) = updateSettings { it.copy(holdToSelectMillis = millis.coerceIn(0, 2_000)) }
     @Throws(NativeFailure::class, CancellationException::class)
-    suspend fun updateSelectOnTouchDown(enabled: Boolean) = updateSettings { it.copy(selectOnTouchDown = enabled) }
+    suspend fun updateSelectOnTouchDown(enabled: Boolean) = updateSettings {
+        it.copy(
+            selectOnTouchDown = enabled,
+            selectOnTouchExit = if (enabled) false else it.selectOnTouchExit,
+        )
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateSelectOnTouchExit(enabled: Boolean) = updateSettings {
+        it.copy(
+            selectOnTouchExit = enabled,
+            selectOnTouchDown = if (enabled) false else it.selectOnTouchDown,
+        )
+    }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSwipeBetweenPages(enabled: Boolean) = updateSettings { it.copy(swipeBetweenPages = enabled) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateLikelyNextPageEnabled(enabled: Boolean) = updateSettings { it.copy(likelyNextPageEnabled = enabled) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateDwellToSelectMillis(millis: Long) = updateSettings { it.copy(dwellToSelectMillis = millis.coerceIn(0, 5_000)) }
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateDwellRearmDelayMillis(millis: Long) = updateSettings { it.copy(dwellRearmDelayMillis = millis.coerceIn(0, 500)) }
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSelectKeyBinding(binding: String) = updateSettings { it.copy(selectKeyBinding = binding) }
     @Throws(NativeFailure::class, CancellationException::class)

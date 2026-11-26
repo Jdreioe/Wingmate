@@ -90,6 +90,9 @@ struct SymbolBoardWorkspaceView: View {
     @State var resizePreview: GridFieldSpanInfo? = nil
     @State var resizePreviewValid = true
     @State var suppressNextCellTap = false
+    @State var touchExitController = TouchExitController()
+    @State var touchExitHighlightedButtonId: String? = nil
+    @GestureState var touchExitGestureActive = false
     @State var useCustomBackgroundColor: Bool = false
     @State var useCustomBorderColor: Bool = false
     @State var editingLinkedBoardId: String = ""

@@ -142,6 +142,36 @@ struct TypingWorkspaceView: View {
             )
         }
         .fullScreenCover(isPresented: $isMessageFullscreen) { fullscreenMessage }
+        .overlay(alignment: .bottom) {
+            if let undo = model.pendingPhraseUndo {
+                HStack(spacing: 12) {
+                    Text(LocalizedStringKey(undo.includesSubItems ? "phrase.deleted_with_subitems" : "phrase.deleted"))
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("action.undo") {
+                        model.undoPendingPhraseDeletion()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button {
+                        model.dismissPendingPhraseUndo()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(minWidth: 32, minHeight: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("common.close"))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color(.separator), lineWidth: 1))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.pendingPhraseUndo)
     }
 
     // MARK: - Compact Layout (Outer Display / Standard iPhone / Narrow Split)

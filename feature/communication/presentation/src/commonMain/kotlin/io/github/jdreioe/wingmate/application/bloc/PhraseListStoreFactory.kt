@@ -61,6 +61,7 @@ class PhraseListStoreFactory(
                 is PhraseListStore.Intent.UpdatePhrase -> updatePhrase(intent.id, intent.text, intent.name, intent.imageUrl)
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.phraseId, intent.targetId)
+                is PhraseListStore.Intent.RestorePhrases -> restorePhrases(intent.phrases)
             }
         }
 
@@ -197,6 +198,25 @@ class PhraseListStoreFactory(
                     throw ce
                 } catch (e: Exception) {
                     dispatch(Msg.ErrorOccurred(e.message ?: "Failed to move phrase"))
+                }
+            }
+        }
+
+        private fun restorePhrases(phrases: List<Phrase>) {
+            if (phrases.isEmpty()) return
+            scope.launch {
+                try {
+                    val existingIds = phraseRepository.getAll().mapTo(mutableSetOf()) { it.id }
+                    phrases.forEach { phrase ->
+                        if (phrase.id.isNotBlank() && existingIds.add(phrase.id)) {
+                            phraseRepository.add(phrase)
+                        }
+                    }
+                    loadPhrasesAndCategories()
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (e: Exception) {
+                    dispatch(Msg.ErrorOccurred(e.message ?: "Failed to restore phrase"))
                 }
             }
         }
