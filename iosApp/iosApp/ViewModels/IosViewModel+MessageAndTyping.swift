@@ -25,7 +25,7 @@ extension IosViewModel {
             // A finished Message may have just entered History.
             let finished = state.playback.name == "Idle"
             playback = state.playback
-            if finished && historyVisible { Task { await loadHistory() } }
+            if finished && settings.historyVisible { Task { await loadHistory() } }
         }
         if sessionNotice != state.notice { sessionNotice = state.notice }
         if sessionIsSaving != state.isSaving { sessionIsSaving = state.isSaving }
@@ -312,22 +312,31 @@ extension IosViewModel {
     func loadHistory() async {
         historyLoadGeneration += 1
         let generation = historyLoadGeneration
-        guard historyVisible else {
+        guard settings.historyVisible else {
             historyPhrases = []
             likelyNextPhrases = []
             return
         }
         // On a read failure keep the History already shown; cancellation leaves it as is too.
         guard let result = try? await communicationFacade.history(), result.isSuccess else { return }
-        guard historyVisible, generation == historyLoadGeneration else { return }
+        guard settings.historyVisible, generation == historyLoadGeneration else { return }
         await MainActor.run { self.historyPhrases = result.phrases.reversed() }
-        if likelyNextPageEnabled {
-            if let next = try? await communicationFacade.likelyNext(), next.isSuccess, historyVisible, likelyNextPageEnabled, generation == historyLoadGeneration {
+        if settings.likelyNextPageEnabled {
+            if let next = try? await communicationFacade.likelyNext(), next.isSuccess, settings.historyVisible, settings.likelyNextPageEnabled, generation == historyLoadGeneration {
                 likelyNextPhrases = next.phrases
             }
         } else { likelyNextPhrases = [] }
     }
-    var likelyNextAvailable: Bool { historyVisible && likelyNextPageEnabled && !likelyNextPhrases.isEmpty }
+    var likelyNextAvailable: Bool { settings.historyVisible && settings.likelyNextPageEnabled && !likelyNextPhrases.isEmpty }
+
+    func clampedSelectionRange(_ range: NSRange, maxLength: Int) -> NSRange {
+        if range.location == NSNotFound {
+            return NSRange(location: maxLength, length: 0)
+        }
+        let safeLocation = min(max(0, range.location), maxLength)
+        let safeLength = min(max(0, range.length), max(0, maxLength - safeLocation))
+        return NSRange(location: safeLocation, length: safeLength)
+    }
 
     // MARK: - Recording path (persisted in shared Phrase)
     func recordingPath(for phraseId: String) -> String? {

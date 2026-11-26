@@ -56,10 +56,10 @@ struct TypingTrayView: View {
                     )
             }
         }
-        .onChange(of: model.historyVisible) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.settings.historyVisible) { _, _ in leaveHistoryIfUnavailable() }
         .onChange(of: model.historyPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
         .onChange(of: model.likelyNextPhrases.isEmpty) { _, _ in leaveHistoryIfUnavailable() }
-        .onChange(of: model.likelyNextPageEnabled) { _, _ in leaveHistoryIfUnavailable() }
+        .onChange(of: model.settings.likelyNextPageEnabled) { _, _ in leaveHistoryIfUnavailable() }
         .confirmationDialog(
             categoryMenu?.text ?? "",
             isPresented: Binding(get: { categoryMenu != nil }, set: { if !$0 { categoryMenu = nil } }),
@@ -96,13 +96,13 @@ struct TypingTrayView: View {
                 Divider()
                 TypingActionStrip(model: model, actions: element.actions, onShowKeyboard: onShowKeyboard)
             }
-            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
         }
     }
 
     // MARK: - Page navigation
 
-    private var historyAvailable: Bool { model.historyVisible && !model.historyPhrases.isEmpty }
+    private var historyAvailable: Bool { model.settings.historyVisible && !model.historyPhrases.isEmpty }
 
     /// History can disappear while open (turned off in Settings); fall back to All Phrases.
     private func leaveHistoryIfUnavailable() {
@@ -169,7 +169,7 @@ struct TypingTrayView: View {
             .padding(.vertical, 4)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(model.scanningEnabled && !model.scanCategoryItemsEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanCategoryItemsEnabled)
     }
 
     @ViewBuilder
@@ -196,7 +196,7 @@ struct TypingTrayView: View {
     /// Orders VoiceOver and switch scanning by the scan-order setting; higher goes first.
     private func scanPriority(index: Int, count: Int) -> Double {
         let columns = max(1, Int(tray.phraseColumns))
-        guard model.scanPhraseGridOrder == "column-major" else { return Double(100_000 - index) }
+        guard model.settings.scanPhraseGridOrder == "column-major" else { return Double(100_000 - index) }
         let rows = Int(ceil(Double(count) / Double(columns)))
         return Double(100_000 - ((index % columns) * rows + index / columns))
     }
@@ -214,7 +214,7 @@ struct TypingTrayView: View {
         let phrases = pagePhrases
         let isHistory = page == .history || page == .likelyNext
         // Long presses activate Phrases under hold-to-select, so editing gestures stay off.
-        let editable = !isHistory && model.holdToSelectMillis <= 0 && !model.selectOnTouchDown
+        let editable = !isHistory && model.settings.holdToSelectMillis <= 0 && !model.settings.selectOnTouchDown
         let columns = Array(
             repeating: GridItem(.flexible(), spacing: 8),
             count: max(1, Int(tray.phraseColumns))
@@ -260,9 +260,9 @@ struct TypingTrayView: View {
         }
         .id(page)
         .transition(.opacity)
-        .scrollDisabled(model.selectOnTouchDown)
+        .scrollDisabled(model.settings.selectOnTouchDown)
         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
-            guard model.swipeBetweenPages, !model.selectOnTouchDown, model.holdToSelectMillis <= 0,
+            guard model.settings.swipeBetweenPages, !model.settings.selectOnTouchDown, model.settings.holdToSelectMillis <= 0,
                   abs(value.translation.width) >= 64, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
             var pages: [TypingPage] = [.all] + model.state.categories.map { .category($0.id) }
             if historyAvailable { pages.append(.history) }
@@ -279,7 +279,7 @@ struct TypingTrayView: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled)
     }
 }
 
@@ -307,7 +307,7 @@ struct TypingActionStrip: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
         }
-        .scrollDisabled(model.selectOnTouchDown)
+        .scrollDisabled(model.settings.selectOnTouchDown)
         .accessibilityElement(children: .contain)
     }
 }
@@ -335,7 +335,7 @@ struct TypingActionGrid: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
     }
 }
 
@@ -417,18 +417,18 @@ struct TypingActionButton: View {
             }
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
         .accessibilityValue(Text(LocalizedStringKey(unsupported ? "typing.action.unsupported" : enabled ? "" : "typing.action.unavailable")))
-        .onAppear { model.registerAccessTarget(targetId, action: perform) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
+        .onAppear { model.settings.registerAccessTarget(targetId, action: perform) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
         .onHover { hovering in
-            if hovering { model.accessEnter(targetId) } else { model.accessExit(targetId) }
+            if hovering { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) }
         }
         .accessTargetFocus(model: model, targetId: targetId)
         .overlay {
-            if model.accessTargetId == targetId {
+            if model.settings.accessTargetId == targetId {
                 shape.stroke(Color.accentColor, lineWidth: 3).allowsHitTesting(false)
             }
         }

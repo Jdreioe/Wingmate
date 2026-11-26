@@ -13,7 +13,7 @@ extension IosViewModel {
     }
 
     func swipePage(by offset: Int) async {
-        guard swipeBetweenPages, !selectOnTouchDown, holdToSelectMillis <= 0,
+        guard settings.swipeBetweenPages, !settings.selectOnTouchDown, settings.holdToSelectMillis <= 0,
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
               let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
         await selectBoard(id: ids[index + offset])
@@ -250,21 +250,13 @@ extension IosViewModel {
     }
 
     func activateBoardSelectionHighlight(buttonId: String) async {
-        guard selectionHighlightMillis > 0 else { return }
-        selectionHighlight.activate(targetId: buttonId, nowMillis: Int64(ProcessInfo.processInfo.systemUptime * 1000))
-        selectionHighlightGeneration += 1
-        let generation = selectionHighlightGeneration
-        highlightedButtonId = buttonId
-        let duration = selectionHighlightMillis
-        try? await Task.sleep(nanoseconds: UInt64(duration) * 1_000_000)
-        guard generation == selectionHighlightGeneration else { return }
-        highlightedButtonId = nil
+        settings.triggerSelectionHighlight(buttonId: buttonId)
     }
 
     // #118: per-target activation debounce. A zero duration disables the guard entirely.
     func acceptActivation(targetId: String) -> Bool {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
-        let window = Int64(selectionDebounceMillis)
+        let window = Int64(settings.selectionDebounceMillis)
         if window <= 0 {
             lastActivationAtMillis[targetId] = nil
             return true

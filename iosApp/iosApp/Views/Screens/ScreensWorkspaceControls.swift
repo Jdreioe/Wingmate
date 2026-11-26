@@ -345,7 +345,7 @@ extension SymbolBoardWorkspaceView {
     @ViewBuilder
     func messageActionButton(_ action: String, boardSetId: String, size: CGSize) -> some View {
         let hasMessage = !model.messageParts.isEmpty
-        let scanHidden = model.scanningEnabled && !model.scanPlaybackAreaEnabled
+        let scanHidden = model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled
         switch action {
         case "Speak":
             let speaking = ["Playing", "Preparing", "Paused"].contains(model.playback.name)
@@ -455,7 +455,7 @@ extension SymbolBoardWorkspaceView {
         Button(action: action) {
             controlLabel(systemImage: systemImage, prominent: prominent, size: size)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .accessibilityLabel(Text(key))
     }
 
@@ -475,8 +475,8 @@ extension SymbolBoardWorkspaceView {
             .disabled(model.isOnStartPage)
             .accessibilityLabel(Text("board_page.start"))
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
     }
 
     func topRowLabel(_ key: LocalizedStringKey, systemImage: String, showsTitle: Bool) -> some View {
@@ -536,6 +536,6 @@ extension SymbolBoardWorkspaceView {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(Text("board_workspace.menu"))
-        .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanTopBarEnabled)
     }
 }

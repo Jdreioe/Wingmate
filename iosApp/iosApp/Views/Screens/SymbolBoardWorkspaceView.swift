@@ -203,7 +203,7 @@ struct SymbolBoardWorkspaceView: View {
             await model.loadBoardSets()
             if !hasAppliedStartupDestination {
                 hasAppliedStartupDestination = true
-                if let startupId = model.startupBoardSetId,
+                if let startupId = model.settings.startupBoardSetId,
                    model.boardSets.contains(where: { $0.id == startupId }) {
                     await model.selectBoardSet(id: startupId)
                     route = .workspace(boardSetId: startupId, mode: .run)

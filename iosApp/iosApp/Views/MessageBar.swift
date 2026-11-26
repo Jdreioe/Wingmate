@@ -22,7 +22,7 @@ struct SpeechControls: View {
                         .frame(width: buttonSize, height: buttonSize)
                         .background(Circle().fill(Color(.secondarySystemFill)))
                 }
-                .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+                .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
                 .accessibilityLabel(Text("playback.stop"))
                 .transition(.scale.combined(with: .opacity))
             }
@@ -35,7 +35,7 @@ struct SpeechControls: View {
                     .frame(width: speakSize, height: speakSize)
                     .background(Circle().fill(Color.accentColor))
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
             .accessibilityLabel(Text(LocalizedStringKey(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play")))
             .accessibilityHint(Text(LocalizedStringKey(paused || playing ? "" : "accessibility.playback.play_hint")))
         }
@@ -68,9 +68,9 @@ struct TypingMessageBar: View {
                     .frame(width: buttonSize, height: buttonSize)
                     .background(Circle().fill(Color(.secondarySystemFill)))
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
             .accessibilityLabel(Text(LocalizedStringKey(messageFocused ? "typing.show_screen" : "typing.show_keyboard")))
-            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
 
             MultiLineInput(
                 text: inputBinding,
@@ -80,8 +80,8 @@ struct TypingMessageBar: View {
                 fontSize: fontSize,
                 minHeight: max(48, minHeight),
                 maxHeight: max(160, minHeight * 2.5),
-                scanEnabled: model.scanningEnabled,
-                includeInScanArea: model.scanInputFieldEnabled,
+                scanEnabled: model.settings.scanningEnabled,
+                includeInScanArea: model.settings.scanInputFieldEnabled,
                 secondaryLanguage: model.speech.secondaryLanguage,
                 secondaryLanguageRanges: model.secondaryLanguageRanges,
                 allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
@@ -91,7 +91,7 @@ struct TypingMessageBar: View {
             SpeechControls(model: model, buttonSize: buttonSize, speakSize: speakSize) {
                 model.speakMessage()
             }
-            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
         }
     }
 }
@@ -114,7 +114,7 @@ struct HeldMessageRow: View {
                 Label("typing.held_message.swap", systemImage: "arrow.left.arrow.right")
                     .frame(minHeight: 44)
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
             .accessibilityHint(Text("accessibility.playback.restore_thought_hint"))
         }
         .padding(.leading, 12)
@@ -122,7 +122,7 @@ struct HeldMessageRow: View {
         .padding(.vertical, 2)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemFill)))
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
     }
 }
 
@@ -198,7 +198,7 @@ struct ScreensMessageBar: View {
         let chip = HStack(spacing: 6) {
             if let onSpeakPart {
                 Button { onSpeakPart(index) } label: { content.contentShape(Rectangle()) }
-                    .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+                    .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
                     .accessibilityLabel(Text(token.title))
                     .accessibilityHint(Text("screens.message_bar.say_part_hint"))
             } else {
@@ -210,7 +210,7 @@ struct ScreensMessageBar: View {
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
             .accessibilityLabel(Text("sentence.box.delete_phrase"))
         }
         .padding(.leading, 10)

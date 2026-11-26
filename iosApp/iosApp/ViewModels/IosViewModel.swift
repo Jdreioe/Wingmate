@@ -17,9 +17,9 @@ final class IosViewModel: ObservableObject {
     let editingAccess = EditingAccessModel()
     let backup = BackupModel()
     let speech = SpeechSettingsModel()
+    let settings = AppSettingsModel()
 
     // Shared feature facades, resolved from the iOS composition root after start()
-    lazy var settingsFacade = IosDiBridge().settingsFacade()
     lazy var boardsFacade = IosDiBridge().boardsFacade()
     lazy var communicationFacade = IosDiBridge().communicationFacade()
     lazy var session = IosDiBridge().communicationSessionFacade()
@@ -35,10 +35,10 @@ final class IosViewModel: ObservableObject {
         editingAccess.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &childModelCancellables)
+        settings.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &childModelCancellables)
     }
-    // Shared access and highlight policies; Swift only supplies events and the clock.
-    let accessInput = AccessInputController()
-    let selectionHighlight = SelectionHighlight()
     var sessionSubscription: Shared.NativeSubscription?
 
     // The shared Message (#306). Kotlin's Communication session owns it; these mirror its
@@ -81,50 +81,9 @@ final class IosViewModel: ObservableObject {
     // History items exposed as phrases for UI rendering
     var historyLoadGeneration = 0
     @Published var likelyNextPhrases: [Shared.Phrase] = []
-    @Published var likelyNextPageEnabled = false
-    @Published var selectOnTouchDown = false
-    @Published var swipeBetweenPages = false
     @Published var boardBackgroundImageUrl: String? = nil
     @Published var boardBackgroundImageFit = "Fill"
     @Published var historyPhrases: [Shared.Phrase] = []
-
-    // Accessibility scanning configuration (persisted in shared Settings)
-    @Published var scanningEnabled: Bool = false
-    @Published var scanPlaybackAreaEnabled: Bool = true
-    @Published var scanInputFieldEnabled: Bool = true
-    @Published var scanPhraseGridEnabled: Bool = true
-    @Published var scanCategoryItemsEnabled: Bool = true
-    @Published var scanTopBarEnabled: Bool = true
-    @Published var scanPhraseGridOrder: String = "row-major"
-    @Published var scanDwellTimeSeconds: Double = 1.0
-    @Published var scanAutoAdvanceSeconds: Double = 1.2
-    // Cross-platform settings mirrored from Android's settings surface.
-    @Published var showButtonLabels: Bool = true
-    @Published var showButtonSymbols: Bool = true
-    @Published var labelAtTop: Bool = false
-    @Published var preferredGridColumns: Int = 3
-    @Published var highContrastMode: Bool = false
-    @Published var wordTypeColorScheme: String = "None"
-    @Published var holdToSelectMillis: Double = 0
-    @Published var dwellToSelectMillis: Double = 0
-    @Published var selectionDebounceMillis: Double = 0
-    @Published var selectionSoundEnabled: Bool = false
-    @Published var auditoryFishingEnabled: Bool = false
-    // #119: legacy immediate speech per selection, or sentence-only composition.
-    @Published var speechPolicy: String = "Immediate"
-    @Published var selectKeyBinding: String = ""
-    @Published var restModeKeyBinding: String = ""
-    @Published var pointerEmphasisStyle: String = "System"
-    @Published var pointerEmphasisScale: Double = 1.5
-    @Published var inputIsPaused: Bool = false
-    @Published var accessTargetId: String? = nil
-    @Published var accessDwellProgress: Double = 0
-    var accessActions: [String: () -> Void] = [:]
-    @Published var usageLoggingEnabled: Bool = false
-    @Published var featureUsageReportingEnabled: Bool = false
-    @Published var historyVisible: Bool = true
-    @Published var startupUsesScreens: Bool = false
-    @Published var startupBoardSetId: String? = nil
 
     // Symbol-first boardset mode
     @Published var boardModeEnabled: Bool = false
@@ -140,19 +99,6 @@ final class IosViewModel: ObservableObject {
     @Published var boardPredictionsByButtonId: [String: String] = [:]
     @Published var boardNamesById: [String: String] = [:]
     @Published var boardStatusMessage: String? = nil
-    @Published var selectionHighlightMillis: Int64 = 0 {
-        didSet {
-            if selectionHighlightMillis != oldValue {
-                selectionHighlightGeneration += 1
-                selectionHighlight.clear()
-                highlightedButtonId = nil
-            }
-        }
-    }
-    @Published var highlightedButtonId: String? = nil
-    var selectionHighlightGeneration: Int64 = 0
-    @Published var boardShowMessageBar: Bool = true
-    @Published var boardShowSpeakButton: Bool = true
     @Published var resolvedBoardShowLabels: Bool? = nil
     @Published var resolvedBoardShowSymbols: Bool? = nil
     @Published var resolvedBoardLabelAtTop: Bool? = nil
@@ -164,17 +110,23 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardReturnBehavior: String? = nil
     @Published var boardStack: [String] = []
 
-    var boardShowLabels: Bool { resolvedBoardShowLabels ?? showButtonLabels }
-    var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? showButtonSymbols }
-    var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? labelAtTop }
-    var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? boardShowMessageBar }
-    var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? boardShowSpeakButton }
+    var boardShowLabels: Bool { resolvedBoardShowLabels ?? settings.showButtonLabels }
+    var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? settings.showButtonSymbols }
+    var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? settings.labelAtTop }
+    var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? settings.boardShowMessageBar }
+    var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? settings.boardShowSpeakButton }
     /// The Screen's message bar buttons in order (`Speak`, `Hold`, `DeleteLast`, `Clear`).
     var boardMessageBarActions: [String] {
-        resolvedBoardMessageBarActions ?? (boardShowSpeakButton ? ["Speak"] : [])
+        resolvedBoardMessageBarActions ?? (settings.boardShowSpeakButton ? ["Speak"] : [])
     }
     var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
     var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
+    var shouldSpeakSelectionImmediately: Bool {
+        settings.shouldSpeakSelectionImmediately(
+            resolvedBoardSpeechPolicy: resolvedBoardSpeechPolicy,
+            activationBehavior: boardActivationBehavior
+        )
+    }
 
     var selectedBoardSet: BoardSetInfo? {
         guard let id = selectedBoardSetId else { return nil }
@@ -219,11 +171,10 @@ final class IosViewModel: ObservableObject {
     speech.refreshVoiceAndLanguages()
 
         await speech.refreshLanguagePreferences()
-        await refreshScanningSettings()
-        await refreshParitySettings()
+        await refreshSettings()
         // The startup workspace applies at launch only. Settings also refresh
         // these values, and must not switch the workspace the user is in.
-        boardModeEnabled = startupUsesScreens
+        boardModeEnabled = settings.startupUsesScreens
 
         // Determine if cloud TTS providers are configured
         await speech.refreshAllProviderConfigurations()
@@ -245,12 +196,19 @@ final class IosViewModel: ObservableObject {
     _ = try? await boardsFacade.cacheAllBoardSetFields()
     }
 
+    func refreshSettings() async {
+        _ = await settings.refresh(fallbackUseSystemTts: speech.useSystemTts) { [weak self] useSystemTts, ttsEngine in
+            self?.speech.applyEngineFromSettings(useSystemTts: useSystemTts, ttsEngine: ttsEngine)
+        }
+        await loadHistory()
+    }
+
     func reloadAfterBackupRestore() async throws {
         communicationFacade.refreshPhrases()
         try await session.reloadAfterRestore()
         await loadTypingTray()
         await loadHistory()
-        await refreshParitySettings()
+        await refreshSettings()
         await speech.refreshAllProviderConfigurations()
         _ = await speech.refreshVoiceAndLanguages().value
         await loadBoardSets()

@@ -4,23 +4,24 @@ import UniformTypeIdentifiers
 
 struct GeneralSettingsView: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var settings: AppSettingsModel
     let onRestartSetup: () -> Void
 
     var body: some View {
         Form {
             Section {
                 Picker("settings.general.startup_mode", selection: Binding(
-                    get: { model.startupUsesScreens }, set: { model.setStartupUsesScreens($0) }
+                    get: { settings.startupUsesScreens }, set: { settings.setStartupUsesScreens($0) }
                 )) {
                     Text("settings.general.keyboard").tag(false)
                     Text("settings.general.screens").tag(true)
                 }
                 .pickerStyle(.segmented)
 
-                if model.startupUsesScreens {
+                if settings.startupUsesScreens {
                     Picker("settings.general.startup_screen", selection: Binding(
-                        get: { model.startupBoardSetId ?? "" },
-                        set: { model.setStartupBoardSetId($0.isEmpty ? nil : $0) }
+                        get: { settings.startupBoardSetId ?? "" },
+                        set: { settings.setStartupBoardSetId($0.isEmpty ? nil : $0) }
                     )) {
                         Text("settings.general.screen_library").tag("")
                         ForEach(model.boardSets) { set in
@@ -88,6 +89,7 @@ struct EditingAccessSettingsView: View {
 
 struct PrivacySettingsView: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var settings: AppSettingsModel
     @ObservedObject var backup: BackupModel
     @State private var importingBackup = false
     @State private var confirmRestoreURL: URL? = nil
@@ -114,11 +116,27 @@ struct PrivacySettingsView: View {
 
             Section {
                 Toggle("settings.privacy.show_history", isOn: Binding(
-                    get: { model.historyVisible },
-                    set: { model.setHistoryVisible($0) }
+                    get: { settings.historyVisible },
+                    set: { visible in
+                        if !visible {
+                            model.historyPhrases = []
+                            model.likelyNextPhrases = []
+                        }
+                        settings.setHistoryVisible(visible) {
+                            if visible { await model.loadHistory() }
+                        }
+                    }
                 ))
-                Toggle("settings.likely_next", isOn: Binding(get: { model.likelyNextPageEnabled }, set: { model.setLikelyNextPageEnabled($0) }))
-                    .disabled(!model.historyVisible)
+                Toggle("settings.likely_next", isOn: Binding(
+                    get: { settings.likelyNextPageEnabled },
+                    set: { enabled in
+                        if !enabled { model.likelyNextPhrases = [] }
+                        settings.setLikelyNextPageEnabled(enabled) {
+                            await model.loadHistory()
+                        }
+                    }
+                ))
+                    .disabled(!settings.historyVisible)
                 Text("settings.likely_next.footer").font(.footnote).foregroundStyle(.secondary)
             } header: {
                 Text("settings.privacy.local_data")
@@ -141,12 +159,12 @@ struct PrivacySettingsView: View {
 
             Section {
                 Toggle("settings.general.analytics", isOn: Binding(
-                    get: { model.featureUsageReportingEnabled },
-                    set: { model.setFeatureUsageReportingEnabled($0) }
+                    get: { settings.featureUsageReportingEnabled },
+                    set: { settings.setFeatureUsageReportingEnabled($0) }
                 ))
                 Toggle("settings.accessibility.usage_logging", isOn: Binding(
-                    get: { model.usageLoggingEnabled },
-                    set: { model.setUsageLoggingEnabled($0) }
+                    get: { settings.usageLoggingEnabled },
+                    set: { settings.setUsageLoggingEnabled($0) }
                 ))
             } header: {
                 Text("settings.privacy.data_collection")

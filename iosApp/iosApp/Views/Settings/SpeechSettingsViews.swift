@@ -2,8 +2,9 @@ import SwiftUI
 import Shared
 
 struct SpeechSettingsView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var settings: AppSettingsModel
     @ObservedObject var speech: SpeechSettingsModel
+    let onSecondaryLanguageChanged: () -> Void
     @State private var showVoicePicker = false
     @State private var showAzureSetup = false
     @State private var showGoogleSetup = false
@@ -17,13 +18,13 @@ struct SpeechSettingsView: View {
         Form {
             Section("settings.interaction.title") {
                 Picker("settings.interaction.select_key", selection: Binding(
-                    get: { model.selectKeyBinding }, set: { model.setSelectKeyBinding($0) }
+                    get: { settings.selectKeyBinding }, set: { settings.setSelectKeyBinding($0) }
                 )) {
                     Text("common.off").tag("")
                     ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
                 }
                 Picker("settings.interaction.rest_key", selection: Binding(
-                    get: { model.restModeKeyBinding }, set: { model.setRestModeKeyBinding($0) }
+                    get: { settings.restModeKeyBinding }, set: { settings.setRestModeKeyBinding($0) }
                 )) {
                     Text("common.off").tag("")
                     ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
@@ -85,9 +86,7 @@ struct SpeechSettingsView: View {
                     Picker("toolbar.second_language", selection: Binding(
                         get: { speech.secondaryLanguage },
                         set: { lang in
-                            speech.updateSecondaryLanguage(lang) {
-                                model.applySessionState(model.session.state())
-                            }
+                            speech.updateSecondaryLanguage(lang, onApplied: onSecondaryLanguageChanged)
                         }
                     )) {
                         Text("settings.speech.language.none").tag("")

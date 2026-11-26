@@ -94,15 +94,15 @@ extension SymbolBoardWorkspaceView {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background {
-                    if !model.highContrastMode { PageBackgroundView(source: model.boardBackgroundImageUrl, fit: model.boardBackgroundImageFit) }
+                    if !model.settings.highContrastMode { PageBackgroundView(source: model.boardBackgroundImageUrl, fit: model.boardBackgroundImageFit) }
                 }
                 .background(
-                    model.highContrastMode
+                    model.settings.highContrastMode
                         ? Color(.systemBackground)
                         : colorFromHex(board.backgroundColor, fallback: Color(.secondarySystemBackground))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .scrollDisabled(model.selectOnTouchDown && !isEditMode)
+                .scrollDisabled(model.settings.selectOnTouchDown && !isEditMode)
                 .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
                     guard !isEditMode, abs(value.translation.width) >= 64,
                           abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
@@ -147,8 +147,8 @@ extension SymbolBoardWorkspaceView {
                         selectField(anchor)
                     }
                 } else {
-                    guard model.holdToSelectMillis <= 0 else { return }
-                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                    guard model.settings.holdToSelectMillis <= 0 else { return }
+                    if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             } label: {
@@ -159,49 +159,49 @@ extension SymbolBoardWorkspaceView {
                     .matchedGeometryEffect(id: flyingTokenId ?? "cell-\(sourceCellId)", in: sentenceAnimationNamespace, isSource: true)
                     .zIndex(flyingTokenId == nil ? 0 : 3)
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown && model.holdToSelectMillis <= 0 && !isEditMode))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown && model.settings.holdToSelectMillis <= 0 && !isEditMode))
             .frame(width: width, height: height)
             .simultaneousGesture(
-                LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
+                LongPressGesture(minimumDuration: max(0.01, model.settings.holdToSelectMillis / 1_000))
                     .onEnded { _ in
-                        guard !isEditMode, model.holdToSelectMillis > 0 else { return }
-                        if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                        guard !isEditMode, model.settings.holdToSelectMillis > 0 else { return }
+                        if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                         activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                     }
             )
             .onHover { hovering in
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
                 if hovering {
-                    model.accessEnter(targetId)
-                    if model.auditoryFishingEnabled, !model.inputIsPaused,
+                    model.settings.accessEnter(targetId)
+                    if model.settings.auditoryFishingEnabled, !model.settings.inputIsPaused,
                        let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
                         model.speak(preview)
                     }
                 } else {
-                    model.accessExit(targetId)
+                    model.settings.accessExit(targetId)
                 }
             }
             .onAppear {
                 guard !isEditMode, cell != nil else { return }
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                model.registerAccessTarget(targetId) {
+                model.settings.registerAccessTarget(targetId) {
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
-            .onDisappear { model.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
+            .onDisappear { model.settings.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
             .accessTargetFocus(model: model, targetId: "board:\(cell?.buttonId ?? sourceCellId)")
             .overlay {
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                if !isEditMode && model.accessTargetId == targetId && model.pointerEmphasisStyle != "System" {
+                if !isEditMode && model.settings.accessTargetId == targetId && model.settings.pointerEmphasisStyle != "System" {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
-                        .padding(6 / model.pointerEmphasisScale)
+                        .stroke(Color.accentColor, lineWidth: 3 * model.settings.pointerEmphasisScale)
+                        .padding(6 / model.settings.pointerEmphasisScale)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
                 }
-                if !isEditMode && model.accessTargetId == targetId && model.accessDwellProgress > 0 {
+                if !isEditMode && model.settings.accessTargetId == targetId && model.settings.accessDwellProgress > 0 {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .trim(from: 0, to: model.accessDwellProgress)
+                        .trim(from: 0, to: model.settings.accessDwellProgress)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
@@ -267,7 +267,7 @@ extension SymbolBoardWorkspaceView {
         }
         .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
         .allowsHitTesting(!hiddenInRunMode)
-        .accessibilityHidden(hiddenInRunMode || (model.scanningEnabled && !model.scanPhraseGridEnabled))
+        .accessibilityHidden(hiddenInRunMode || (model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled))
     }
 
     func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
@@ -292,7 +292,7 @@ extension SymbolBoardWorkspaceView {
                 .frame(width: width, height: height)
             )
         }
-        let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
+        let isHighlighted = model.settings.highlightedButtonId != nil && model.settings.highlightedButtonId == cell?.buttonId
         let hasSymbol = model.boardShowSymbols && trimmed(cell?.imageUrl) != nil
         return AnyView(
             VStack(alignment: .center, spacing: 4) {
@@ -336,12 +336,12 @@ extension SymbolBoardWorkspaceView {
         .frame(width: width, height: height)
         .background(
             RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
-                .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
+                .fill(model.settings.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
-                .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)),
-                    lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
+                .stroke(model.settings.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)),
+                    lineWidth: model.settings.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
         )
         .overlay {
             if isHighlighted {
@@ -364,7 +364,7 @@ extension SymbolBoardWorkspaceView {
     func boardCellLabel(_ cell: BoardCellInfo?, size: CGFloat, hasSymbol: Bool, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         let expanded = !hasSymbol ? ScreenButtonText.expandedText(label: cell?.label, vocalization: cell?.vocalization) : nil
         let text = expanded ?? boardCellDisplayLabel(cell)
-        let foreground = model.highContrastMode
+        let foreground = model.settings.highContrastMode
             ? Color.primary
             : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary)
         if !text.isEmpty {

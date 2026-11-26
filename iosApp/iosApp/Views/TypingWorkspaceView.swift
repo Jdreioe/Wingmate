@@ -109,7 +109,7 @@ struct TypingWorkspaceView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 fullscreenButton
-                    .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                    .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanTopBarEnabled)
             }
         }
         .onAppear {
@@ -275,8 +275,8 @@ struct TypingWorkspaceView: View {
             fontSize: CGFloat(uiInputFontSize),
             minHeight: height,
             maxHeight: max(height, CGFloat(uiTextFieldHeight) * 2.2),
-            scanEnabled: model.scanningEnabled,
-            includeInScanArea: model.scanInputFieldEnabled,
+            scanEnabled: model.settings.scanningEnabled,
+            includeInScanArea: model.settings.scanInputFieldEnabled,
             secondaryLanguage: model.speech.secondaryLanguage,
             secondaryLanguageRanges: model.secondaryLanguageRanges,
             allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
@@ -365,7 +365,7 @@ struct TypingWorkspaceView: View {
                 }
                 .padding(.bottom, 4)
             }
-            .scrollDisabled(model.selectOnTouchDown)
+            .scrollDisabled(model.settings.selectOnTouchDown)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemBackground)))
@@ -393,13 +393,13 @@ struct TypingWorkspaceView: View {
             .background(shape.fill(Color.accentColor))
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .accessibilityLabel(Text(LocalizedStringKey(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play")))
         .accessibilityHint(Text(LocalizedStringKey(paused || playing ? "" : "accessibility.playback.play_hint")))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-        .onAppear { model.registerAccessTarget(targetId, action: action) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
-        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
         .accessTargetFocus(model: model, targetId: targetId)
     }
 
@@ -419,14 +419,14 @@ struct TypingWorkspaceView: View {
             .background(shape.fill(Color(.tertiarySystemFill)))
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
         .accessibilityLabel(Text("playback.stop"))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-        .onAppear { model.registerAccessTarget(targetId, action: model.stopSpeech) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
-        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: model.stopSpeech) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
         .accessTargetFocus(model: model, targetId: targetId)
     }
 
@@ -449,12 +449,12 @@ struct TypingWorkspaceView: View {
             .background(shape.fill(Color(.tertiarySystemFill)))
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .accessibilityLabel(Text(LocalizedStringKey(showing ? "typing.hide_keyboard" : "typing.show_keyboard")))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-        .onAppear { model.registerAccessTarget(targetId, action: action) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
-        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
         .accessTargetFocus(model: model, targetId: targetId)
     }
 
@@ -475,13 +475,13 @@ struct TypingWorkspaceView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemFill)))
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
             .accessibilityHint(Text("accessibility.playback.restore_thought_hint"))
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.tertiarySystemBackground)))
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
     }
 
     // MARK: - Rows
@@ -521,7 +521,7 @@ struct TypingWorkspaceView: View {
                 })
             )
             .frame(height: 56)
-            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
         } else {
             if onScreenKeyboard && !actionStripActions.isEmpty {
                 TypingActionStrip(
@@ -532,7 +532,7 @@ struct TypingWorkspaceView: View {
                 )
                 .frame(height: 56)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+                .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
             }
             if let held = model.heldMessageText {
                 HeldMessageRow(model: model, heldText: held)
@@ -556,10 +556,10 @@ struct TypingWorkspaceView: View {
                     }
                 }
             }
-            .scrollDisabled(model.selectOnTouchDown)
+            .scrollDisabled(model.settings.selectOnTouchDown)
             .frame(height: oneRowWhileTyping ? 56 : 88)
         }
-        .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled)
     }
 
     private var compactPhraseRow: some View {
@@ -570,7 +570,7 @@ struct TypingWorkspaceView: View {
                         model: model,
                         phrase: phrase,
                         recorder: recorder,
-                        editable: model.holdToSelectMillis <= 0 && !model.selectOnTouchDown,
+                        editable: model.settings.holdToSelectMillis <= 0 && !model.settings.selectOnTouchDown,
                         minHeight: 72,
                         onEdit: { requestMutation { editingPhrase = phrase } },
                         requestMic: { id in requestMutation { requestMicAndStart(id) } },
@@ -581,9 +581,9 @@ struct TypingWorkspaceView: View {
             }
             .padding(.vertical, 4)
         }
-        .scrollDisabled(model.selectOnTouchDown)
+        .scrollDisabled(model.settings.selectOnTouchDown)
         .frame(height: 88)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled)
     }
 
     // MARK: - Tray

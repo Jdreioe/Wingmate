@@ -337,8 +337,8 @@ extension WelcomeFlow {
 
             // Bound to the shared setting, like Settings, so both screens show the same consent.
             Toggle(isOn: Binding(
-                get: { model.featureUsageReportingEnabled },
-                set: { model.setFeatureUsageReportingEnabled($0) }
+                get: { model.settings.featureUsageReportingEnabled },
+                set: { model.settings.setFeatureUsageReportingEnabled($0) }
             )) {
                 Text(NSLocalizedString("welcome_analytics.opt_in", comment: ""))
                     .font(.headline)

@@ -163,7 +163,7 @@ struct SettingsView: View {
             }
         }
         .task {
-            await model.refreshParitySettings()
+            await model.refreshSettings()
             await model.loadBoardSets()
         }
     }
@@ -172,23 +172,32 @@ struct SettingsView: View {
     private func destinationView(_ destination: SettingsDestination) -> some View {
         switch destination {
         case .speech:
-            SpeechSettingsView(model: model, speech: model.speech)
+            SpeechSettingsView(
+                settings: model.settings,
+                speech: model.speech,
+                onSecondaryLanguageChanged: {
+                    model.applySessionState(model.session.state())
+                }
+            )
         case .display:
             DisplaySettingsView(
-                model: model,
+                settings: model.settings,
                 uiTextFieldHeight: $uiTextFieldHeight,
                 uiInputFontSize: $uiInputFontSize,
                 uiChipFontSize: $uiChipFontSize,
-                uiPlayIconSize: $uiPlayIconSize
+                uiPlayIconSize: $uiPlayIconSize,
+                onWordTypeColorsChanged: {
+                    await model.refreshBoardCells()
+                }
             )
         case .accessibility:
-            AccessibilitySettingsView(model: model)
+            AccessibilitySettingsView(settings: model.settings)
         case .sync:
             SyncSettingsView(model: model)
         case .privacy:
-            PrivacySettingsView(model: model, backup: model.backup)
+            PrivacySettingsView(model: model, settings: model.settings, backup: model.backup)
         case .general:
-            GeneralSettingsView(model: model, onRestartSetup: onRestartSetup)
+            GeneralSettingsView(model: model, settings: model.settings, onRestartSetup: onRestartSetup)
         case .pronunciation:
             PronunciationDictionaryView(model: model.pronunciationDictionary)
         }
