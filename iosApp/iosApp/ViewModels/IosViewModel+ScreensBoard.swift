@@ -88,6 +88,7 @@ extension IosViewModel {
 
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
+            boardLoadGeneration &+= 1
             resetSelectedBoardState(failedPageId: nil)
             return
         }
@@ -97,93 +98,28 @@ extension IosViewModel {
             loadedBoardCellsPageId = nil
         }
         boardCellsLoadFailedPageId = nil
+        boardLoadGeneration &+= 1
+        let generation = boardLoadGeneration
         do {
-            // Stage board, resolved settings, cells, and field items before publishing any of them
-            // so a same-Page reload never renders new grid geometry against stale Buttons.
-            guard let loadedBoard = try await boardsFacade.getBoard(id: id) else {
-                guard selectedBoardId == id else { return }
+            // One snapshot from a single board read, so settings, Buttons, and field spans
+            // always come from the same Page revision.
+            let snapshot = try await boardsFacade.loadBoardSnapshot(boardId: id)
+            // A newer load (or a Page switch) started while this one was suspended.
+            guard selectedBoardId == id, boardLoadGeneration == generation else { return }
+            guard let snapshot else {
                 resetSelectedBoardState(failedPageId: id)
                 return
             }
-            let resolved = try? await boardsFacade.resolveBoardSettings(boardId: id)
-            let cells = try await boardsFacade.listBoardCells(boardId: id)
-            let fields = try await boardsFacade.listBoardFieldItems(boardId: id)
-            guard selectedBoardId == id else { return }
-
-            selectedBoard = loadedBoard
-            boardBackgroundImageUrl = boardsFacade.backgroundImageUrl(board: loadedBoard)
-            boardBackgroundImageFit = boardsFacade.backgroundImageFit(board: loadedBoard)
-            selectedBoardKeyboardLayout = boardsFacade.boardKeyboardLayout(board: loadedBoard)
-            selectedBoardUsesSpellingMode = boardsFacade.boardUsesSpellingMode(board: loadedBoard)
-            resolvedBoardShowLabels = resolved?.showLabels
-            resolvedBoardShowSymbols = resolved?.showSymbols
-            resolvedBoardLabelAtTop = resolved?.labelAtTop
-            resolvedBoardShowMessageBar = resolved?.showMessageBar
-            resolvedBoardShowSpeakButton = resolved?.showSpeakButton
-            resolvedBoardMessageBarActions = resolved?.messageBarActions
-            resolvedBoardActivationBehavior = resolved?.activationBehavior
-            resolvedBoardSpeechPolicy = resolved?.speechPolicy
-            resolvedBoardReturnBehavior = resolved?.returnBehavior
-            resolvedBoardCellGapDp = resolved?.cellGapDp?.intValue
-            resolvedBoardOuterMarginDp = resolved?.outerMarginDp?.intValue
-            let boardName = loadedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !boardName.isEmpty {
-                boardNamesById[id] = boardName
-            }
-            boardCells = cells.map { cell in
-                BoardCellInfo(
-                    row: Int(cell.row),
-                    col: Int(cell.col),
-                    buttonId: cell.buttonId,
-                    label: cell.label,
-                    vocalization: cell.vocalization,
-                    backgroundColor: cell.backgroundColor,
-                    resolvedBackgroundColor: cell.resolvedBackgroundColor,
-                    wordType: cell.wordType,
-                    borderColor: cell.borderColor,
-                    linkedBoardId: cell.linkedBoardId,
-                    imageId: cell.imageId,
-                    imageUrl: cell.imageUrl,
-                    hidden: cell.hidden,
-                    actions: cell.actions,
-                    soundId: cell.soundId,
-                    soundDataUrl: cell.soundDataUrl,
-                    soundPath: cell.soundPath,
-                    shape: cell.shape,
-                    language: cell.language,
-                    mathMode: cell.mathMode
-                )
-            }
-            boardFieldItems = fields.map { field in
-                BoardFieldItem(
-                    row: Int(field.row),
-                    column: Int(field.column),
-                    rowSpan: Int(field.rowSpan),
-                    columnSpan: Int(field.columnSpan),
-                    buttonId: field.buttonId
-                )
-            }
-            loadedBoardCellsPageId = id
-            boardCellsLoadFailedPageId = nil
-            rememberScreenButtonLooks()
+            applyBoardSnapshot(snapshot, pageId: id)
         } catch {
-            guard selectedBoardId == id else { return }
+            guard selectedBoardId == id, boardLoadGeneration == generation else { return }
             resetSelectedBoardState(failedPageId: id)
         }
     }
 
-    func refreshSelectedBoardMetadata() async {
-        guard let board = selectedBoard else {
-            selectedBoardKeyboardLayout = nil
-            selectedBoardUsesSpellingMode = false
-            return
-        }
-        selectedBoardKeyboardLayout = boardsFacade.boardKeyboardLayout(board: board)
-        selectedBoardUsesSpellingMode = boardsFacade.boardUsesSpellingMode(board: board)
-    }
-
     func refreshBoardCells() async {
         guard let boardId = selectedBoardId else {
+            boardLoadGeneration &+= 1
             loadedBoardCellsPageId = nil
             boardCellsLoadFailedPageId = nil
             boardCells = []
@@ -191,53 +127,89 @@ extension IosViewModel {
             return
         }
 
+        boardLoadGeneration &+= 1
+        let generation = boardLoadGeneration
         do {
-            let cells = try await boardsFacade.listBoardCells(boardId: boardId)
-            let fields = try await boardsFacade.listBoardFieldItems(boardId: boardId)
-            guard selectedBoardId == boardId else { return }
-            boardCells = cells.map { cell in
-                BoardCellInfo(
-                    row: Int(cell.row),
-                    col: Int(cell.col),
-                    buttonId: cell.buttonId,
-                    label: cell.label,
-                    vocalization: cell.vocalization,
-                    backgroundColor: cell.backgroundColor,
-                    resolvedBackgroundColor: cell.resolvedBackgroundColor,
-                    wordType: cell.wordType,
-                    borderColor: cell.borderColor,
-                    linkedBoardId: cell.linkedBoardId,
-                    imageId: cell.imageId,
-                    imageUrl: cell.imageUrl,
-                    hidden: cell.hidden,
-                    actions: cell.actions,
-                    soundId: cell.soundId,
-                    soundDataUrl: cell.soundDataUrl,
-                    soundPath: cell.soundPath,
-                    shape: cell.shape,
-                    language: cell.language,
-                    mathMode: cell.mathMode
-                )
+            let snapshot = try await boardsFacade.loadBoardSnapshot(boardId: boardId)
+            guard selectedBoardId == boardId, boardLoadGeneration == generation else { return }
+            guard let snapshot else {
+                boardCells = []
+                boardFieldItems = []
+                loadedBoardCellsPageId = boardId
+                boardCellsLoadFailedPageId = nil
+                return
             }
-            boardFieldItems = fields.map { field in
-                BoardFieldItem(
-                    row: Int(field.row),
-                    column: Int(field.column),
-                    rowSpan: Int(field.rowSpan),
-                    columnSpan: Int(field.columnSpan),
-                    buttonId: field.buttonId
-                )
-            }
-            loadedBoardCellsPageId = boardId
-            boardCellsLoadFailedPageId = nil
-            rememberScreenButtonLooks()
+            applyBoardSnapshot(snapshot, pageId: boardId)
         } catch {
-            guard selectedBoardId == boardId else { return }
+            guard selectedBoardId == boardId, boardLoadGeneration == generation else { return }
             loadedBoardCellsPageId = nil
             boardCellsLoadFailedPageId = boardId
             boardCells = []
             boardFieldItems = []
         }
+    }
+
+    /// Publishes every piece of a Page snapshot with no suspension in between, so SwiftUI
+    /// never renders new grid geometry against stale Buttons or settings.
+    private func applyBoardSnapshot(_ snapshot: IosBoardSnapshot, pageId id: String) {
+        let loadedBoard = snapshot.board
+        let resolved = snapshot.settings
+        selectedBoard = loadedBoard
+        boardBackgroundImageUrl = boardsFacade.backgroundImageUrl(board: loadedBoard)
+        boardBackgroundImageFit = boardsFacade.backgroundImageFit(board: loadedBoard)
+        selectedBoardKeyboardLayout = boardsFacade.boardKeyboardLayout(board: loadedBoard)
+        selectedBoardUsesSpellingMode = boardsFacade.boardUsesSpellingMode(board: loadedBoard)
+        resolvedBoardShowLabels = resolved.showLabels
+        resolvedBoardShowSymbols = resolved.showSymbols
+        resolvedBoardLabelAtTop = resolved.labelAtTop
+        resolvedBoardShowMessageBar = resolved.showMessageBar
+        resolvedBoardShowSpeakButton = resolved.showSpeakButton
+        resolvedBoardMessageBarActions = resolved.messageBarActions
+        resolvedBoardActivationBehavior = resolved.activationBehavior
+        resolvedBoardSpeechPolicy = resolved.speechPolicy
+        resolvedBoardReturnBehavior = resolved.returnBehavior
+        resolvedBoardCellGapDp = resolved.cellGapDp?.intValue
+        resolvedBoardOuterMarginDp = resolved.outerMarginDp?.intValue
+        let boardName = loadedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !boardName.isEmpty {
+            boardNamesById[id] = boardName
+        }
+        boardCells = snapshot.cells.map { cell in
+            BoardCellInfo(
+                row: Int(cell.row),
+                col: Int(cell.col),
+                buttonId: cell.buttonId,
+                label: cell.label,
+                vocalization: cell.vocalization,
+                backgroundColor: cell.backgroundColor,
+                resolvedBackgroundColor: cell.resolvedBackgroundColor,
+                wordType: cell.wordType,
+                borderColor: cell.borderColor,
+                linkedBoardId: cell.linkedBoardId,
+                imageId: cell.imageId,
+                imageUrl: cell.imageUrl,
+                hidden: cell.hidden,
+                actions: cell.actions,
+                soundId: cell.soundId,
+                soundDataUrl: cell.soundDataUrl,
+                soundPath: cell.soundPath,
+                shape: cell.shape,
+                language: cell.language,
+                mathMode: cell.mathMode
+            )
+        }
+        boardFieldItems = snapshot.fieldItems.map { field in
+            BoardFieldItem(
+                row: Int(field.row),
+                column: Int(field.column),
+                rowSpan: Int(field.rowSpan),
+                columnSpan: Int(field.columnSpan),
+                buttonId: field.buttonId
+            )
+        }
+        loadedBoardCellsPageId = id
+        boardCellsLoadFailedPageId = nil
+        rememberScreenButtonLooks()
     }
 
     func upsertSelectedBoardCell(

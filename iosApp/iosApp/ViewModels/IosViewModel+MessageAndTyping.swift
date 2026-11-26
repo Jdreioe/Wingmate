@@ -209,10 +209,15 @@ extension IosViewModel {
 
     /// Speaks an auditory-fishing preview, replacing any earlier preview without
     /// interrupting committed speech or recording History.
-    func previewSpeech(_ text: String) {
+    func previewSpeech(_ text: String, languageTag: String? = nil) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         AudioSessionHelper.activatePlayback()
-        session.previewText(text: text, voice: selectedVoice, rateOverride: KotlinDouble(value: 0.8))
+        session.previewText(
+            text: text,
+            voice: selectedVoice,
+            rateOverride: KotlinDouble(value: 0.8),
+            languageTag: languageTag
+        )
     }
 
     /// Stops any active or queued auditory-fishing preview without interrupting committed speech.

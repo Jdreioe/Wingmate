@@ -306,6 +306,36 @@ class BoardsFacadeTest {
     }
 
     @Test
+    fun boardSnapshotDerivesSettingsButtonsAndSpansFromOnePageRead() = runBlocking {
+        val facade = facade()
+        val boardSet = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home")
+        val boardId = boardSet.rootBoardId
+        facade.upsertBoardCellButton(
+            boardId = boardId, row = 0, col = 1, label = "Hi", vocalization = "Hi",
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        facade.updateBoardSettings(
+            boardSetId = boardSet.id, boardId = boardId, forPage = true,
+            showLabels = "inherit", showSymbols = "inherit", labelAtTop = "inherit",
+            showMessageBar = "inherit", showSpeakButton = "inherit", messageBarEditable = "inherit",
+            activationBehavior = "inherit", returnBehavior = "inherit", cacheSpeech = "inherit",
+            cellGapDp = 6, outerMarginDp = 10,
+        )
+
+        val snapshot = assertNotNull(facade.loadBoardSnapshot(boardId))
+        assertEquals(boardId, snapshot.board.id)
+        assertEquals(facade.resolveBoardSettings(boardId), snapshot.settings)
+        assertEquals(6, snapshot.settings.cellGapDp)
+        assertEquals(10, snapshot.settings.outerMarginDp)
+        assertEquals(facade.listBoardCells(boardId), snapshot.cells)
+        assertEquals(facade.listBoardFieldItems(boardId), snapshot.fieldItems)
+        assertEquals("Hi", snapshot.cells.single().label)
+
+        assertNull(facade.loadBoardSnapshot("missing-page"))
+    }
+
+    @Test
     fun moveBoardFieldSwapsButtonsAndRefusesASpanThatDoesNotFit() = runBlocking {
         val facade = facade()
         val boardId = facade.createBoardSet("Test", rows = 2, columns = 2, rootBoardName = "Home").rootBoardId

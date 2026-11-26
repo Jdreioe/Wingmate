@@ -218,11 +218,24 @@ internal fun SpanningBoardGrid(
     val touchExitController = remember { TouchExitController() }
     var touchExitActiveButtonId by remember(gestureKey, items, touchExitEnabled) { mutableStateOf<String?>(null) }
     val currentTouchExit by rememberUpdatedState(touchExit)
+    // A Page, Button, or mode change cancels a held Touch Exit. The shared controller then
+    // ignores that finger until it lifts and a new touch begins.
     DisposableEffect(gestureKey, items, touchExitEnabled) {
         onDispose {
             touchExitController.cancel()
             touchExitActiveButtonId = null
             currentTouchExit?.onCancel?.invoke()
+        }
+    }
+    // Keyguard gap, grid size, or direction changes move hit boxes without changing items, so
+    // they also invalidate a held finger (only when one is actually tracking).
+    val touchExitLayoutDirection = LocalLayoutDirection.current
+    DisposableEffect(horizontalGapPx, verticalGapPx, gridSizePx, touchExitLayoutDirection) {
+        onDispose {
+            if (touchExitController.cancel() != null) {
+                touchExitActiveButtonId = null
+                currentTouchExit?.onCancel?.invoke()
+            }
         }
     }
 

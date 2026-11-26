@@ -156,7 +156,10 @@ extension SymbolBoardWorkspaceView {
                     }
                 })
                 .onChange(of: touchExitGestureActive) { _, active in
-                    if !active { cancelTouchExit() }
+                    if !active {
+                        cancelTouchExit(latchUntilLift: false)
+                        touchExitLatchedUntilLift = false
+                    }
                 }
                 .onChange(of: touchExitActive) { _, active in
                     if !active { cancelTouchExit() }
@@ -174,6 +177,12 @@ extension SymbolBoardWorkspaceView {
                     cancelTouchExit()
                 }
                 .onChange(of: model.boardCells) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.resolvedBoardCellGapDp) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.resolvedBoardOuterMarginDp) { _, _ in
                     cancelTouchExit()
                 }
                 .onDisappear {
@@ -263,7 +272,7 @@ extension SymbolBoardWorkspaceView {
                     model.accessEnter(targetId)
                     if model.auditoryFishingEnabled, !model.inputIsPaused {
                         if let preview = boardCellPreviewText(cell) {
-                            model.previewSpeech(preview)
+                            model.previewSpeech(preview, languageTag: cell?.language)
                         } else {
                             model.cancelPreviewSpeech()
                         }
@@ -625,6 +634,8 @@ extension SymbolBoardWorkspaceView {
                 state = true
             }
             .onChanged { value in
+                // A finger held across a Page or layout change must lift before it can select again.
+                guard !touchExitLatchedUntilLift else { return }
                 guard model.boardCellsReady(for: pageId) else {
                     cancelTouchExit()
                     return
@@ -643,7 +654,7 @@ extension SymbolBoardWorkspaceView {
                    model.auditoryFishingEnabled,
                    !model.inputIsPaused {
                     if let preview = boardCellPreviewText(cell) {
-                        model.previewSpeech(preview)
+                        model.previewSpeech(preview, languageTag: cell.language)
                     } else {
                         model.cancelPreviewSpeech()
                     }
@@ -653,8 +664,10 @@ extension SymbolBoardWorkspaceView {
             }
             .onEnded { value in
                 model.cancelPreviewSpeech()
-                guard model.boardCellsReady(for: pageId) else {
-                    cancelTouchExit()
+                let latched = touchExitLatchedUntilLift
+                touchExitLatchedUntilLift = false
+                guard !latched, model.boardCellsReady(for: pageId) else {
+                    cancelTouchExit(latchUntilLift: false)
                     return
                 }
                 let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
@@ -672,7 +685,10 @@ extension SymbolBoardWorkspaceView {
             }
     }
 
-    func cancelTouchExit() {
+    func cancelTouchExit(latchUntilLift: Bool = true) {
+        if latchUntilLift && touchExitGestureActive {
+            touchExitLatchedUntilLift = true
+        }
         _ = touchExitController.cancel()
         model.cancelPreviewSpeech()
         if touchExitHighlightedButtonId != nil {

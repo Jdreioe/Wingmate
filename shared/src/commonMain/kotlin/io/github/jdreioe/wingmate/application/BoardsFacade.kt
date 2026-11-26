@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.obf.backgroundImage
 import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
 import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
@@ -107,6 +108,17 @@ data class IosBoardFieldItem(
     val rowSpan: Int,
     val columnSpan: Int,
     val buttonId: String? = null,
+)
+
+/**
+ * One Page read from a single captured board, so native clients never publish
+ * settings, Buttons, and field spans from different revisions of the same Page.
+ */
+data class IosBoardSnapshot(
+    val board: ObfBoard,
+    val settings: IosResolvedBoardSettings,
+    val cells: List<IosBoardCell>,
+    val fieldItems: List<IosBoardFieldItem>,
 )
 
 data class IosGridFieldSpan(
@@ -342,8 +354,30 @@ class BoardsFacade(
      */
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun resolveBoardSettings(boardId: String): IosResolvedBoardSettings = nativeCall {
+        resolvedSettingsFor(boardId, boardRepository.getBoard(boardId), settingsUseCase.get())
+    }
+
+    /**
+     * Read the Page once and derive its resolved settings, Buttons, and field spans from
+     * that same board. Returns null when the Page no longer exists.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun loadBoardSnapshot(boardId: String): IosBoardSnapshot? = nativeCall {
+        val board = boardRepository.getBoard(boardId) ?: return@nativeCall null
         val settings = settingsUseCase.get()
-        val board = boardRepository.getBoard(boardId)
+        IosBoardSnapshot(
+            board = board,
+            settings = resolvedSettingsFor(boardId, board, settings),
+            cells = cellsFor(board, settings),
+            fieldItems = fieldItemsFor(board),
+        )
+    }
+
+    private suspend fun resolvedSettingsFor(
+        boardId: String,
+        board: ObfBoard?,
+        settings: Settings,
+    ): IosResolvedBoardSettings {
         val screenOverrides = boardSetUseCase.listBoardSets()
             .firstOrNull { set -> set.boardIds.contains(boardId) }
             ?.screenSettings ?: BoardSettingsOverrides()
@@ -360,7 +394,7 @@ class BoardsFacade(
             screen = screenOverrides,
             page = pageOverrides,
         )
-        IosResolvedBoardSettings(
+        return IosResolvedBoardSettings(
             showLabels = resolved.showLabels,
             showSymbols = resolved.showSymbols,
             labelAtTop = resolved.labelAtTop,
@@ -383,12 +417,15 @@ class BoardsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun listBoardCells(boardId: String): List<IosBoardCell> = nativeCall {
         val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
-        val grid = board.grid ?: return@nativeCall emptyList()
+        cellsFor(board, settingsUseCase.get())
+    }
+
+    private fun cellsFor(board: ObfBoard, settings: Settings): List<IosBoardCell> {
+        val grid = board.grid ?: return emptyList()
         val buttons = board.buttons.associateBy { it.id }
         val images = board.images.associateBy { it.id }
-        val settings = settingsUseCase.get()
         val locale = settings.primaryLanguage
-        grid.order.flatMapIndexed { row, columns ->
+        return grid.order.flatMapIndexed { row, columns ->
             columns.mapIndexedNotNull { col, buttonId ->
                 val id = buttonId ?: return@mapIndexedNotNull null
                 val button = buttons[id] ?: return@mapIndexedNotNull null
@@ -422,8 +459,12 @@ class BoardsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun listBoardFieldItems(boardId: String): List<IosBoardFieldItem> = nativeCall {
         val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
-        val grid = board.grid ?: return@nativeCall emptyList()
-        grid.fieldItems().map { field ->
+        fieldItemsFor(board)
+    }
+
+    private fun fieldItemsFor(board: ObfBoard): List<IosBoardFieldItem> {
+        val grid = board.grid ?: return emptyList()
+        return grid.fieldItems().map { field ->
             IosBoardFieldItem(
                 row = field.row,
                 column = field.column,

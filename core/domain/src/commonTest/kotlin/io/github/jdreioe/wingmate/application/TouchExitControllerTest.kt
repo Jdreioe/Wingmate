@@ -84,6 +84,22 @@ class TouchExitControllerTest {
     }
 
     @Test
+    fun heldFingerAfterCancelCannotHighlightOrActivateUntilANewBegin() {
+        val controller = TouchExitController()
+        controller.begin("btn-a")
+
+        // Layout or Page changed under a held finger.
+        controller.cancel()
+
+        assertNull(controller.move("btn-b"))
+        assertNull(controller.state.activeTargetId)
+        assertEquals(TouchExitEffect.Cancelled, controller.release("btn-b"))
+
+        // A fresh touch starts tracking again.
+        assertEquals(TouchExitEffect.Preview("btn-b"), controller.begin("btn-b"))
+    }
+
+    @Test
     fun precedenceRulesMatchSharedTouchAccessPolicy() {
         assertTrue(touchExitIsActive(isEditMode = false, holdToSelectMillis = 0, selectOnTouchDown = false, selectOnTouchExit = true))
         assertFalse(touchExitIsActive(isEditMode = true, holdToSelectMillis = 0, selectOnTouchDown = false, selectOnTouchExit = true))

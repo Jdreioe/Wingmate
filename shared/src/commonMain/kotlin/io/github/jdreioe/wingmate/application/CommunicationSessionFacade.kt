@@ -181,11 +181,11 @@ class CommunicationSessionFacade(
      * Speaks an auditory-fishing preview cue, replacing any previous preview without
      * interrupting committed speech or recording History.
      */
-    fun previewText(text: String, voice: Voice?, rateOverride: Double? = 0.8) {
+    fun previewText(text: String, voice: Voice?, rateOverride: Double? = 0.8, languageTag: String? = null) {
         if (text.isBlank()) return
         session.accept(
             CommunicationAction.SpeakPart(
-                part = MessagePart(text),
+                part = MessagePart(text, languageTag = languageTag),
                 voice = voice,
                 rateOverride = rateOverride,
                 isPreview = true,
