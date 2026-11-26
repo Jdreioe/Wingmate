@@ -185,7 +185,7 @@ struct SyncSettingsView: View {
             let result = try? await IosDiBridge().remoteScreenActions().connectCloudSync(provider: provider)
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -204,7 +204,7 @@ struct SyncSettingsView: View {
             )
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -216,7 +216,7 @@ struct SyncSettingsView: View {
             let result = try? await IosDiBridge().remoteScreenActions().disconnectSyncConnection(connectionId: id)
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -228,7 +228,7 @@ struct SyncSettingsView: View {
             let result = try? await IosDiBridge().remoteScreenActions().syncNowAll()
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 }

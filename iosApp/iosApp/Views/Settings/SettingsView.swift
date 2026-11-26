@@ -164,7 +164,7 @@ struct SettingsView: View {
         }
         .task {
             await model.refreshSettings()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -187,7 +187,7 @@ struct SettingsView: View {
                 uiChipFontSize: $uiChipFontSize,
                 uiPlayIconSize: $uiPlayIconSize,
                 onWordTypeColorsChanged: {
-                    await model.refreshBoardCells()
+                    await model.screens.refreshBoardCells()
                 }
             )
         case .accessibility:

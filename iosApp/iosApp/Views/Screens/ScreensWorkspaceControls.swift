@@ -33,7 +33,7 @@ extension SymbolBoardWorkspaceView {
                             // The Screen's own actions sit on its title.
                             Menu {
                                 Button {
-                                    managementName = model.selectedBoardSet?.name ?? ""
+                                    managementName = model.screens.selectedBoardSet?.name ?? ""
                                     managementSheet = .renameSet
                                 } label: {
                                     Label("boardset.rename_set", systemImage: "pencil")
@@ -43,7 +43,7 @@ extension SymbolBoardWorkspaceView {
                                 } label: { Label("board_settings.screen_title", systemImage: "gearshape") }
                             } label: {
                                 HStack(spacing: 4) {
-                                    Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.selectedBoardSet?.name ?? ""))
+                                    Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.screens.selectedBoardSet?.name ?? ""))
                                         .lineLimit(1)
                                     Image(systemName: "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
                                 }
@@ -79,7 +79,7 @@ extension SymbolBoardWorkspaceView {
                         }
                     }
                 }
-                if model.selectedBoardSet != nil {
+                if model.screens.selectedBoardSet != nil {
                     // Use mode's top, Grid 3 style: a slim menu row where the clock was,
                     // then the message bar with the Screen's own buttons. Edit mode shows
                     // the same bar so those buttons can be chosen in place.
@@ -87,13 +87,13 @@ extension SymbolBoardWorkspaceView {
                         HStack {
                             workspaceMenu(boardSetId: boardSetId)
                             Spacer(minLength: 0)
-                            if (model.selectedBoardSet?.boardIds.count ?? 0) > 1 {
+                            if (model.screens.selectedBoardSet?.boardIds.count ?? 0) > 1 {
                                 pageNavigation
                             }
                         }
                         // Clear of the rounded corner when it sits beside the Dynamic Island.
                         .padding(.horizontal, horizontalSizeClass == .regular ? 16 : 28)
-                        if model.boardMessageBarVisible {
+                        if model.screens.boardMessageBarVisible {
                             HStack(alignment: .center, spacing: 8) {
                                 ScreensMessageBar(
                                     model: model,
@@ -114,7 +114,7 @@ extension SymbolBoardWorkspaceView {
                             }
                             .padding(.horizontal)
                         }
-                    } else if model.boardMessageBarVisible {
+                    } else if model.screens.boardMessageBarVisible {
                         HStack(alignment: .center, spacing: 8) {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(Color(.secondarySystemFill))
@@ -134,16 +134,16 @@ extension SymbolBoardWorkspaceView {
             .padding(.top, occlusionTop)
             .frame(width: workspaceProxy.size.width, height: workspaceProxy.size.height, alignment: .top)
         }
-        .animation(.easeInOut(duration: 0.2), value: model.selectedBoardId)
+        .animation(.easeInOut(duration: 0.2), value: model.screens.selectedBoardId)
         .task(id: boardPredictionTaskId) {
-            await model.refreshBoardPredictions(context: boardSentenceText)
+            await model.screens.refreshBoardPredictions(context: boardSentenceText)
         }
-        .onDisappear { model.stopBoardPredictions() }
-        .onChange(of: model.selectedBoardId) { _, _ in
+        .onDisappear { model.screens.stopBoardPredictions() }
+        .onChange(of: model.screens.selectedBoardId) { _, _ in
             guard mode == .run else { return }
             UIAccessibility.post(
                 notification: .screenChanged,
-                argument: model.selectedBoard?.name ?? NSLocalizedString("boardset.untitled_board", comment: "")
+                argument: model.screens.selectedBoard?.name ?? NSLocalizedString("boardset.untitled_board", comment: "")
             )
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -159,7 +159,7 @@ extension SymbolBoardWorkspaceView {
             if isStartPage {
                 Image(systemName: "house.fill").font(.caption2)
             }
-            Text(model.boardDisplayName(id: id))
+            Text(model.screens.boardDisplayName(id: id))
                 .font(.subheadline)
                 .fontWeight(isSelected ? .bold : .regular)
             if isSelected {
@@ -177,20 +177,20 @@ extension SymbolBoardWorkspaceView {
     @ViewBuilder
     func pageActions(isStartPage: Bool) -> some View {
         Button {
-            managementName = model.selectedBoard?.name ?? ""
+            managementName = model.screens.selectedBoard?.name ?? ""
             managementSheet = .renameBoard
         } label: {
             Label("boardset.rename_board", systemImage: "pencil")
         }
         Button {
-            managementRows = max(1, Int(model.selectedBoard?.grid?.rows ?? 4))
-            managementColumns = max(1, Int(model.selectedBoard?.grid?.columns ?? 4))
+            managementRows = max(1, Int(model.screens.selectedBoard?.grid?.rows ?? 4))
+            managementColumns = max(1, Int(model.screens.selectedBoard?.grid?.columns ?? 4))
             managementSheet = .resizeBoard
         } label: {
             Label("boardset.resize_board", systemImage: "square.grid.3x3")
         }
         Button {
-            if let value = model.selectedBoard?.backgroundColor {
+            if let value = model.screens.selectedBoard?.backgroundColor {
                 managementBackgroundColor = colorFromHex(value, fallback: Color(.secondarySystemBackground))
                 useCustomManagementBackground = true
             } else {
@@ -202,7 +202,7 @@ extension SymbolBoardWorkspaceView {
             Label("boardset.background_color", systemImage: "paintpalette")
         }
         Button {
-            backgroundFit = model.boardBackgroundImageFit
+            backgroundFit = model.screens.boardBackgroundImageFit
             showBackgroundEditor = true
         } label: { Label("boardset.background_image", systemImage: "photo") }
         Button {
@@ -210,7 +210,7 @@ extension SymbolBoardWorkspaceView {
         } label: { Label("board_settings.page_title", systemImage: "slider.horizontal.3") }
         if !isStartPage {
             Button {
-                Task { await model.makeSelectedBoardRoot() }
+                Task { await model.screens.makeSelectedBoardRoot() }
             } label: {
                 Label("boardset.make_home", systemImage: "house")
             }
@@ -228,16 +228,16 @@ extension SymbolBoardWorkspaceView {
     func pageStrip(boardSetId: String) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                if let selectedSet = model.selectedBoardSet {
+                if let selectedSet = model.screens.selectedBoardSet {
                     ForEach(selectedSet.boardIds, id: \.self) { id in
-                        if model.selectedBoardId == id {
+                        if model.screens.selectedBoardId == id {
                             Menu { pageActions(isStartPage: id == selectedSet.rootBoardId) } label: {
                                 pageChip(id: id, isStartPage: id == selectedSet.rootBoardId, isSelected: true)
                             }
                             .accessibilityAddTraits(.isSelected)
                         } else {
                             Button(action: {
-                                Task { await model.selectBoard(id: id, resetStack: true) }
+                                Task { await model.screens.selectBoard(id: id, resetStack: true) }
                             }) {
                                 pageChip(id: id, isStartPage: id == selectedSet.rootBoardId, isSelected: false)
                             }
@@ -246,7 +246,7 @@ extension SymbolBoardWorkspaceView {
                     }
                 }
                 Button(action: {
-                    addBoardKeyboardLayout = model.selectedBoardKeyboardLayout ?? "qwerty"
+                    addBoardKeyboardLayout = model.screens.selectedBoardKeyboardLayout ?? "qwerty"
                     showAddBoardSheet = true
                 }) {
                     Label("boardset.add_board", systemImage: "plus")
@@ -269,7 +269,7 @@ extension SymbolBoardWorkspaceView {
     /// changes or removes its action, and a + slot adds one.
     @ViewBuilder
     func messageControls(boardSetId: String, editing: Bool) -> some View {
-        let actions = model.boardMessageBarActions
+        let actions = model.screens.boardMessageBarActions
         let slots: [String?] = actions.map { Optional($0) } + (editing && actions.count < 4 ? [nil] : [])
         let gap: CGFloat = 8
         let full = controlSize * 2 + gap
@@ -386,7 +386,7 @@ extension SymbolBoardWorkspaceView {
                 Button {
                     var next = actions
                     next[index] = choice
-                    Task { await model.setMessageBarActions(next) }
+                    Task { await model.screens.setMessageBarActions(next) }
                 } label: {
                     Label(messageActionTitle(choice), systemImage: choice == action ? "checkmark" : messageActionIcon(choice))
                 }
@@ -396,7 +396,7 @@ extension SymbolBoardWorkspaceView {
             Button(role: .destructive) {
                 var next = actions
                 next.remove(at: index)
-                Task { await model.setMessageBarActions(next) }
+                Task { await model.screens.setMessageBarActions(next) }
             } label: {
                 Label("screens.message_bar.remove_button", systemImage: "minus.circle")
             }
@@ -412,7 +412,7 @@ extension SymbolBoardWorkspaceView {
         Menu {
             ForEach(Self.messageBarActionChoices.filter { !actions.contains($0) }, id: \.self) { choice in
                 Button {
-                    Task { await model.setMessageBarActions(actions + [choice]) }
+                    Task { await model.screens.setMessageBarActions(actions + [choice]) }
                 } label: {
                     Label(messageActionTitle(choice), systemImage: messageActionIcon(choice))
                 }
@@ -464,15 +464,15 @@ extension SymbolBoardWorkspaceView {
     var pageNavigation: some View {
         let showsLabels = horizontalSizeClass == .regular
         return HStack(spacing: 4) {
-            Button { Task { await model.navigateBoardBack() } } label: {
+            Button { Task { await model.screens.navigateBoardBack() } } label: {
                 topRowLabel("board_page.back", systemImage: "chevron.backward", showsTitle: showsLabels)
             }
-            .disabled(!model.canNavigateBoardBack)
+            .disabled(!model.screens.canNavigateBoardBack)
             .accessibilityLabel(Text("board_page.back"))
-            Button { Task { await model.navigateBoardHome() } } label: {
+            Button { Task { await model.screens.navigateBoardHome() } } label: {
                 topRowLabel("board_page.start", systemImage: "house", showsTitle: showsLabels)
             }
-            .disabled(model.isOnStartPage)
+            .disabled(model.screens.isOnStartPage)
             .accessibilityLabel(Text("board_page.start"))
         }
         .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
@@ -499,9 +499,9 @@ extension SymbolBoardWorkspaceView {
     func workspaceMenu(boardSetId: String) -> some View {
         Menu {
             Button {
-                if model.canEditSelectedBoardSet {
+                if model.screens.canEditSelectedBoardSet {
                     Task { await requestEnterEditing(boardSetId: boardSetId) }
-                } else if let set = model.selectedBoardSet {
+                } else if let set = model.screens.selectedBoardSet {
                     Task { await beginScreenLockToggle(set) }
                 }
             } label: { Label("board_sets.library.edit", systemImage: "pencil") }

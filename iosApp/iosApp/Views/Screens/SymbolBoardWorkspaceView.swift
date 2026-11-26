@@ -128,7 +128,7 @@ struct SymbolBoardWorkspaceView: View {
     var body: some View {
         VStack(spacing: 0) {
             if exportingPdf { ProgressView("boardset.print_preparing").padding(8) }
-            if let status = model.boardStatusMessage, !status.isEmpty {
+            if let status = model.screens.boardStatusMessage, !status.isEmpty {
                 Text(status).font(.footnote).padding(8).accessibilityAddTraits(.updatesFrequently)
             }
             switch route {
@@ -141,7 +141,7 @@ struct SymbolBoardWorkspaceView: View {
         .sheet(isPresented: $showBackgroundEditor) {
             NavigationStack {
                 Form {
-                    if let status = model.boardStatusMessage { Text(status).foregroundStyle(.secondary) }
+                    if let status = model.screens.boardStatusMessage { Text(status).foregroundStyle(.secondary) }
                     if importingBackground { ProgressView() }
                     PhotosPicker(selection: $backgroundPhoto, matching: .images) {
                         Label("boardset.background_choose", systemImage: "photo")
@@ -151,13 +151,13 @@ struct SymbolBoardWorkspaceView: View {
                         Text("boardset.background_fit").tag("Fit")
                     }
                     .onChange(of: backgroundFit) { _, fit in
-                        if let source = model.boardBackgroundImageUrl {
-                            Task { await model.setPageBackground(imageUrl: source, fit: fit) }
+                        if let source = model.screens.boardBackgroundImageUrl {
+                            Task { await model.screens.setPageBackground(imageUrl: source, fit: fit) }
                         }
                     }
                     Button("boardset.background_remove", role: .destructive) {
-                        Task { await model.setPageBackground(imageUrl: nil, fit: backgroundFit) }
-                    }.disabled(model.boardBackgroundImageUrl == nil)
+                        Task { await model.screens.setPageBackground(imageUrl: nil, fit: backgroundFit) }
+                    }.disabled(model.screens.boardBackgroundImageUrl == nil)
                 }
                 .disabled(importingBackground)
                 .navigationTitle("boardset.background_image")
@@ -175,7 +175,7 @@ struct SymbolBoardWorkspaceView: View {
                 defer { importingBackground = false; backgroundPhoto = nil }
                 do {
                     guard let original = try await item.loadTransferable(type: Data.self), let data = UIImage(data: original)?.pngData() else {
-                        model.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "")
+                        model.screens.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "")
                         return
                     }
                     let url = try await Task.detached {
@@ -185,8 +185,8 @@ struct SymbolBoardWorkspaceView: View {
                         try data.write(to: url, options: .atomic)
                         return url
                     }.value
-                    await model.setPageBackground(imageUrl: url.absoluteString, fit: backgroundFit)
-                } catch { model.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
+                    await model.screens.setPageBackground(imageUrl: url.absoluteString, fit: backgroundFit)
+                } catch { model.screens.boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
             }
         }
         .onChange(of: route) { _, newRoute in
@@ -200,36 +200,36 @@ struct SymbolBoardWorkspaceView: View {
             isEditingScreen = false
         }
         .task {
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
             if !hasAppliedStartupDestination {
                 hasAppliedStartupDestination = true
                 if let startupId = model.settings.startupBoardSetId,
-                   model.boardSets.contains(where: { $0.id == startupId }) {
-                    await model.selectBoardSet(id: startupId)
+                   model.screens.boardSets.contains(where: { $0.id == startupId }) {
+                    await model.screens.selectBoardSet(id: startupId)
                     route = .workspace(boardSetId: startupId, mode: .run)
                 }
             }
         }
         .task {
             // Linked Screens sync with no input: on open, then every 45 s outside edit mode.
-            await model.syncRemoteScreensAutomatic(force: true)
+            await model.screens.syncRemoteScreensAutomatic(force: true)
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 45_000_000_000)
                 guard !Task.isCancelled else { break }
                 if case .workspace(_, .edit) = route { continue }
-                await model.syncRemoteScreensAutomatic(force: false)
+                await model.screens.syncRemoteScreensAutomatic(force: false)
             }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                Task { await model.syncRemoteScreensAutomatic(force: false) }
+                Task { await model.screens.syncRemoteScreensAutomatic(force: false) }
             }
         }
         .sheet(isPresented: $showRemoteScreen, onDismiss: { cloudShares.pendingShare = nil }) {
             RemoteScreenSheet(
-                target: model.boardSets.first { $0.id == remoteScreenId },
+                target: model.screens.boardSets.first { $0.id == remoteScreenId },
                 acceptedShare: remoteScreenId == nil ? cloudShares.pendingShare : nil,
-                refresh: { await model.loadBoardSets() }
+                refresh: { await model.screens.loadBoardSets() }
             )
         }
         .onChange(of: cloudShares.pendingShare) { _, share in
@@ -252,7 +252,7 @@ struct SymbolBoardWorkspaceView: View {
                 .presentationBackground(Color(.systemGroupedBackground))
         }
         .sheet(item: $settingsTarget) { target in
-            BoardSettingsSheet(model: model, forPage: target.forPage) {
+            BoardSettingsSheet(screens: model.screens, forPage: target.forPage) {
                 settingsTarget = nil
             }
         }
@@ -371,7 +371,7 @@ struct SymbolBoardWorkspaceView: View {
         .alert("boardset.delete_board", isPresented: $showDeleteBoardConfirmation) {
             Button("common.cancel", role: .cancel) {}
             Button("common.delete", role: .destructive) {
-                Task { await model.deleteSelectedBoard() }
+                Task { await model.screens.deleteSelectedBoard() }
             }
         } message: {
             Text("boardset.delete_board.message")

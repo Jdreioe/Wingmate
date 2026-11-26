@@ -26,26 +26,26 @@ extension SymbolBoardWorkspaceView {
     var boardSentenceText: String { model.communication.input }
 
     var boardPredictionTaskId: String {
-        let predictors = model.boardCells
+        let predictors = model.screens.boardCells
             .filter { $0.actions.contains(where: { $0.lowercased().hasPrefix(":prediction") }) }
             .map(\.buttonId)
             .joined(separator: ",")
-        return "\(model.selectedBoardId ?? "")|\(predictors)|\(boardSentenceText)"
+        return "\(model.screens.selectedBoardId ?? "")|\(predictors)|\(boardSentenceText)"
     }
 
     func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
         guard let cell else { return }
         if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
-            if let current = model.selectedBoardId {
-                model.pushBoardNavigationStack(current)
+            if let current = model.screens.selectedBoardId {
+                model.screens.pushBoardNavigationStack(current)
             }
-            Task { await model.activateSelectedBoardCell(row: row, col: col) }
+            Task { await model.screens.activateSelectedBoardCell(row: row, col: col) }
             return
         }
         if cell.actions.isEmpty {
-            let behavior = model.boardActivationBehavior
+            let behavior = model.screens.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
-            let shouldSpeak = model.shouldSpeakSelectionImmediately
+            let shouldSpeak = model.screens.shouldSpeakSelectionImmediately
             // A Button's own sound replaces its spoken text, so it is said once.
             if shouldSpeak { playCellSound(cell) }
             if shouldAdd {
@@ -53,9 +53,9 @@ extension SymbolBoardWorkspaceView {
             }
             Task {
                 if shouldSpeak && trimmed(cell.soundPath) == nil && trimmed(cell.soundDataUrl) == nil {
-                    await model.activateSelectedBoardCell(row: row, col: col)
+                    await model.screens.activateSelectedBoardCell(row: row, col: col)
                 }
-                await model.activateBoardSelectionHighlight(buttonId: cell.buttonId)
+                await model.screens.activateBoardSelectionHighlight(buttonId: cell.buttonId)
             }
             return
         }
@@ -72,11 +72,11 @@ extension SymbolBoardWorkspaceView {
             case ":clear":
                 model.communication.clearMessage()
             case ":speak":
-                if let boardSetId = model.selectedBoardSetId {
+                if let boardSetId = model.screens.selectedBoardSetId {
                     model.communication.speakBoardMessage(boardSetId: boardSetId)
                 }
             case ":home":
-                Task { await model.navigateBoardHome() }
+                Task { await model.screens.navigateBoardHome() }
             case ":pause":
                 model.communication.pauseSpeech()
             case ":resume":
@@ -86,12 +86,12 @@ extension SymbolBoardWorkspaceView {
             case ":hold-message":
                 model.communication.toggleHoldThatThought()
             case ":secondary-language":
-                model.boardStatusMessage = NSLocalizedString("boardset.status.unsupported_action", comment: "")
+                model.screens.boardStatusMessage = NSLocalizedString("boardset.status.unsupported_action", comment: "")
             case ":native-keyboard":
                 nativeKeyboardDraft = boardSentenceText
                 showNativeKeyboardSheet = true
             case ":prediction", ":predictions":
-                if let suggestion = model.boardPrediction(for: cell.buttonId) {
+                if let suggestion = model.screens.boardPrediction(for: cell.buttonId) {
                     isContentActivation = true
                     let insertion = predictionInsertion(sentence: boardSentenceText, suggestion: suggestion)
                     appendCellToSentenceIfNeeded(cell, textOverride: insertion, sourceCellId: sourceCellId)
@@ -110,8 +110,8 @@ extension SymbolBoardWorkspaceView {
         }
         if isContentActivation {
             playCellSound(cell)
-            Task { await model.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
-            Task { await model.applyBoardReturnBehavior() }
+            Task { await model.screens.activateBoardSelectionHighlight(buttonId: cell.buttonId) }
+            Task { await model.screens.applyBoardReturnBehavior() }
         }
     }
 
@@ -152,13 +152,13 @@ extension SymbolBoardWorkspaceView {
     }
 
     func predictionInsertion(sentence: String, suggestion: String) -> String {
-        model.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
+        model.screens.nGramPredictionInsertion(sentence: sentence, suggestion: suggestion)
     }
 
     func boardCellDisplayLabel(_ cell: BoardCellInfo?) -> String {
         guard let cell else { return "" }
         if cell.actions.contains(where: { $0.lowercased() == ":prediction" || $0.lowercased() == ":predictions" }),
-           let prediction = model.boardPrediction(for: cell.buttonId) {
+           let prediction = model.screens.boardPrediction(for: cell.buttonId) {
             return prediction
         }
         if let expanded = ScreenButtonText.expandedText(label: cell.label, vocalization: cell.vocalization) {
@@ -220,8 +220,8 @@ extension SymbolBoardWorkspaceView {
         editingSpan = .single
         editingSpanOptions = []
         Task {
-            let options = await model.availableFieldSpanOptions(row: row, col: col)
-            let currentField = model.boardFieldItems.first { $0.row == row && $0.column == col }
+            let options = await model.screens.availableFieldSpanOptions(row: row, col: col)
+            let currentField = model.screens.boardFieldItems.first { $0.row == row && $0.column == col }
             await MainActor.run {
                 editingSpanOptions = options
                 if let field = currentField, existing != nil,
@@ -445,8 +445,8 @@ extension SymbolBoardWorkspaceView {
         pendingEditingBoardSetId = nil
         pendingDeleteBoardSetId = nil
         if !set.isLocked && model.editingAccess.enabled {
-            await model.selectBoardSet(id: set.id)
-            model.setSelectedBoardSetLocked(true)
+            await model.screens.selectBoardSet(id: set.id)
+            model.screens.setSelectedBoardSetLocked(true)
             return
         }
         pendingBoardLockId = set.id
@@ -466,13 +466,13 @@ extension SymbolBoardWorkspaceView {
         if let lockId = pendingBoardLockId {
             let unlocks = pendingBoardLockUnlocks
             pendingBoardLockId = nil
-            await model.selectBoardSet(id: lockId)
-            model.setSelectedBoardSetLocked(!unlocks)
+            await model.screens.selectBoardSet(id: lockId)
+            model.screens.setSelectedBoardSetLocked(!unlocks)
             return
         }
         if let deleteId = pendingDeleteBoardSetId {
             pendingDeleteBoardSetId = nil
-            await model.deleteBoardSet(id: deleteId, deleteRemote: pendingDeleteRemote)
+            await model.screens.deleteBoardSet(id: deleteId, deleteRemote: pendingDeleteRemote)
             pendingDeleteRemote = false
         } else if let id = pendingEditingBoardSetId {
             pendingEditingBoardSetId = nil
@@ -484,7 +484,7 @@ extension SymbolBoardWorkspaceView {
     func confirmDeleteScreen(_ target: BoardSetInfo, deleteRemote: Bool) {
         Task {
             if await model.editingAccess.isAuthorized() {
-                await model.deleteBoardSet(id: target.id, deleteRemote: deleteRemote)
+                await model.screens.deleteBoardSet(id: target.id, deleteRemote: deleteRemote)
             } else {
                 pendingDeleteBoardSetId = target.id
                 pendingDeleteRemote = deleteRemote
@@ -517,12 +517,12 @@ extension SymbolBoardWorkspaceView {
     /// An iCloud share link was tapped: show the Screen if it is already here, otherwise offer to open it.
     func openAcceptedShare(_ share: AcceptedCloudKitScreenShare) {
         Task {
-            await model.loadBoardSets()
-            if let existing = model.boardSets.first(where: { $0.remoteLocation == share.location }) {
+            await model.screens.loadBoardSets()
+            if let existing = model.screens.boardSets.first(where: { $0.remoteLocation == share.location }) {
                 cloudShares.pendingShare = nil
-                await model.selectBoardSet(id: existing.id)
+                await model.screens.selectBoardSet(id: existing.id)
                 route = .workspace(boardSetId: existing.id, mode: .run)
-                await model.syncRemoteScreensAutomatic(force: true)
+                await model.screens.syncRemoteScreensAutomatic(force: true)
             } else if !showRemoteScreen {
                 manageRemoteScreen(id: nil)
             }
@@ -545,33 +545,19 @@ extension SymbolBoardWorkspaceView {
     func printScreen(id: String) {
         guard !exportingPdf else { return }
         exportingPdf = true
-        model.boardStatusMessage = nil
+        model.screens.boardStatusMessage = nil
         Task {
             defer { exportingPdf = false }
             do { pdfUrl = try await exportScreenPdf(id: id) }
-            catch { model.boardStatusMessage = NSLocalizedString("boardset.print_failed", comment: "") }
+            catch { model.screens.boardStatusMessage = NSLocalizedString("boardset.print_failed", comment: "") }
         }
     }
 
     func exportBoardSet(id: String) async {
-        let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsObz(id: id)
-        await finishExport(result)
+        await model.screens.exportBoardSetAsObz(id: id)
     }
 
     func exportBoardSetAsGridset(id: String) async {
-        let result = try? await IosDiBridge().boardsFacade().shareBoardSetAsGridset(id: id)
-        await finishExport(result)
-    }
-
-    func finishExport(_ result: BoardSetExportResult?) async {
-        let message: String
-        if let result, result.isSuccess, let fileName = result.fileName {
-            message = String(format: NSLocalizedString("boardset.export_obz_done", comment: ""), fileName)
-        } else {
-            message = NSLocalizedString("boardset.export_obz_failed", comment: "")
-        }
-        await MainActor.run {
-            model.boardStatusMessage = message
-        }
+        await model.screens.exportBoardSetAsGridset(id: id)
     }
 }

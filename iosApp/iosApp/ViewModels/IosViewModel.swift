@@ -1,12 +1,17 @@
 import Foundation
 import Combine
 import Shared
-import AVFoundation
-import Network
 
+/// Root composition container for the iOS app (#187).
+/// Owns only app-wide workspace navigation (`boardModeEnabled`) and composes
+/// feature-scoped observable models. Feature state, task lifetimes, and error
+/// handling live inside each feature model.
 @MainActor
 final class IosViewModel: ObservableObject {
     private var childModelCancellables: Set<AnyCancellable> = []
+
+    /// App-wide workspace switch (`false` = Typing workspace, `true` = Screens workspace).
+    @Published var boardModeEnabled: Bool = false
 
     // Feature-scoped observable models (#187)
     let pronunciationDictionary = PronunciationDictionaryModel()
@@ -14,6 +19,7 @@ final class IosViewModel: ObservableObject {
     let backup = BackupModel()
     let speech = SpeechSettingsModel()
     let settings = AppSettingsModel()
+
     private(set) lazy var communication: CommunicationModel = CommunicationModel(
         settings: settings,
         speech: speech,
@@ -21,23 +27,30 @@ final class IosViewModel: ObservableObject {
         activeScreenContext: { [weak self] in
             guard let self else { return ("", nil, false, [], { _ in true }) }
             return (
-                screenId: self.selectedBoardSetId ?? "",
-                pageId: self.selectedBoardId,
-                spellingMode: self.selectedBoardUsesSpellingMode,
-                currentCells: self.boardCells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) },
+                screenId: self.screens.selectedBoardSetId ?? "",
+                pageId: self.screens.selectedBoardId,
+                spellingMode: self.screens.selectedBoardUsesSpellingMode,
+                currentCells: self.screens.boardCells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) },
                 cacheWholeSentences: { [weak self] id in
-                    self?.boardSets.first(where: { $0.id == id })?.cacheWholeSentences ?? true
+                    self?.screens.boardSets.first(where: { $0.id == id })?.cacheWholeSentences ?? true
                 }
             )
         }
     )
 
-    // Remaining Screens facades (migrating to ScreensModel next)
-    lazy var boardsFacade = IosDiBridge().boardsFacade()
-    lazy var predictionFacade = IosDiBridge().predictionFacade()
+    private(set) lazy var screens: ScreensModel = ScreensModel(
+        settings: settings,
+        editingAccess: editingAccess,
+        onSpeak: { [weak self] text in
+            self?.communication.speak(text)
+        },
+        onRememberButtonLooks: { [weak self] pageId, cells in
+            self?.communication.rememberScreenButtonLooks(pageId: pageId, cells: cells)
+        }
+    )
 
     init() {
-        // Forward child observable changes while transitional screens still observe IosViewModel.
+        // Forward child observable changes for top-level views that observe IosViewModel.
         speech.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &childModelCancellables)
@@ -50,70 +63,9 @@ final class IosViewModel: ObservableObject {
         communication.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &childModelCancellables)
-    }
-
-    var boardPredictionSubscription: Shared.NativeSubscription?
-
-    deinit {
-        boardPredictionSubscription?.cancel()
-    }
-
-    // Symbol-first boardset mode
-    @Published var boardModeEnabled: Bool = false
-    @Published var isCreatingBoardSet: Bool = false
-    @Published var boardSets: [BoardSetInfo] = []
-    @Published var selectedBoardSetId: String? = nil
-    @Published var selectedBoardId: String? = nil
-    @Published var selectedBoard: Shared.ObfBoard? = nil
-    @Published var boardCells: [BoardCellInfo] = []
-    @Published var boardFieldItems: [BoardFieldItem] = []
-    @Published var selectedBoardKeyboardLayout: String? = nil
-    @Published var selectedBoardUsesSpellingMode: Bool = false
-    @Published var boardPredictionsByButtonId: [String: String] = [:]
-    @Published var boardNamesById: [String: String] = [:]
-    @Published var boardStatusMessage: String? = nil
-    @Published var boardBackgroundImageUrl: String? = nil
-    @Published var boardBackgroundImageFit = "Fill"
-    @Published var resolvedBoardShowLabels: Bool? = nil
-    @Published var resolvedBoardShowSymbols: Bool? = nil
-    @Published var resolvedBoardLabelAtTop: Bool? = nil
-    @Published var resolvedBoardShowMessageBar: Bool? = nil
-    @Published var resolvedBoardShowSpeakButton: Bool? = nil
-    @Published var resolvedBoardMessageBarActions: [String]? = nil
-    @Published var resolvedBoardSpeechPolicy: String? = nil
-    @Published var resolvedBoardActivationBehavior: String? = nil
-    @Published var resolvedBoardReturnBehavior: String? = nil
-    @Published var boardStack: [String] = []
-
-    var boardShowLabels: Bool { resolvedBoardShowLabels ?? settings.showButtonLabels }
-    var boardShowSymbols: Bool { resolvedBoardShowSymbols ?? settings.showButtonSymbols }
-    var boardLabelAtTop: Bool { resolvedBoardLabelAtTop ?? settings.labelAtTop }
-    var boardMessageBarVisible: Bool { resolvedBoardShowMessageBar ?? settings.boardShowMessageBar }
-    var boardSpeakButtonVisible: Bool { resolvedBoardShowSpeakButton ?? settings.boardShowSpeakButton }
-    /// The Screen's message bar buttons in order (`Speak`, `Hold`, `DeleteLast`, `Clear`).
-    var boardMessageBarActions: [String] {
-        resolvedBoardMessageBarActions ?? (settings.boardShowSpeakButton ? ["Speak"] : [])
-    }
-    var boardActivationBehavior: String { resolvedBoardActivationBehavior ?? "SpeakAndAdd" }
-    var boardReturnBehavior: String { resolvedBoardReturnBehavior ?? "Stay" }
-    var shouldSpeakSelectionImmediately: Bool {
-        settings.shouldSpeakSelectionImmediately(
-            resolvedBoardSpeechPolicy: resolvedBoardSpeechPolicy,
-            activationBehavior: boardActivationBehavior
-        )
-    }
-
-    var selectedBoardSet: BoardSetInfo? {
-        guard let id = selectedBoardSetId else { return nil }
-        return boardSets.first(where: { $0.id == id })
-    }
-
-    var selectedBoardSetLocked: Bool {
-        selectedBoardSet?.isLocked ?? false
-    }
-
-    var canEditSelectedBoardSet: Bool {
-        !selectedBoardSetLocked
+        screens.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &childModelCancellables)
     }
 
     /// Starts the shared Koin graph. Later calls do nothing. The app calls this at launch,
@@ -131,7 +83,7 @@ final class IosViewModel: ObservableObject {
         Self.startDependencies()
         communication.startObserving()
 
-        // Load selected voice and languages for welcome gating and UI
+        // Load selected voice and languages for welcome gating and UI.
         speech.refreshVoiceAndLanguages()
         await speech.refreshLanguagePreferences()
         await refreshSettings()
@@ -139,24 +91,13 @@ final class IosViewModel: ObservableObject {
         // these values, and must not switch the workspace the user is in.
         boardModeEnabled = settings.startupUsesScreens
 
-        // Determine if cloud TTS providers are configured
+        // Determine if cloud TTS providers are configured.
         await speech.refreshAllProviderConfigurations()
 
-        // Start connectivity monitoring
-        ConnectivityMonitor.shared.onChange { [weak self] online in
-            guard let self = self else { return }
-            self.boardsFacade.updateBoardSetSpeechCacheOnline(online: online)
-            if online {
-                Task {
-                    try? await self.boardsFacade.cacheAllBoardSetFields()
-                    try? await self.boardsFacade.retryBoardSetSpeechCaching()
-                }
-            }
-        }
+        screens.startSpeechCacheConnectivityMonitoring()
         await communication.loadTypingTray()
-        // Load boardsets and selected board for symbol mode
-        await loadBoardSets()
-        _ = try? await boardsFacade.cacheAllBoardSetFields()
+        await screens.loadBoardSets()
+        await screens.warmSpeechCache()
     }
 
     func refreshSettings() async {
@@ -171,7 +112,7 @@ final class IosViewModel: ObservableObject {
         await refreshSettings()
         await speech.refreshAllProviderConfigurations()
         _ = await speech.refreshVoiceAndLanguages().value
-        await loadBoardSets()
+        await screens.loadBoardSets()
     }
 }
 

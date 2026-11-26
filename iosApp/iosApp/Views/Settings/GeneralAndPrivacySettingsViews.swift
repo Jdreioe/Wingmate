@@ -24,7 +24,7 @@ struct GeneralSettingsView: View {
                         set: { settings.setStartupBoardSetId($0.isEmpty ? nil : $0) }
                     )) {
                         Text("settings.general.screen_library").tag("")
-                        ForEach(model.boardSets) { set in
+                        ForEach(model.screens.boardSets) { set in
                             Text(set.name).tag(set.id)
                         }
                     }
@@ -144,10 +144,10 @@ struct PrivacySettingsView: View {
             }
 
             Section {
-                ForEach(model.boardSets) { set in
+                ForEach(model.screens.boardSets) { set in
                     Toggle(set.name, isOn: Binding(
                         get: { set.cacheWholeSentences },
-                        set: { model.setBoardSetSentenceCaching(id: set.id, enabled: $0) }
+                        set: { model.screens.setBoardSetSentenceCaching(id: set.id, enabled: $0) }
                     ))
                 }
             } header: {

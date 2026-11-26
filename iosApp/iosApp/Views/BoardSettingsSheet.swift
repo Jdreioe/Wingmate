@@ -3,7 +3,7 @@ import SwiftUI
 /// Screen or Page settings, matching Android's inheritance: each choice can follow
 /// the level above it, or set Shown/Hidden, activation, and where to go next.
 struct BoardSettingsSheet: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var screens: ScreensModel
     let forPage: Bool
     let onClose: () -> Void
 
@@ -91,7 +91,7 @@ struct BoardSettingsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.save") { save() }
-                        .disabled(isSaving || !model.canEditSelectedBoardSet)
+                        .disabled(isSaving || !screens.canEditSelectedBoardSet)
                 }
             }
             .task { await load() }
@@ -114,7 +114,7 @@ struct BoardSettingsSheet: View {
     }
 
     private func load() async {
-        guard let draft = await model.loadBoardSettings(forPage: forPage) else { return }
+        guard let draft = await screens.loadBoardSettings(forPage: forPage) else { return }
         showLabels = draft.showLabels
         showSymbols = draft.showSymbols
         labelAtTop = draft.labelAtTop
@@ -129,7 +129,7 @@ struct BoardSettingsSheet: View {
     private func save() {
         isSaving = true
         Task {
-            let saved = await model.saveBoardSettings(
+            let saved = await screens.saveBoardSettings(
                 forPage: forPage,
                 showLabels: showLabels,
                 showSymbols: showSymbols,
