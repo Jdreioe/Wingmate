@@ -121,6 +121,12 @@ Du kan også vælge, hvor appen skal starte. Gå til **Indstillinger → Generel
 
 ![Skrivning på iPad, hvor knapperne står i en kolonne til højre (iPad)](images/ios/ipad-skrivning-oversigt.png)
 
+På iPhone Duo står knapperne under fraserne på yderdisplayet og til højre på inderskærmen, når telefonen er foldet ud og ligger på langs.
+
+<img src="images/ios/iphone-duo-skrivning-yderdisplay.png" alt="Skrivning på iPhone Duo med knapperne under fraserne på yderdisplayet" width="300">
+
+![Skrivning på den udfoldede iPhone Duo med knapperne til højre](images/ios/iphone-duo-skrivning-inderskaerm.png)
+
 ## Skrivning
 
 I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et ord eller en besked, du har gemt, fx «Tak».
@@ -336,12 +342,16 @@ Sådan forbinder du et drev:
 
 Du kan også trykke **Vælg synkroniseringsmappe**, hvis skærmene skal ligge i en mappe, du allerede synkroniserer, for eksempel i iCloud Drive.
 
+<img src="images/ios/iphone-indstillinger-synkronisering.png" alt="Synkronisering på iPhone med Vælg synkroniseringsmappe og Synkroniser nu" width="300">
+
 Vil du dele én skærm med en anden Apple-konto, gør du det fra skærmen:
 
 1. Gå til oversigten **Skærme**.
 2. Tryk **Flere handlinger** ved skærmen, og vælg **Fjernlagring**.
 3. Vælg **iCloud-deling (iPhone / iPad)**, og tryk **Del med iCloud**.
 4. Inviter personen. Data ligger på din iCloud-lagerplads. Den anden skal være logget ind på iCloud.
+
+<img src="images/ios/iphone-fjernlagring-icloud.png" alt="Fjernlagring på iPhone med iCloud-deling valgt og knappen Del med iCloud" width="300">
 
 Den, der bliver inviteret, trykker på linket. Så åbner skærmen i Wingmate. Er du kun inviteret til at se skærmen, kan du bruge den, men ikke ændre den.
 
