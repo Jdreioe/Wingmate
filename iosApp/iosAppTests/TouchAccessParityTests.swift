@@ -513,6 +513,27 @@ final class TouchAccessParityTests: XCTestCase {
     }
 
     @MainActor
+    func testIosBoardLayoutRevisionTracksOnlyRealLayoutChanges() {
+        let model = IosViewModel()
+        let field = BoardFieldItem(row: 0, column: 0, rowSpan: 1, columnSpan: 1, buttonId: "btn-1")
+        model.boardFieldItems = [field]
+        let rendered = model.boardLayoutRevision
+
+        // Republishing identical data (e.g. a no-op background sync) keeps a held gesture valid.
+        model.boardFieldItems = [field]
+        model.resolvedBoardCellGapDp = nil
+        XCTAssertEqual(model.boardLayoutRevision, rendered)
+
+        // A same-Page update that moves Buttons invalidates the revision a gesture captured at render.
+        model.boardFieldItems = [BoardFieldItem(row: 0, column: 0, rowSpan: 1, columnSpan: 2, buttonId: "btn-1")]
+        XCTAssertNotEqual(model.boardLayoutRevision, rendered)
+
+        let afterSpan = model.boardLayoutRevision
+        model.resolvedBoardCellGapDp = 12
+        XCTAssertNotEqual(model.boardLayoutRevision, afterSpan)
+    }
+
+    @MainActor
     func testIosScreenButtonDebounceIsScopedByPageId() {
         let model = IosViewModel()
         model.selectionDebounceMillis = 500

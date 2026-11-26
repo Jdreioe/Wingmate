@@ -129,7 +129,12 @@ extension SymbolBoardWorkspaceView {
                     .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
                     .contentShape(Rectangle())
                     .highPriorityGesture(
-                        touchExitGesture(pageId: board.id, layout: foldLayout, isEditMode: isEditMode),
+                        touchExitGesture(
+                            pageId: board.id,
+                            layout: foldLayout,
+                            layoutRevision: model.boardLayoutRevision,
+                            isEditMode: isEditMode
+                        ),
                         including: touchExitActive ? .gesture : .subviews
                     )
                     .padding(gridInset)
@@ -635,7 +640,7 @@ extension SymbolBoardWorkspaceView {
         return nil
     }
 
-    func touchExitGesture(pageId: String, layout: BoardFoldLayout, isEditMode: Bool) -> some Gesture {
+    func touchExitGesture(pageId: String, layout: BoardFoldLayout, layoutRevision: Int, isEditMode: Bool) -> some Gesture {
         // Use .local so coordinates share the exact origin of the framed ZStack / foldLayout.
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .updating($touchExitGestureActive) { _, state, _ in
@@ -644,7 +649,10 @@ extension SymbolBoardWorkspaceView {
             .onChanged { value in
                 // A finger held across a Page or layout change must lift before it can select again.
                 guard !touchExitLatch.ignoresFinger else { return }
-                guard model.boardCellsReady(for: pageId) else {
+                // The model published a new layout this gesture has not rendered yet: hit-testing
+                // would mix the captured geometry with new Buttons.
+                guard model.boardCellsReady(for: pageId),
+                      model.boardLayoutRevision == layoutRevision else {
                     cancelTouchExit()
                     return
                 }
@@ -673,7 +681,9 @@ extension SymbolBoardWorkspaceView {
             .onEnded { value in
                 model.cancelPreviewSpeech()
                 let latched = touchExitLatch.lift()
-                guard !latched, model.boardCellsReady(for: pageId) else {
+                guard !latched,
+                      model.boardCellsReady(for: pageId),
+                      model.boardLayoutRevision == layoutRevision else {
                     cancelTouchExit(latchUntilLift: false)
                     return
                 }

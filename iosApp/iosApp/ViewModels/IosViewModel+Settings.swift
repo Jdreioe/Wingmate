@@ -49,6 +49,9 @@ extension IosViewModel {
     func restoreCompleteBackup(path: String) async throws -> Shared.BackupOperationResult {
         let result = try await backupFacade.restoreBackup(path: path)
         if result.isSuccess {
+            // The restored library replaces the one the pending deletion came from, so its
+            // Undo must not insert an old Phrase or Category into it.
+            dismissPendingPhraseUndo()
             communicationFacade.refreshPhrases()
             try? await session.reloadAfterRestore()
             await loadTypingTray()

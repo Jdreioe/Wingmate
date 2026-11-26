@@ -133,10 +133,9 @@ extension IosViewModel {
             let snapshot = try await boardsFacade.loadBoardSnapshot(boardId: boardId)
             guard selectedBoardId == boardId, boardLoadGeneration == generation else { return }
             guard let snapshot else {
-                boardCells = []
-                boardFieldItems = []
-                loadedBoardCellsPageId = boardId
-                boardCellsLoadFailedPageId = nil
+                // The Page was deleted (e.g. by a background sync): show the same retry state
+                // as loadSelectedBoard instead of an empty grid for a Page that no longer exists.
+                resetSelectedBoardState(failedPageId: boardId)
                 return
             }
             applyBoardSnapshot(snapshot, pageId: boardId)

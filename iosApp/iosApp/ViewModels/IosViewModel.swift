@@ -137,13 +137,23 @@ final class IosViewModel: ObservableObject {
     @Published var boardSets: [BoardSetInfo] = []
     @Published var selectedBoardSetId: String? = nil
     @Published var selectedBoardId: String? = nil
-    @Published var selectedBoard: Shared.ObfBoard? = nil
+    @Published var selectedBoard: Shared.ObfBoard? = nil {
+        didSet { if oldValue != selectedBoard { boardLayoutRevision &+= 1 } }
+    }
     @Published var loadedBoardCellsPageId: String? = nil
     @Published var boardCellsLoadFailedPageId: String? = nil
+    /// Bumped whenever anything that positions Screen Buttons changes (board, cells, fields,
+    /// keyguard spacing). A Touch Exit gesture captures it at render and rejects moves and lifts
+    /// once the model has moved past the layout the Communicator was looking at.
+    var boardLayoutRevision: Int = 0
     /// Bumped by every Page load so an older same-Page completion cannot overwrite a newer one.
     var boardLoadGeneration: Int = 0
-    @Published var boardCells: [BoardCellInfo] = []
-    @Published var boardFieldItems: [BoardFieldItem] = []
+    @Published var boardCells: [BoardCellInfo] = [] {
+        didSet { if oldValue != boardCells { boardLayoutRevision &+= 1 } }
+    }
+    @Published var boardFieldItems: [BoardFieldItem] = [] {
+        didSet { if oldValue != boardFieldItems { boardLayoutRevision &+= 1 } }
+    }
     @Published var selectedBoardKeyboardLayout: String? = nil
     @Published var selectedBoardUsesSpellingMode: Bool = false
     @Published var boardPredictionsByButtonId: [String: String] = [:]
@@ -175,8 +185,12 @@ final class IosViewModel: ObservableObject {
     @Published var resolvedBoardSpeechPolicy: String? = nil
     @Published var resolvedBoardActivationBehavior: String? = nil
     @Published var resolvedBoardReturnBehavior: String? = nil
-    @Published var resolvedBoardCellGapDp: Int? = nil
-    @Published var resolvedBoardOuterMarginDp: Int? = nil
+    @Published var resolvedBoardCellGapDp: Int? = nil {
+        didSet { if oldValue != resolvedBoardCellGapDp { boardLayoutRevision &+= 1 } }
+    }
+    @Published var resolvedBoardOuterMarginDp: Int? = nil {
+        didSet { if oldValue != resolvedBoardOuterMarginDp { boardLayoutRevision &+= 1 } }
+    }
     @Published var boardStack: [String] = []
 
     var boardShowLabels: Bool { resolvedBoardShowLabels ?? showButtonLabels }
