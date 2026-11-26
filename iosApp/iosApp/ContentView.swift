@@ -122,6 +122,7 @@ struct ContentView: View {
                     if shouldShowWelcomeFlow {
                         WelcomeFlow(
                             model: model,
+                            backup: model.backup,
                             onComplete: {
                                 model.setStartupUsesScreens(model.boardModeEnabled)
                                 hasCompletedWelcome = true
@@ -218,7 +219,7 @@ struct ContentView: View {
             )
             // Editing access relocks whenever Wingmate leaves the foreground, in either workspace.
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { model.lockEditingAccess() }
+                if phase != .active { model.editingAccess.lock() }
             }
             .onKeyPress(phases: [.down, .up]) { press -> KeyPress.Result in
                 guard !shouldShowWelcomeFlow else { return .ignored }

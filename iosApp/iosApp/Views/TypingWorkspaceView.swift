@@ -132,7 +132,7 @@ struct TypingWorkspaceView: View {
         }
         .sheet(isPresented: Binding(get: { pendingMutation != nil }, set: { if !$0 { pendingMutation = nil } })) {
             EditingAccessUnlockSheet(
-                model: model,
+                editingAccess: model.editingAccess,
                 onUnlocked: {
                     let mutation = pendingMutation
                     pendingMutation = nil
@@ -707,7 +707,7 @@ struct TypingWorkspaceView: View {
     /// Runs a vocabulary change now, or after Editing access is unlocked.
     private func requestMutation(_ mutation: @escaping () -> Void) {
         Task {
-            if await model.editingIsAuthorized() {
+            if await model.editingAccess.isAuthorized() {
                 mutation()
             } else {
                 pendingMutation = mutation

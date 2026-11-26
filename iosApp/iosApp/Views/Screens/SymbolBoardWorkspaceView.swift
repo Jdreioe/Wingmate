@@ -285,7 +285,7 @@ struct SymbolBoardWorkspaceView: View {
                 showRemoteScreen = true
             }
         }) {
-            EditingAccessPinSheet(model: model, mode: pinMode, onSuccess: {
+            EditingAccessPinSheet(editingAccess: model.editingAccess, mode: pinMode, onSuccess: {
                 showEditingAccessSheet = false
                 Task { await finishEditingAccessSuccess() }
             }, onCancel: {

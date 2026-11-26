@@ -2,61 +2,6 @@ import Foundation
 import Shared
 
 extension IosViewModel {
-    func refreshEditingAccess() async {
-        guard let state = try? await settingsFacade.editingAccessState() else { return }
-        editingAccessEnabled = state.enabled
-        editingAccessUnlocked = state.unlocked
-        editingAccessSupported = state.supported
-        editingAccessRetryAt = TimeInterval(state.retryNotBeforeMillis) / 1_000
-    }
-
-    func unlockEditingAccess(_ code: String) async -> Bool {
-        let success = (try? await settingsFacade.unlockEditing(code: code))?.boolValue ?? false
-        await refreshEditingAccess()
-        return success
-    }
-
-    func configureEditingAccess(_ code: String) async -> Bool {
-        do {
-            try await settingsFacade.configureEditingAccess(code: code)
-            await refreshEditingAccess()
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    func disableEditingAccess(_ code: String) async -> Bool {
-        let success = (try? await settingsFacade.disableEditingAccess(code: code))?.boolValue ?? false
-        await refreshEditingAccess()
-        return success
-    }
-
-    func lockEditingAccess() {
-        settingsFacade.lockEditingAccess()
-        editingAccessUnlocked = !editingAccessEnabled
-    }
-
-    func editingIsAuthorized() async -> Bool {
-        await refreshEditingAccess()
-        return !editingAccessEnabled || editingAccessUnlocked
-    }
-
-    func shareCompleteBackup() async throws -> Shared.BackupOperationResult {
-        try await backupFacade.shareBackup()
-    }
-
-    func restoreCompleteBackup(path: String) async throws -> Shared.BackupOperationResult {
-        let result = try await backupFacade.restoreBackup(path: path)
-        if result.isSuccess {
-            communicationFacade.refreshPhrases()
-            try? await session.reloadAfterRestore()
-            await loadTypingTray()
-            await loadHistory()
-        }
-        return result
-    }
-
     func effectiveLanguage(for v: Shared.Voice) -> String {
         func nonEmpty(_ s: String?) -> String? {
             let t = (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -543,40 +488,6 @@ extension IosViewModel {
             self.selectedVoice = v
             if let langs = v?.supportedLanguages { self.availableLanguages = langs } else { self.availableLanguages = [] }
             if let v = v { self.primaryLanguage = effectiveLanguage(for: v) }
-        }
-    }
-
-    // MARK: - Pronunciations
-    func loadPronunciations() async {
-        // Cancellation leaves the dictionary and its notice as they were.
-        guard let result = try? await pronunciationFacade.list() else { return }
-        await MainActor.run {
-            // A failed read keeps the entries already shown.
-            if result.isSuccess { self.pronunciations = result.entries }
-            self.pronunciationError = result.isSuccess ? nil : NSLocalizedString("pronunciation.error.load_failed", comment: "")
-        }
-    }
-
-    func addPronunciation(word: String, phoneme: String, alphabet: String) {
-        Task {
-            guard let result = try? await pronunciationFacade.add(word: word, phoneme: phoneme, alphabet: alphabet) else { return }
-            await applyPronunciationChange(result)
-        }
-    }
-
-    func deletePronunciation(word: String) {
-        Task {
-            guard let result = try? await pronunciationFacade.delete(word: word) else { return }
-            await applyPronunciationChange(result)
-        }
-    }
-
-    func applyPronunciationChange(_ result: Shared.PronunciationResult) async {
-        await loadPronunciations()
-        if !result.isSuccess {
-            await MainActor.run {
-                self.pronunciationError = NSLocalizedString("pronunciation.error.save_failed", comment: "")
-            }
         }
     }
 }

@@ -10,8 +10,12 @@ final class IosViewModel: ObservableObject {
 
     @Published var state: Shared.PhraseListStoreState = Shared.PhraseListStoreState(phrases: [], categories: [], selectedCategoryId: nil, isLoading: true, error: nil)
 
+    // Feature-scoped observable models (#187)
+    let pronunciationDictionary = PronunciationDictionaryModel()
+    let editingAccess = EditingAccessModel()
+    let backup = BackupModel()
+
     // Shared feature facades, resolved from the iOS composition root after start()
-    lazy var backupFacade = IosDiBridge().backupFacade()
     lazy var speechFacade = IosDiBridge().speechFacade()
     lazy var settingsFacade = IosDiBridge().settingsFacade()
     lazy var boardsFacade = IosDiBridge().boardsFacade()
@@ -19,7 +23,6 @@ final class IosViewModel: ObservableObject {
     lazy var session = IosDiBridge().communicationSessionFacade()
     lazy var typingScreens = IosDiBridge().typingScreenFacade()
     lazy var predictionFacade = IosDiBridge().predictionFacade()
-    lazy var pronunciationFacade = IosDiBridge().pronunciationFacade()
     lazy var symbolSearchFacade = IosDiBridge().symbolSearchFacade()
     // Shared access and highlight policies; Swift only supplies events and the clock.
     let accessInput = AccessInputController()
@@ -118,10 +121,6 @@ final class IosViewModel: ObservableObject {
     @Published var startupUsesScreens: Bool = false
     @Published var startupBoardSetId: String? = nil
 
-    // Pronunciation Dictionary
-    @Published var pronunciations: [Shared.PronunciationEntry] = []
-    @Published var pronunciationError: String? = nil
-
     // Azure availability (subscription configured)
     @Published var azureConfigured: Bool = false
     @Published var googleConfigured: Bool = false
@@ -141,10 +140,6 @@ final class IosViewModel: ObservableObject {
     @Published var boardPredictionsByButtonId: [String: String] = [:]
     @Published var boardNamesById: [String: String] = [:]
     @Published var boardStatusMessage: String? = nil
-    @Published var editingAccessEnabled: Bool = false
-    @Published var editingAccessUnlocked: Bool = true
-    @Published var editingAccessSupported: Bool = true
-    @Published var editingAccessRetryAt: TimeInterval = 0
     @Published var selectionHighlightMillis: Int64 = 0 {
         didSet {
             if selectionHighlightMillis != oldValue {
@@ -247,11 +242,22 @@ final class IosViewModel: ObservableObject {
             }
         }
     await loadTypingTray()
-    // Load pronunciations
-    await loadPronunciations()
     // Load boardsets and selected board for symbol mode
     await loadBoardSets()
     _ = try? await boardsFacade.cacheAllBoardSetFields()
+    }
+
+    func reloadAfterBackupRestore() async throws {
+        communicationFacade.refreshPhrases()
+        try await session.reloadAfterRestore()
+        await loadTypingTray()
+        await loadHistory()
+        await refreshParitySettings()
+        await refreshAzureConfiguration()
+        await refreshGoogleConfiguration()
+        await refreshElevenLabsConfiguration()
+        refreshVoiceAndLanguages()
+        await loadBoardSets()
     }
 
     func retryPhraseLoad() {

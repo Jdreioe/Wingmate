@@ -3,7 +3,7 @@ import Shared
 
 extension IosViewModel {
     func setPageBackground(imageUrl: String?, fit: String) async {
-        guard canEditSelectedBoardSet, await editingIsAuthorized(),
+        guard canEditSelectedBoardSet, await editingAccess.isAuthorized(),
               let setId = selectedBoardSetId, let pageId = selectedBoardId else { return }
         do {
             _ = try await boardsFacade.setBoardBackgroundImage(boardSetId: setId, boardId: pageId, imageUrl: imageUrl, fit: fit)

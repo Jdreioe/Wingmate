@@ -119,13 +119,13 @@ struct SyncSettingsView: View {
             if let action = pendingAction {
                 pendingAction = nil
                 Task {
-                    if await model.editingIsAuthorized() {
+                    if await model.editingAccess.isAuthorized() {
                         action()
                     }
                 }
             }
         }) {
-            EditingAccessPinSheet(model: model, mode: .unlock, onSuccess: {
+            EditingAccessPinSheet(editingAccess: model.editingAccess, mode: .unlock, onSuccess: {
                 showUnlockSheet = false
             }, onCancel: {
                 pendingAction = nil
@@ -168,7 +168,7 @@ struct SyncSettingsView: View {
 
     private func runAuthorized(_ action: @escaping () -> Void) {
         Task {
-            if await model.editingIsAuthorized() {
+            if await model.editingAccess.isAuthorized() {
                 action()
             } else {
                 pendingAction = action

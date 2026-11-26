@@ -186,11 +186,11 @@ struct SettingsView: View {
         case .sync:
             SyncSettingsView(model: model)
         case .privacy:
-            PrivacySettingsView(model: model)
+            PrivacySettingsView(model: model, backup: model.backup)
         case .general:
             GeneralSettingsView(model: model, onRestartSetup: onRestartSetup)
         case .pronunciation:
-            PronunciationDictionaryView(model: model)
+            PronunciationDictionaryView(model: model.pronunciationDictionary)
         }
     }
 }

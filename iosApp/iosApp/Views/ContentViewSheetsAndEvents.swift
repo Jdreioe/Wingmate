@@ -84,7 +84,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
             }
             .sheet(isPresented: $showPronunciationSheet) {
                 NavigationStack {
-                    PronunciationDictionaryView(model: model)
+                    PronunciationDictionaryView(model: model.pronunciationDictionary)
                 }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct WelcomeFlow: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var backup: BackupModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State var currentStep = 0
     @State var modeTour: String? = nil // "keyboard" or "screens"
@@ -19,8 +20,9 @@ struct WelcomeFlow: View {
     @State var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
     @State var importingBackup = false
     @State var confirmRestoreURL: URL? = nil
-    @State var restoreStatus: String? = nil
-    @State var isRestoring = false
+
+    var restoreStatus: String? { backup.state.statusMessage }
+    var isRestoring: Bool { backup.state.isRestoring }
 
     let onComplete: () -> Void
     let onSkip: () -> Void
@@ -183,29 +185,13 @@ struct WelcomeFlow: View {
             Button("backup.replace_action", role: .destructive) {
                 guard let url = confirmRestoreURL else { return }
                 confirmRestoreURL = nil
-                isRestoring = true
-                restoreStatus = nil
                 Task {
-                    let accessed = url.startAccessingSecurityScopedResource()
-                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    do {
-                        let result = try await model.restoreCompleteBackup(path: url.path)
-                        if !result.isSuccess {
-                            restoreStatus = result.message ?? NSLocalizedString("backup.failed", comment: "")
-                            isRestoring = false
-                            return
-                        }
-                        await model.refreshParitySettings()
+                    let restored = await backup.restoreBackup(from: url) {
+                        try await model.reloadAfterBackupRestore()
                         await refreshAllProviderConfigurations()
-                        model.refreshVoiceAndLanguages()
-                        await model.loadBoardSets()
-                        isRestoring = false
+                    }.value
+                    if restored {
                         onRestoreComplete()
-                    } catch is CancellationError {
-                        isRestoring = false
-                    } catch {
-                        restoreStatus = NSLocalizedString("backup.failed", comment: "")
-                        isRestoring = false
                     }
                 }
             }

@@ -35,7 +35,7 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                EditingAccessSettingsView(model: model)
+                EditingAccessSettingsView(editingAccess: model.editingAccess)
             } header: {
                 Text("editing_access.title")
             } footer: {
@@ -54,22 +54,22 @@ struct GeneralSettingsView: View {
 }
 
 struct EditingAccessSettingsView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var editingAccess: EditingAccessModel
     @State private var pinMode: EditingAccessPinMode?
 
     var body: some View {
         Group {
-            if !model.editingAccessSupported {
+            if !editingAccess.supported {
                 Text("editing_access.unavailable").foregroundStyle(.red)
             } else {
-                if model.editingAccessEnabled {
+                if editingAccess.enabled {
                     Button("editing_access.change") { pinMode = .change }
                         .frame(minHeight: 44)
                 } else {
                     Button("editing_access.enable") { pinMode = .create }
                         .frame(minHeight: 44)
                 }
-                if model.editingAccessEnabled {
+                if editingAccess.enabled {
                     Button("editing_access.disable", role: .destructive) {
                         pinMode = .disable
                     }
@@ -77,9 +77,9 @@ struct EditingAccessSettingsView: View {
                 }
             }
         }
-        .task { await model.refreshEditingAccess() }
+        .task { _ = await editingAccess.refresh() }
         .sheet(item: $pinMode) { mode in
-            EditingAccessPinSheet(model: model, mode: mode, onSuccess: {
+            EditingAccessPinSheet(editingAccess: editingAccess, mode: mode, onSuccess: {
                 pinMode = nil
             }, onCancel: { pinMode = nil })
         }
@@ -88,29 +88,24 @@ struct EditingAccessSettingsView: View {
 
 struct PrivacySettingsView: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var backup: BackupModel
     @State private var importingBackup = false
-    @State private var backupStatus: String? = nil
     @State private var confirmRestoreURL: URL? = nil
 
     var body: some View {
         Form {
             Section {
                 Button("backup.create") {
-                    Task {
-                        do {
-                            let result = try await model.shareCompleteBackup()
-                            backupStatus = result.isSuccess
-                                ? NSLocalizedString("backup.exported", comment: "")
-                                : result.message ?? NSLocalizedString("backup.failed", comment: "")
-                        } catch is CancellationError {
-                            return
-                        } catch {
-                            backupStatus = NSLocalizedString("backup.failed", comment: "")
-                        }
-                    }
+                    backup.exportBackup()
                 }
+                .disabled(backup.state.isBusy)
                 Button("backup.restore") { importingBackup = true }
-                if let backupStatus { Text(backupStatus).font(.footnote) }
+                    .disabled(backup.state.isBusy)
+                if backup.state.isBusy {
+                    ProgressView()
+                } else if let backupStatus = backup.state.statusMessage {
+                    Text(backupStatus).font(.footnote)
+                }
             } header: {
                 Text("backup.title")
             } footer: {
@@ -172,25 +167,8 @@ struct PrivacySettingsView: View {
             Button("backup.replace_action", role: .destructive) {
                 guard let url = confirmRestoreURL else { return }
                 confirmRestoreURL = nil
-                Task {
-                    let accessed = url.startAccessingSecurityScopedResource()
-                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    do {
-                        let result = try await model.restoreCompleteBackup(path: url.path)
-                        if result.isSuccess {
-                            backupStatus = NSLocalizedString("backup.restored", comment: "")
-                            await model.refreshParitySettings()
-                            await model.refreshAzureConfiguration()
-                            model.refreshVoiceAndLanguages()
-                            await model.loadBoardSets()
-                        } else {
-                            backupStatus = result.message ?? NSLocalizedString("backup.failed", comment: "")
-                        }
-                    } catch is CancellationError {
-                        return
-                    } catch {
-                        backupStatus = NSLocalizedString("backup.failed", comment: "")
-                    }
+                backup.restoreBackup(from: url) {
+                    try await model.reloadAfterBackupRestore()
                 }
             }
             Button("common.cancel", role: .cancel) { confirmRestoreURL = nil }

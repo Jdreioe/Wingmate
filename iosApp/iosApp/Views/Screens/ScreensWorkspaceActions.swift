@@ -441,17 +441,17 @@ extension SymbolBoardWorkspaceView {
     /// Unlocking always asks for that PIN. The device passcode is not used.
     @MainActor
     func beginScreenLockToggle(_ set: BoardSetInfo) async {
-        await model.refreshEditingAccess()
+        _ = await model.editingAccess.refresh()
         pendingEditingBoardSetId = nil
         pendingDeleteBoardSetId = nil
-        if !set.isLocked && model.editingAccessEnabled {
+        if !set.isLocked && model.editingAccess.enabled {
             await model.selectBoardSet(id: set.id)
             model.setSelectedBoardSetLocked(true)
             return
         }
         pendingBoardLockId = set.id
         pendingBoardLockUnlocks = set.isLocked
-        pinMode = model.editingAccessEnabled ? .unlock : .create
+        pinMode = model.editingAccess.enabled ? .unlock : .create
         showEditingAccessSheet = true
     }
 
@@ -483,7 +483,7 @@ extension SymbolBoardWorkspaceView {
     /// Deleting is protected by Editing access; [deleteRemote] also trashes the Screen's cloud file.
     func confirmDeleteScreen(_ target: BoardSetInfo, deleteRemote: Bool) {
         Task {
-            if await model.editingIsAuthorized() {
+            if await model.editingAccess.isAuthorized() {
                 await model.deleteBoardSet(id: target.id, deleteRemote: deleteRemote)
             } else {
                 pendingDeleteBoardSetId = target.id
@@ -501,7 +501,7 @@ extension SymbolBoardWorkspaceView {
     func manageRemoteScreen(id: String?) {
         Task {
             remoteScreenId = id
-            if await model.editingIsAuthorized() {
+            if await model.editingAccess.isAuthorized() {
                 showRemoteScreen = true
             } else {
                 pendingEditingBoardSetId = nil
@@ -531,7 +531,7 @@ extension SymbolBoardWorkspaceView {
 
     @MainActor
     func requestEnterEditing(boardSetId: String) async {
-        if await model.editingIsAuthorized() {
+        if await model.editingAccess.isAuthorized() {
             route = .workspace(boardSetId: boardSetId, mode: .edit)
         } else {
             pendingEditingBoardSetId = boardSetId
