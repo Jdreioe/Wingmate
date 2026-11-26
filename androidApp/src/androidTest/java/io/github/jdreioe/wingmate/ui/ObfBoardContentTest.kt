@@ -1,11 +1,16 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -41,6 +46,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -441,7 +447,7 @@ class ObfBoardContentTest {
         var cancelCountAfterGap = 0
         composeRule.runOnIdle {
             assertEquals(emptyList<String>(), clicked)
-            assert(cancelCount > 0)
+            assertTrue(cancelCount > 0)
             cancelCountAfterGap = cancelCount
         }
 
@@ -458,7 +464,7 @@ class ObfBoardContentTest {
 
         composeRule.runOnIdle {
             assertEquals(emptyList<String>(), clicked)
-            assert(cancelCount > cancelCountAfterGap)
+            assertTrue(cancelCount > cancelCountAfterGap)
         }
     }
 
@@ -491,7 +497,7 @@ class ObfBoardContentTest {
 
         composeRule.runOnIdle {
             assertEquals(emptyList<String>(), clicked)
-            assert(cancelCount > 0)
+            assertTrue(cancelCount > 0)
         }
     }
 
@@ -527,7 +533,7 @@ class ObfBoardContentTest {
 
         composeRule.runOnIdle {
             assertEquals(emptyList<String>(), clicked)
-            assert(cancelCount > 0)
+            assertTrue(cancelCount > 0)
         }
     }
 
@@ -561,7 +567,7 @@ class ObfBoardContentTest {
         val yesBounds = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot
         val noBounds = composeRule.onNodeWithText("No").fetchSemanticsNode().boundsInRoot
         // In RTL, column 0 ("Yes") renders on the right of column 1 ("No").
-        assert(yesBounds.center.x > noBounds.center.x)
+        assertTrue(yesBounds.center.x > noBounds.center.x)
 
         val yesLocal = yesBounds.center - gridBounds.topLeft
         val noLocal = noBounds.center - gridBounds.topLeft
@@ -578,6 +584,54 @@ class ObfBoardContentTest {
         composeRule.runOnIdle {
             assertEquals(listOf("Yes", "No"), previews)
             assertEquals(listOf("yes", "no"), clicked)
+        }
+    }
+
+    @Test
+    fun touchExitDoesNotSwallowHorizontalSwipeOnHiddenOnlyPage() {
+        var totalDragX = 0f
+        val hiddenOnlyBoard = ObfBoard(
+            format = "open-board-0.1",
+            id = "hidden-only",
+            buttons = listOf(yes.copy(hidden = true)),
+            grid = ObfGrid(rows = 1, columns = 1, order = listOf(listOf("yes"))),
+        )
+        composeRule.setContent {
+            AppTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures { _, dragAmount ->
+                                totalDragX += dragAmount
+                            }
+                        }
+                ) {
+                    ObfBoardContent(
+                        state = ObfBoardUiState(
+                            board = hiddenOnlyBoard,
+                            settings = Settings(selectOnTouchExit = true),
+                        ),
+                        onButtonClick = {},
+                    )
+                }
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val bounds = grid.fetchSemanticsNode().boundsInRoot
+        val start = Offset(bounds.width * 0.8f, bounds.height * 0.5f)
+        val end = Offset(bounds.width * 0.2f, bounds.height * 0.5f)
+
+        grid.performTouchInput {
+            down(start)
+            moveTo(end)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertTrue(totalDragX < 0f)
         }
     }
 

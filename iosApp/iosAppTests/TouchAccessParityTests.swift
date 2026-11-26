@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import Shared
 @testable import Wingmate
@@ -484,5 +485,43 @@ final class TouchAccessParityTests: XCTestCase {
         // Navigating to another Page with the same Button ID allows legitimate activation immediately.
         model.selectedBoardId = "page-b"
         XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
+    }
+
+    @MainActor
+    func testIosSamePageReloadPreservesReadinessAndFailedLoadSetsRetryState() async throws {
+        let model = IosViewModel()
+        let createdSet = try await model.boardsFacade.createBoardSet(
+            name: "Reload Test Screen",
+            rows: 1,
+            columns: 2,
+            rootBoardName: "Home"
+        )
+        let pageId = createdSet.rootBoardId
+        model.selectedBoardId = pageId
+        await model.loadSelectedBoard()
+        XCTAssertTrue(model.boardCellsReady(for: pageId))
+        XCTAssertNil(model.boardCellsLoadFailedPageId)
+
+        // Reloading the same Page (e.g. settings save, lock toggle, sync) must not clear
+        // loadedBoardCellsPageId or unmount the grid.
+        var observedLoadedIds: [String?] = []
+        let cancellable = model.$loadedBoardCellsPageId
+            .dropFirst()
+            .sink { observedLoadedIds.append($0) }
+        defer { cancellable.cancel() }
+
+        await model.loadSelectedBoard()
+        XCTAssertTrue(model.boardCellsReady(for: pageId))
+        XCTAssertFalse(observedLoadedIds.contains(nil), "Same-Page reload must not clear readiness")
+
+        // A missing/failed Page load must mark boardCellsLoadFailedPageId so retry UI appears.
+        let missingPageId = "missing-page-\(UUID().uuidString)"
+        model.selectedBoardId = missingPageId
+        await model.loadSelectedBoard()
+        XCTAssertFalse(model.boardCellsReady(for: missingPageId))
+        XCTAssertEqual(model.boardCellsLoadFailedPageId, missingPageId)
+        XCTAssertNotNil(model.boardStatusMessage)
+
+        try? await model.boardsFacade.deleteBoardSet(id: createdSet.id)
     }
 }

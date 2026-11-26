@@ -12,18 +12,13 @@ extension IosViewModel {
         } catch { boardStatusMessage = NSLocalizedString("boardset.background_failed", comment: "") }
     }
 
-    func swipePage(by offset: Int, touchExitOwnsGrid: Bool? = nil) async {
-        let touchExitBlocksSwipe = touchExitOwnsGrid ?? (
-            selectOnTouchExit &&
-            selectedBoardId.map { boardCellsReady(for: $0) } == true &&
-            boardCells.contains { !$0.hidden }
-        )
+    func swipePage(by offset: Int, touchExitOwnsGrid: Bool) async {
         guard TouchExitControllerKt.pageSwipeIsActive(
                 isEditMode: false,
                 swipeBetweenPages: swipeBetweenPages,
                 holdToSelectMillis: Int64(holdToSelectMillis),
                 selectOnTouchDown: selectOnTouchDown,
-                selectOnTouchExit: touchExitBlocksSwipe,
+                selectOnTouchExit: touchExitOwnsGrid,
                 disableOnHoldToSelect: true
               ),
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
@@ -70,8 +65,9 @@ extension IosViewModel {
     }
 
     func loadSelectedBoard() async {
-        loadedBoardCellsPageId = nil
         guard let id = selectedBoardId else {
+            loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = nil
             selectedBoard = nil
             boardCells = []
             boardFieldItems = []
@@ -91,8 +87,23 @@ extension IosViewModel {
             resolvedBoardOuterMarginDp = nil
             return
         }
+        // Preserve readiness across same-Page reloads (settings save, lock toggle, background sync)
+        // so the grid stays mounted and keeps dwell/switch focus; invalidate only on Page switch.
+        if loadedBoardCellsPageId != id {
+            loadedBoardCellsPageId = nil
+        }
+        boardCellsLoadFailedPageId = nil
         do {
-            let loadedBoard = try await boardsFacade.getBoard(id: id)
+            guard let loadedBoard = try await boardsFacade.getBoard(id: id) else {
+                guard selectedBoardId == id else { return }
+                selectedBoard = nil
+                loadedBoardCellsPageId = nil
+                boardCellsLoadFailedPageId = id
+                boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
+                boardCells = []
+                boardFieldItems = []
+                return
+            }
             guard selectedBoardId == id else { return }
             selectedBoard = loadedBoard
             boardBackgroundImageUrl = selectedBoard.flatMap { boardsFacade.backgroundImageUrl(board: $0) }
@@ -120,6 +131,8 @@ extension IosViewModel {
             guard selectedBoardId == id else { return }
             selectedBoard = nil
             loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = id
+            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
             boardCells = []
             boardFieldItems = []
             selectedBoardKeyboardLayout = nil
@@ -152,6 +165,7 @@ extension IosViewModel {
     func refreshBoardCells() async {
         guard let boardId = selectedBoardId else {
             loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = nil
             boardCells = []
             boardFieldItems = []
             return
@@ -195,10 +209,13 @@ extension IosViewModel {
                 )
             }
             loadedBoardCellsPageId = boardId
+            boardCellsLoadFailedPageId = nil
             rememberScreenButtonLooks()
         } catch {
             guard selectedBoardId == boardId else { return }
             loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = boardId
+            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
             boardCells = []
             boardFieldItems = []
         }
@@ -554,6 +571,7 @@ extension IosViewModel {
                     selectedBoardId = nil
                     selectedBoard = nil
                     loadedBoardCellsPageId = nil
+                    boardCellsLoadFailedPageId = nil
                     boardCells = []
                     boardFieldItems = []
                 }

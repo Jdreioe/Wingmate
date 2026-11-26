@@ -292,6 +292,49 @@ class CommunicationFacadeTest {
         assertEquals(listOf("p-1", "p-2"), base.getAll().map { it.id })
     }
 
+    @Test
+    fun deletePublishesUndoEvenWhenPostDeleteReloadFails() = withFakeMain {
+        val base = InMemoryPhraseRepository()
+        val p1 = Phrase(id = "p-1", text = "Keep", createdAt = 1L)
+        val p2 = Phrase(id = "p-2", text = "Remove", createdAt = 2L)
+        base.add(p1)
+        base.add(p2)
+        var failNextReload = false
+        val repo = object : PhraseRepository by base {
+            override suspend fun deleteAll(ids: List<String>) {
+                base.deleteAll(ids)
+                failNextReload = true
+            }
+
+            override suspend fun getAll(): List<Phrase> {
+                if (failNextReload) {
+                    failNextReload = false
+                    throw IllegalStateException("post-delete reload failed")
+                }
+                return base.getAll()
+            }
+        }
+        val store = facade(phraseRepository = repo).phraseListStore()
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.DeletePhrase(phraseId = "p-2"))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo == null || store.state.error == null) delay(10)
+        }
+        val undo = store.state.lastDeletedUndo!!
+        assertEquals(listOf("p-2"), undo.phrases.map { it.id })
+        assertEquals(listOf("p-1"), store.state.phrases.map { it.id })
+
+        // Undo still restores the committed deletion once storage reads succeed again.
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undo.id))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo != null) delay(10)
+        }
+        assertEquals(listOf("p-1", "p-2"), base.getAll().map { it.id })
+    }
+
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */
     private suspend fun awaitRecordingPath(
         phraseRepo: PhraseRepository,

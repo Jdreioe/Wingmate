@@ -233,6 +233,7 @@ extension IosViewModel {
             selectedBoardId = nil
             selectedBoard = nil
             loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = nil
             boardCells = []
             boardFieldItems = []
             boardNamesById = [:]
@@ -389,7 +390,10 @@ extension IosViewModel {
             return
         }
         if resetStack { boardStack = [] }
-        loadedBoardCellsPageId = nil
+        if loadedBoardCellsPageId != id {
+            loadedBoardCellsPageId = nil
+        }
+        boardCellsLoadFailedPageId = nil
         selectedBoardId = id
         await loadSelectedBoard()
     }

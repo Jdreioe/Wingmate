@@ -177,6 +177,19 @@ extension SymbolBoardWorkspaceView {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .id(board.id)
             .transition(.opacity)
+        } else if let pageId = model.selectedBoardId, model.boardCellsLoadFailedPageId == pageId {
+            VStack(spacing: 12) {
+                Text(model.boardStatusMessage ?? NSLocalizedString("board_sets.error.load_failed", comment: ""))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button(NSLocalizedString("common.retry", comment: "")) {
+                    Task { await model.loadSelectedBoard() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(24)
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, alignment: .center)

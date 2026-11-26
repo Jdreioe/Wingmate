@@ -139,6 +139,7 @@ final class IosViewModel: ObservableObject {
     @Published var selectedBoardId: String? = nil
     @Published var selectedBoard: Shared.ObfBoard? = nil
     @Published var loadedBoardCellsPageId: String? = nil
+    @Published var boardCellsLoadFailedPageId: String? = nil
     @Published var boardCells: [BoardCellInfo] = []
     @Published var boardFieldItems: [BoardFieldItem] = []
     @Published var selectedBoardKeyboardLayout: String? = nil

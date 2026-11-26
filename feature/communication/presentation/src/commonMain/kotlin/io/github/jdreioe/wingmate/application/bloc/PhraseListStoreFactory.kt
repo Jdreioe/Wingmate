@@ -12,7 +12,9 @@ import io.github.jdreioe.wingmate.application.usecase.GetPhrasesAndCategoriesUse
 import io.github.jdreioe.wingmate.application.usecase.UpdatePhraseUseCase
 import io.github.jdreioe.wingmate.domain.Phrase
 import io.github.jdreioe.wingmate.domain.PhraseRepository
+import io.github.jdreioe.wingmate.domain.isGridPhrase
 import io.github.jdreioe.wingmate.domain.phraseSubtree
+import io.github.jdreioe.wingmate.domain.toFolderPhrase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -161,14 +163,17 @@ class PhraseListStoreFactory(
         private fun deleteNode(rootId: String, failureMessage: String) {
             scope.launch {
                 mutationMutex.withLock {
+                    var committedUndo: PhraseListStore.DeletedPhraseUndo? = null
+                    var remainingAfterDelete: List<Phrase>? = null
                     try {
                         val beforeAll = phraseRepository.getAll()
                         val removed = phraseSubtree(beforeAll, rootId)
+                        val removedIds = removed.mapTo(HashSet()) { it.id }
                         val indexById = beforeAll.mapIndexed { index, phrase -> phrase.id to index }.toMap()
                         val originalIndices = removed.map { indexById[it.id] ?: beforeAll.size }
                         deletePhraseUseCase(rootId)
-                        val (phrases, categories) = reloadUnlocked()
-                        val undo = removed.takeIf { it.isNotEmpty() }?.let {
+                        remainingAfterDelete = beforeAll.filterNot { it.id in removedIds }
+                        committedUndo = removed.takeIf { it.isNotEmpty() }?.let {
                             PhraseListStore.DeletedPhraseUndo(
                                 id = ++undoSequence,
                                 phrases = it,
@@ -176,10 +181,18 @@ class PhraseListStoreFactory(
                                 includesSubItems = it.size > 1,
                             )
                         }
-                        dispatch(Msg.DeletionCompleted(phrases, categories, undo))
+                        val (phrases, categories) = reloadUnlocked()
+                        dispatch(Msg.DeletionCompleted(phrases, categories, committedUndo))
                     } catch (ce: CancellationException) {
                         throw ce
                     } catch (e: Exception) {
+                        val undo = committedUndo
+                        val remaining = remainingAfterDelete
+                        if (undo != null && remaining != null) {
+                            val remainingPhrases = remaining.filter { it.isGridPhrase() }
+                            val remainingCategories = remaining.mapNotNull { it.toFolderPhrase()?.phrase }
+                            dispatch(Msg.DeletionCompleted(remainingPhrases, remainingCategories, undo))
+                        }
                         dispatch(Msg.ErrorOccurred(e.message ?: failureMessage))
                     }
                 }

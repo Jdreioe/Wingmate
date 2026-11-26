@@ -579,12 +579,14 @@ internal fun ObfBoardContent(
         val desiredHorizontalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 4.0
         val desiredVerticalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 8.0
         val desiredOuterMarginDp = effectiveBoardSettings.outerMarginDp?.toDouble() ?: 8.0
-        val touchExitEligible = state.allowTouchExit && touchExitIsActive(
-            isEditMode = isEditMode,
-            holdToSelectMillis = settings.holdToSelectMillis,
-            selectOnTouchDown = settings.selectOnTouchDown,
-            selectOnTouchExit = settings.selectOnTouchExit,
-        )
+        val touchExitEligible = state.allowTouchExit &&
+            board.hasVisibleButton(showHiddenButtons) &&
+            touchExitIsActive(
+                isEditMode = isEditMode,
+                holdToSelectMillis = settings.holdToSelectMillis,
+                selectOnTouchDown = settings.selectOnTouchDown,
+                selectOnTouchExit = settings.selectOnTouchExit,
+            )
         // Shared across Touch Exit and per-Button actions (tap, dwell, switch, accessibility)
         // so switching access methods within the debounce window cannot bypass the guard.
         val boardDebouncer = remember(homeBoardId, board.id) { SelectionDebouncer() }
