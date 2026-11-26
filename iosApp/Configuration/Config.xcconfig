@@ -11,9 +11,15 @@ MARKETING_VERSION=1.10.0
 APTABASE_APP_KEY =
 
 // Public OAuth client IDs for Google Drive (iOS client) and OneDrive (Microsoft Entra app).
-// Empty hides that storage option. Xcode Cloud fills them in ci_post_clone.sh.
+// Empty hides that storage option. Xcode Cloud writes gitignored CloudDriveOAuth.xcconfig
+// from Infisical; see ci_scripts/configure_ios_cloud_drive_oauth.sh.
+// xcconfig keeps the first assignment, so the included file wins over these defaults.
+#include? "CloudDriveOAuth.xcconfig"
 WINGMATE_GOOGLE_IOS_CLIENT_ID =
 WINGMATE_MICROSOFT_CLIENT_ID =
+// Registered in Info.plist. An empty scheme fails App Store validation.
+// CloudDriveOAuth.xcconfig replaces this with com.googleusercontent.apps.<client-id-prefix>.
+WINGMATE_GOOGLE_IOS_URL_SCHEME = com.hojmoseit.wingmate.google-oauth
 
 // Public endpoint only. The OpenSymbols secret is stored in the Worker.
 OPEN_SYMBOLS_PROXY_URL = https:/$()/wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev

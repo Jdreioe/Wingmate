@@ -11,7 +11,7 @@ artifacts: values compiled into them can be extracted.
 | Aptabase app key | Public client identifier | Android BuildConfig or iOS Info.plist build setting (Xcode Cloud `WINGMATE_APTABASE_APP_KEY`) |
 | Azure Speech subscription key | User-owned secret | Android Keystore or iOS Keychain |
 | Google Cloud Text-to-Speech API key | User-owned secret | Android Keystore or iOS Keychain |
-| Google Drive / OneDrive OAuth client IDs | Public client identifiers | Android BuildConfig or iOS Info.plist build setting (Xcode Cloud `WINGMATE_GOOGLE_IOS_CLIENT_ID`, `WINGMATE_MICROSOFT_CLIENT_ID`) |
+| Google Drive / OneDrive OAuth client IDs | Public client identifiers | Android BuildConfig, or iOS Info.plist via gitignored `CloudDriveOAuth.xcconfig`. Xcode Cloud fetches Infisical `prod` secrets `WINGMATE_GOOGLE_IOS_CLIENT_ID` and `WINGMATE_MICROSOFT_CLIENT_ID` when `INFISICAL_CLIENT_ID`, `INFISICAL_CLIENT_SECRET`, and `INFISICAL_PROJECT_ID` are set on the workflow. |
 | Remote Screen password, token, or cloud drive sign-in | User-owned secret | Android Keystore or iOS Keychain. Cloud drive tokens stay in shared Kotlin; native UI only holds an opaque account reference. Screen exports and backups omit remote links and credentials. |
 | Android keystore and passwords | Build secret | Android release CI process only |
 | Play service-account JSON | Deployment secret | Android release CI process only |
@@ -27,8 +27,10 @@ Use separate folders and machine identities with least-privilege access:
   directly to the Worker. Client build identities must not read it.
 - `/ci/android`: signing keystore, signing passwords, Play service account, and
   the Aptabase app key. Only the Google Play workflow identity may read it.
-  Xcode Cloud cannot read Infisical, so its `WINGMATE_APTABASE_APP_KEY`
-  environment variable is a manual copy of the same public key.
+  Xcode Cloud reads the public OAuth client IDs from Infisical `prod` folder `/`
+  with the machine identity in `INFISICAL_CLIENT_ID` / `INFISICAL_CLIENT_SECRET`.
+  `WINGMATE_APTABASE_APP_KEY` on the Xcode Cloud workflow remains a manual copy
+  of the same public key.
 - `/ci/worker`: Cloudflare deployment credentials if deployment is later
   automated. The Worker runtime itself does not need these.
 

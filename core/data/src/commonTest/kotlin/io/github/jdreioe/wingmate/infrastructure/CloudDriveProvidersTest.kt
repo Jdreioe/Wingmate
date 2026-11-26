@@ -205,6 +205,23 @@ class CloudDriveProvidersTest {
         assertEquals(RemoteStorageErrorCode.UNAUTHORIZED, error.code)
     }
 
+    @Test
+    fun iosOAuthRedirectsMatchTheRegisteredUrlSchemes() {
+        assertEquals(
+            "com.googleusercontent.apps.1234567890-abc123:/oauth2redirect",
+            CloudDriveOAuth.googleIosRedirectUri("1234567890-abc123.apps.googleusercontent.com"),
+        )
+        assertEquals(
+            "com.googleusercontent.apps.1234567890-abc123",
+            CloudDriveOAuth.googleIosCallbackScheme("1234567890-abc123.apps.googleusercontent.com"),
+        )
+        assertEquals("wingmate-auth://oauth", CloudDriveOAuth.microsoft("client-id").redirectUri)
+        assertEquals("msauth.com.hojmoseit.wingmate://auth", CloudDriveOAuth.MICROSOFT_IOS_REDIRECT_URI)
+        val ios = CloudDriveOAuth.microsoft("11111111-2222-3333-4444-555555555555", CloudDriveOAuth.MICROSOFT_IOS_REDIRECT_URI)
+        assertEquals(CloudDriveOAuth.MICROSOFT_IOS_REDIRECT_URI, ios.redirectUri)
+        assertEquals(listOf("Files.ReadWrite", "offline_access"), ios.scopes)
+    }
+
     private class MemoryCredentials : RemoteScreenCredentialStorage {
         val values = mutableMapOf<String, String>()
         override val isSupported = true

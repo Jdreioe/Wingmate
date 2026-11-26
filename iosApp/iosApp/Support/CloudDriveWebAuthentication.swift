@@ -5,6 +5,8 @@ import UIKit
 
 /// Shows Google and Microsoft sign-in pages for Google Drive / OneDrive Screens.
 /// The shared module runs the OAuth (PKCE) exchange and keeps the tokens in the Keychain.
+/// The callback scheme (Google's reversed client ID, or `msauth.com.hojmoseit.wingmate`)
+/// has to be listed in Info.plist. Otherwise the system sheet refuses to start.
 final class CloudDriveWebAuthentication: NSObject, IosWebAuthenticationBridge, ASWebAuthenticationPresentationContextProviding {
     static let shared = CloudDriveWebAuthentication()
 

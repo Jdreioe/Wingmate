@@ -21,20 +21,75 @@ Remote storage receives only the chosen Screen's Pages, media, name, and Screen 
 
 ## Setting up Google Drive and OneDrive
 
-A storage option appears only when its public OAuth client ID is configured. These IDs are public client identifiers, not secrets ([SECRET_BOUNDARIES.md](SECRET_BOUNDARIES.md)). All of the following is free.
+A storage option appears only when its public OAuth client ID is configured. These IDs are public client identifiers, not secrets ([SECRET_BOUNDARIES.md](SECRET_BOUNDARIES.md)). Android and iOS share one Microsoft application ID. Google uses a separate iOS client and separate Android clients. All of the following is free.
 
-**Google Cloud** (one project):
+On iOS, `ci_scripts/ci_post_clone.sh` runs `ci_scripts/configure_ios_cloud_drive_oauth.sh`. That script installs the Infisical CLI, logs in with universal auth, and reads the two secret names below from environment `prod`. It writes gitignored `iosApp/Configuration/CloudDriveOAuth.xcconfig`, which `Config.xcconfig` includes. Xcode copies the IDs into Info.plist. It also registers the Google reversed client ID and `msauth.com.hojmoseit.wingmate` as URL schemes, which the system sign-in sheet requires before it will open. When the Infisical credentials are absent, the script warns, leaves the IDs empty, and the build still succeeds with both providers hidden.
 
-1. Enable the Google Drive API.
-2. Configure the OAuth consent screen with the `.../auth/drive.file` scope.
-3. Create an **iOS** OAuth client for bundle ID `com.hojmoseit.wingmate`. Put its client ID in `WINGMATE_GOOGLE_IOS_CLIENT_ID` (Xcode Cloud environment variable, or `iosApp/Configuration/Config.xcconfig` locally).
-4. Create one **Android** OAuth client per signing key: package `com.hojmoseit.wingmate` with the Play App Signing key SHA-1 (copies installed from Google Play), and a second one with the upload key SHA-1 (release APKs installed directly, for example with `adb`). Debug builds use `com.hojmoseit.wingmate.dev` with the debug key SHA-1. A missing match makes Google answer `UNREGISTERED_ON_API_CONSOLE` (Wingmate shows "Google error 8"). Android signs in through Google Play services and needs no client ID in the app, only `WINGMATE_GOOGLE_DRIVE_ANDROID_ENABLED=true` (Infisical `prod`, `local.properties`, or a Gradle property).
+### Infisical secrets (environment `prod`, folder `/`)
 
-**Microsoft Entra** (one app registration):
+Create these in the same `prod` root the Play workflow already reads:
 
-1. Supported account types: personal Microsoft accounts and accounts in any organizational directory.
-2. Platform "Mobile and desktop applications" with redirect URI `wingmate-auth://oauth`; allow public client flows.
-3. Delegated Microsoft Graph permissions `Files.ReadWrite` and `offline_access`.
-4. Put the Application (client) ID in `WINGMATE_MICROSOFT_CLIENT_ID` for iOS (Xcode Cloud or `Config.xcconfig`) and Android (`local.properties` or Gradle properties).
+| Secret name | Value |
+|---|---|
+| `WINGMATE_GOOGLE_IOS_CLIENT_ID` | iOS OAuth client ID, ending in `.apps.googleusercontent.com` |
+| `WINGMATE_MICROSOFT_CLIENT_ID` | Entra application (client) ID, a UUID. Android release builds read this same name. |
+
+### Xcode Cloud environment variables
+
+On each release workflow, add:
+
+| Variable | Secret | Value |
+|---|---|---|
+| `INFISICAL_CLIENT_ID` | yes | Universal Auth client ID of a machine identity that can read `prod` |
+| `INFISICAL_CLIENT_SECRET` | yes | That identity's client secret |
+| `INFISICAL_PROJECT_ID` | yes | Project ID from Infisical → Project Settings → Copy Project ID |
+
+The GitHub Actions variable `INFISICAL_PROJECT_SLUG` is a different string. The CLI reads `INFISICAL_PROJECT_ID`. The same Universal Auth client ID and client secret used by the Play workflow can be copied here; Xcode Cloud has its own environment and does not see GitHub Actions secrets.
+
+Optional overrides:
+
+| Variable | Default |
+|---|---|
+| `INFISICAL_DOMAIN` | `https://eu.infisical.com` |
+| `INFISICAL_ENV` | `prod` |
+| `INFISICAL_SECRET_PATH` | `/` |
+
+`WINGMATE_GOOGLE_IOS_CLIENT_ID` and `WINGMATE_MICROSOFT_CLIENT_ID`, when set directly on the workflow, are used as-is and Infisical is not asked for that value.
+
+For a local build, create gitignored `iosApp/Configuration/CloudDriveOAuth.xcconfig`:
+
+```
+WINGMATE_GOOGLE_IOS_CLIENT_ID = 123456789012-abcdef.apps.googleusercontent.com
+WINGMATE_GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.123456789012-abcdef
+WINGMATE_MICROSOFT_CLIENT_ID = 11111111-2222-3333-4444-555555555555
+```
+
+The URL scheme is `com.googleusercontent.apps.` plus the client ID with `.apps.googleusercontent.com` removed. The configure script derives it. Keep real IDs out of `Config.xcconfig`.
+
+### Google Cloud
+
+1. Open Google Cloud Console → APIs & Services → Library, and enable **Google Drive API**.
+2. Open the OAuth consent screen. Add the scope `https://www.googleapis.com/auth/drive.file`.
+3. Open Credentials → Create credentials → OAuth client ID.
+4. Application type: **iOS**. Bundle ID: `com.hojmoseit.wingmate`. Team ID `9BB3E6JDX4` is optional.
+5. Create the client and copy the client ID. It looks like `123456789012-abcdef.apps.googleusercontent.com`. Leave the client secret blank; an iOS client does not have one.
+6. Store it as Infisical secret `WINGMATE_GOOGLE_IOS_CLIENT_ID` in environment `prod`, folder `/`.
+
+Google fixes the iOS redirect at `com.googleusercontent.apps.<client-id-prefix>:/oauth2redirect`. The build registers that scheme from the client ID. There is no redirect field to fill in on the iOS client.
+
+Android signs in through Google Play services and embeds no Google client ID. Set `WINGMATE_GOOGLE_DRIVE_ANDROID_ENABLED=true` (Infisical `prod`, `local.properties`, or a Gradle property). In the same Google Cloud project, create one Android OAuth client per signing key: package `com.hojmoseit.wingmate` with the Play App Signing SHA-1, another with the upload-key SHA-1, and debug package `com.hojmoseit.wingmate.dev` with the debug-key SHA-1. A missing match makes Google answer `UNREGISTERED_ON_API_CONSOLE` (Wingmate shows "Google error 8").
+
+### Microsoft Entra
+
+1. Open Microsoft Entra admin center → App registrations → New registration. Name it `Wingmate`.
+2. Supported account types: **Accounts in any organizational directory and personal Microsoft accounts**.
+3. Register the app. Open Authentication → Add a platform → **Mobile and desktop applications**.
+4. Add both redirect URIs on that platform:
+   - iOS: `msauth.com.hojmoseit.wingmate://auth`
+   - Android: `wingmate-auth://oauth`
+5. Turn on **Allow public client flows**. Leave the client secret blank.
+6. Open API permissions → Add a permission → Microsoft Graph → Delegated. Add `Files.ReadWrite` and `offline_access`. Personal Microsoft accounts can consent themselves. A school tenant may still require its IT team to approve Wingmate once.
+7. Copy the Application (client) ID from Overview.
+8. Store it as Infisical secret `WINGMATE_MICROSOFT_CLIENT_ID` in environment `prod`, folder `/`. Use the same value for Android (`WINGMATE_MICROSOFT_CLIENT_ID` in `local.properties`, a Gradle property, or the environment). If an Entra app already exists for Android, add the iOS redirect URI to that app and reuse its application ID.
 
 Supporters who edit on a PC need a browser editor; see [issue #381](https://github.com/Jdreioe/Wingmate/issues/381).

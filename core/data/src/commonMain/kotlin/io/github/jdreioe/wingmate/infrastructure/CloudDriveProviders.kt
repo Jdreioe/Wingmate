@@ -100,8 +100,14 @@ object CloudDriveOAuth {
     const val MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     val MICROSOFT_SCOPES = listOf("Files.ReadWrite", "offline_access")
 
-    /** Mobile redirect registered for the Microsoft Entra app (custom scheme). */
+    /** Android redirect registered for the Microsoft Entra app (custom scheme). */
     const val MOBILE_REDIRECT_URI = "wingmate-auth://oauth"
+
+    /**
+     * iOS redirect for bundle ID `com.hojmoseit.wingmate`. The scheme is listed in
+     * `iosApp/iosApp/Info.plist` so the system sign-in sheet can return to the app.
+     */
+    const val MICROSOFT_IOS_REDIRECT_URI = "msauth.com.hojmoseit.wingmate://auth"
 
     fun google(clientId: String, redirectUri: String, clientSecret: String? = null) = OAuthClientConfig(
         kind = RemoteStorageKind.GOOGLE_DRIVE,

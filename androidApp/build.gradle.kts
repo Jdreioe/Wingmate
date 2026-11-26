@@ -91,7 +91,8 @@ android {
     val openSymbolsProxyUrl = resolveConfigValue("OPENSYMBOLS_PROXY_URL")
         .ifBlank { "https://wingmate-opensymbols-proxy.patient-mouse-467e.workers.dev" }
     // Remote Screens cloud drives. Both are public client configuration, not secrets.
-    // OneDrive: the Microsoft Entra app (client) ID whose redirect is wingmate-auth://oauth.
+    // OneDrive: the Microsoft Entra application (client) ID.
+    // Android redirects to wingmate-auth://oauth. iOS redirects to msauth.com.hojmoseit.wingmate://auth.
     val microsoftClientId = resolveConfigValue("MICROSOFT_CLIENT_ID")
     // Google Drive: true once an Android OAuth client (package + signing SHA-1) exists in Google Cloud.
     val googleDriveAndroidEnabled = resolveConfigValue("GOOGLE_DRIVE_ANDROID_ENABLED").toBoolean()

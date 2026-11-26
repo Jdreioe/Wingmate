@@ -59,6 +59,7 @@ xcuserdata/
 !.env.example
 **/*Secrets.xcconfig
 iosApp/Configuration/Secrets.xcconfig
+iosApp/Configuration/CloudDriveOAuth.xcconfig
 iosApp/iosApp/Info-Local.plist
 iosApp/iosApp/Info.local.plist
 

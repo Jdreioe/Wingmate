@@ -188,3 +188,5 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Enforce client secret boundaries
         run: bash ci_scripts/check_client_secret_boundary.sh
+      - name: Test iOS cloud drive OAuth client configuration
+        run: bash ci_scripts/test_configure_ios_cloud_drive_oauth.sh

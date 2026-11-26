@@ -56,7 +56,7 @@ class IosCloudDriveSignIn(private val httpClient: HttpClient) : CloudDriveSignIn
                 add(CloudDriveOAuth.google(id, CloudDriveOAuth.googleIosRedirectUri(id)))
             }
             registration.microsoftClientId?.trim()?.takeIf(String::isNotEmpty)?.let { id ->
-                add(CloudDriveOAuth.microsoft(id))
+                add(CloudDriveOAuth.microsoft(id, CloudDriveOAuth.MICROSOFT_IOS_REDIRECT_URI))
             }
         }
         if (configs.isEmpty()) return null

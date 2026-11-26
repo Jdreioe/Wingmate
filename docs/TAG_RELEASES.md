@@ -61,6 +61,14 @@ Workflow selection (optional GitHub repository variables or Infisical values):
    a duplicate run if an active build for that tag is already queued/running).
 3. Add a non-secret environment variable named `REQUIRE_RELEASE_TAG` with the
    value `TRUE` to both release workflows.
+4. Add the Infisical machine-identity variables from
+   [Remote Screens](REMOTE_SCREENS.md#setting-up-google-drive-and-onedrive) so
+   Google Drive and OneDrive are included: secret `INFISICAL_CLIENT_ID`, secret
+   `INFISICAL_CLIENT_SECRET`, and `INFISICAL_PROJECT_ID` (the project ID, which
+   is separate from the GitHub variable `INFISICAL_PROJECT_SLUG`). The script
+   reads Infisical `prod` secrets `WINGMATE_GOOGLE_IOS_CLIENT_ID` and
+   `WINGMATE_MICROSOFT_CLIENT_ID`. When the workflow variables are absent, the
+   build still succeeds and hides both providers.
 
 Because `POST /v1/ciBuildRuns` targets the tag's `scmGitReferences` resource,
 Xcode Cloud still populates `CI_TAG` (`staging/1.2.3` or `prod/1.2.3`). The
