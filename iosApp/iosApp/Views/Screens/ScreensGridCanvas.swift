@@ -18,6 +18,28 @@ extension SymbolBoardWorkspaceView {
             )
 
             GeometryReader { geometry in
+                let isCompact = board.compactGrid
+                let rawGridHeightFraction = board.gridHeightFraction?.floatValue
+                let hasSavedFraction = (rawGridHeightFraction?.isFinite == true) && (rawGridHeightFraction ?? 0) > 0
+                let prelimInset = min(
+                    CGFloat(max(0, desiredInset)),
+                    max(0, (geometry.size.width - CGFloat(BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP) * CGFloat(cols)) / 2),
+                    max(0, (geometry.size.height - CGFloat(BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP) * CGFloat(rows)) / 2)
+                )
+                let prelimAvailableHeight = max(0, geometry.size.height - (prelimInset * 2))
+                // Mirror Compose sizing: non-compact boards fill the full available
+                // height (fraction 1), compact/keyboard boards size to their content
+                // (fraction computed from a minimum cell height of 72pt).
+                let minCellHeight: CGFloat = 72
+                let minContentHeight = (minCellHeight * CGFloat(rows)) + (CGFloat(max(0, desiredGap)) * CGFloat(rows - 1))
+                let defaultFraction: CGFloat = isCompact
+                    ? min(max(minContentHeight / max(minContentHeight, prelimAvailableHeight), 0.15), 1)
+                    : 1
+                let gridHeightFraction: CGFloat = hasSavedFraction
+                    ? CGFloat(rawGridHeightFraction ?? 1)
+                    : defaultFraction
+                let fraction = min(max(gridHeightFraction, 0.15), 1)
+
                 let effectiveSpacing = BoardSettingsKt.effectiveKeyguardSpacing(
                     viewportWidthDp: Double(geometry.size.width),
                     viewportHeightDp: Double(geometry.size.height),
@@ -26,27 +48,14 @@ extension SymbolBoardWorkspaceView {
                     desiredHorizontalGapDp: desiredGap,
                     desiredVerticalGapDp: desiredGap,
                     desiredOuterMarginDp: desiredInset,
-                    minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP
+                    minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP,
+                    heightFraction: Double(fraction),
+                    constrainHeight: true
                 )
                 let gridGap = CGFloat(min(effectiveSpacing.horizontalGapDp, effectiveSpacing.verticalGapDp))
                 let gridInset = CGFloat(effectiveSpacing.outerMarginDp)
                 let availableHeight = max(0, geometry.size.height - (gridInset * 2))
                 let availableWidth = max(0, geometry.size.width - (gridInset * 2))
-                let isCompact = board.compactGrid
-
-                // Mirror Compose sizing: non-compact boards fill the full available
-                // height (fraction 1), compact/keyboard boards size to their content
-                // (fraction computed from a minimum cell height of 72pt).
-                let minCellHeight: CGFloat = 72
-                let minContentHeight = (minCellHeight * CGFloat(rows)) + (gridGap * CGFloat(rows - 1))
-                let defaultFraction: CGFloat = isCompact
-                    ? min(max(minContentHeight / max(minContentHeight, availableHeight), 0.15), 1)
-                    : 1
-                let rawGridHeightFraction = board.gridHeightFraction?.floatValue
-                let gridHeightFraction: CGFloat = (rawGridHeightFraction?.isFinite == true) && (rawGridHeightFraction ?? 0) > 0
-                    ? CGFloat(rawGridHeightFraction ?? 1)
-                    : defaultFraction
-                let fraction = min(max(gridHeightFraction, 0.15), 1)
 
                 let contentHeight = max(0, availableHeight * fraction)
                 let contentWidth = max(0, availableWidth)
@@ -189,7 +198,6 @@ extension SymbolBoardWorkspaceView {
                     }
                 } else {
                     guard model.holdToSelectMillis <= 0, !touchExitActive else { return }
-                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             } label: {
@@ -206,7 +214,6 @@ extension SymbolBoardWorkspaceView {
                 LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
                     .onEnded { _ in
                         guard !isEditMode, model.holdToSelectMillis > 0 else { return }
-                        if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                         activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                     }
             )
@@ -214,10 +221,12 @@ extension SymbolBoardWorkspaceView {
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
                 if hovering {
                     model.accessEnter(targetId)
-                    if model.auditoryFishingEnabled, !model.inputIsPaused,
-                       let cell,
-                       let preview = trimmed(cell.vocalization) ?? trimmed(boardCellDisplayLabel(cell)) {
-                        model.previewSpeech(preview)
+                    if model.auditoryFishingEnabled, !model.inputIsPaused {
+                        if let preview = boardCellPreviewText(cell) {
+                            model.previewSpeech(preview)
+                        } else {
+                            model.cancelPreviewSpeech()
+                        }
                     }
                 } else {
                     model.accessExit(targetId)
@@ -545,9 +554,12 @@ extension SymbolBoardWorkspaceView {
                 if effect is TouchExitEffectPreview,
                    let cell = hit?.cell,
                    model.auditoryFishingEnabled,
-                   !model.inputIsPaused,
-                   let preview = trimmed(cell.vocalization) ?? trimmed(boardCellDisplayLabel(cell)) {
-                    model.previewSpeech(preview)
+                   !model.inputIsPaused {
+                    if let preview = boardCellPreviewText(cell) {
+                        model.previewSpeech(preview)
+                    } else {
+                        model.cancelPreviewSpeech()
+                    }
                 } else if previousTargetId != nil && hit == nil {
                     model.cancelPreviewSpeech()
                 }
@@ -558,7 +570,6 @@ extension SymbolBoardWorkspaceView {
                 let effect = touchExitController.release(targetId: hit?.cell.buttonId)
                 touchExitHighlightedButtonId = touchExitController.state.activeTargetId
                 if effect is TouchExitEffectActivate, let hit {
-                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                     activateBoardCell(
                         hit.cell,
                         row: hit.field.row,

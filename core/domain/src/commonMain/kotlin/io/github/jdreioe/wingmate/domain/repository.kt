@@ -34,6 +34,32 @@ interface PhraseRepository {
     suspend fun update(phrase: Phrase): Phrase
     suspend fun delete(id: String)
     suspend fun move(fromIndex: Int, toIndex: Int)
+
+    /** Deletes all [ids] in one repository mutation where supported. */
+    suspend fun deleteAll(ids: List<String>) {
+        ids.forEach { delete(it) }
+    }
+
+    /** Restores missing [entries] (phrase paired with original repository index) in one mutation where supported. */
+    suspend fun restoreAtIndices(entries: List<Pair<Phrase, Int>>) {
+        if (entries.isEmpty()) return
+        val existingIds = getAll().mapTo(mutableSetOf()) { it.id }
+        val inserted = mutableListOf<Pair<String, Int>>()
+        entries.forEach { (phrase, targetIndex) ->
+            if (phrase.id.isNotBlank() && existingIds.add(phrase.id)) {
+                add(phrase)
+                inserted += phrase.id to targetIndex
+            }
+        }
+        inserted.sortedBy { it.second }.forEach { (id, targetIndex) ->
+            val all = getAll()
+            val currentIndex = all.indexOfFirst { it.id == id }
+            val clampedTarget = targetIndex.coerceIn(0, all.lastIndex.coerceAtLeast(0))
+            if (currentIndex >= 0 && currentIndex != clampedTarget) {
+                move(currentIndex, clampedTarget)
+            }
+        }
+    }
 }
 
 interface SettingsRepository {

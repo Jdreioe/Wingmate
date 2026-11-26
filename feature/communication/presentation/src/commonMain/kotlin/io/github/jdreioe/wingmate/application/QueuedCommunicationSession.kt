@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -66,8 +67,7 @@ class QueuedCommunicationSession(
     private val previewGeneration = MutableStateFlow(0L)
     private val pauseRequested = MutableStateFlow(false)
     private val pendingStop = MutableStateFlow<Job?>(null)
-    private val activePlayback = MutableStateFlow<Job?>(null)
-    private val activeRequest = MutableStateFlow<SpeechRequest?>(null)
+    private val activeSpeech = MutableStateFlow<ActiveSpeech?>(null)
     private var initialLoadFailed = false
     private var speechRequestSequence = 0L
     private var failureSequence = 0L
@@ -86,26 +86,29 @@ class QueuedCommunicationSession(
         }
         scope.launch {
             for (request in speechRequests) {
-                pendingStop.value?.join()
-                if (isStale(request)) {
-                    mutableState.update { current ->
-                        current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
-                    }
-                    continue
+                // Take ownership of the queued count immediately so cancelling a lazy
+                // playback job before play() starts can never leak queuedSpeechCount.
+                mutableState.update { current ->
+                    current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
                 }
+                pendingStop.value?.join()
+                if (isStale(request)) continue
                 // Native Stop may cancel its caller. Give each request its own job so
                 // cancellation cannot terminate the consumer of future speech requests.
                 supervisorScope {
-                    activeRequest.value = request
                     val playback = async(start = CoroutineStart.LAZY) { play(request) }
-                    activePlayback.value = playback
+                    val active = ActiveSpeech(request, playback)
+                    activeSpeech.value = active
                     try {
-                        playback.await()
+                        if (isStale(request)) {
+                            playback.cancel()
+                        } else {
+                            playback.await()
+                        }
                     } catch (cancelled: CancellationException) {
                         if (!currentCoroutineContext().isActive) throw cancelled
                     } finally {
-                        activePlayback.compareAndSet(playback, null)
-                        activeRequest.compareAndSet(request, null)
+                        activeSpeech.compareAndSet(active, null)
                     }
                 }
             }
@@ -344,17 +347,11 @@ class QueuedCommunicationSession(
     }
 
     private suspend fun play(request: SpeechRequest) {
-        if (isStale(request)) {
-            mutableState.update { current ->
-                current.copy(queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0))
-            }
-            return
-        }
+        if (isStale(request)) return
         mutableState.update { current ->
             current.copy(
                 playbackStatus = CommunicationPlaybackStatus.Preparing,
                 currentSpeechRequestId = request.id,
-                queuedSpeechCount = (current.queuedSpeechCount - 1).coerceAtLeast(0),
             )
         }
         try {
@@ -526,8 +523,8 @@ class QueuedCommunicationSession(
 
     private fun stop() {
         stopGeneration.update { it + 1 }
-        val playback = activePlayback.value
-        playback?.cancel()
+        val active = activeSpeech.getAndUpdate { null }
+        active?.job?.cancel()
         pauseRequested.value = false
         var drained = 0
         while (speechRequests.tryReceive().isSuccess) drained++
@@ -541,7 +538,7 @@ class QueuedCommunicationSession(
         val previousStop = pendingStop.value
         val stopping = scope.launch(start = CoroutineStart.LAZY) {
             previousStop?.join()
-            playback?.join()
+            active?.job?.join()
             runCatching { speechService.stop() }.onFailure { markPlaybackFailure() }
         }
         pendingStop.value = stopping
@@ -550,12 +547,12 @@ class QueuedCommunicationSession(
 
     private fun cancelPreviews() {
         previewGeneration.update { it + 1 }
-        val current = activeRequest.value ?: return
-        if (!current.isPreview) return
-        val playback = activePlayback.value
-        playback?.cancel()
+        val active = activeSpeech.value ?: return
+        if (!active.request.isPreview) return
+        if (!activeSpeech.compareAndSet(active, null)) return
+        active.job.cancel()
         mutableState.update { state ->
-            if (state.currentSpeechRequestId == current.id) {
+            if (state.currentSpeechRequestId == active.request.id) {
                 state.copy(
                     playbackStatus = CommunicationPlaybackStatus.Idle,
                     currentSpeechRequestId = null,
@@ -567,7 +564,7 @@ class QueuedCommunicationSession(
         val previousStop = pendingStop.value
         val stopping = scope.launch(start = CoroutineStart.LAZY) {
             previousStop?.join()
-            playback?.join()
+            active.job.join()
             runCatching { speechService.stop() }
         }
         pendingStop.value = stopping
@@ -600,6 +597,11 @@ class QueuedCommunicationSession(
         if (isStale(request)) throw CancellationException("Speech request stopped")
     }
 }
+
+private data class ActiveSpeech(
+    val request: SpeechRequest,
+    val job: Job,
+)
 
 private data class SpeechRequest(
     val id: Long,

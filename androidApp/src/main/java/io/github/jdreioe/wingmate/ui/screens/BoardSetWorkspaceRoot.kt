@@ -658,7 +658,10 @@ internal fun BoardSetWorkspaceRoot(
                         swipeBetweenPages = settings.swipeBetweenPages,
                         holdToSelectMillis = settings.holdToSelectMillis,
                         selectOnTouchDown = settings.selectOnTouchDown,
-                        selectOnTouchExit = settings.selectOnTouchExit,
+                        // Only suppress swipe when the active Page actually installs the Touch Exit grid.
+                        selectOnTouchExit = settings.selectOnTouchExit &&
+                            activeBoard.grid != null &&
+                            !activeBoard.isAbsoluteLayout,
                     ),
                     onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
                     modifier = Modifier.weight(1f).fillMaxWidth(),

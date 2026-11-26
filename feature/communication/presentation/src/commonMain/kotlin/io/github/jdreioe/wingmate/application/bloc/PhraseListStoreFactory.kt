@@ -49,7 +49,7 @@ class PhraseListStoreFactory(
             val undo: PhraseListStore.DeletedPhraseUndo?,
         ) : Msg()
         data class UndoRestored(val phrases: List<Phrase>, val categories: List<Phrase>) : Msg()
-        data object UndoDismissed : Msg()
+        data class UndoDismissed(val undoId: Long) : Msg()
         data class CategorySelected(val categoryId: String?) : Msg()
         data class ErrorOccurred(val error: String) : Msg()
         data class PhraseUpdated(val phrase: Phrase) : Msg()
@@ -75,8 +75,8 @@ class PhraseListStoreFactory(
                 is PhraseListStore.Intent.UpdatePhraseRecording -> updatePhraseRecording(intent.id, intent.recordingPath)
                 is PhraseListStore.Intent.MovePhrase -> movePhrase(intent.phraseId, intent.targetId)
                 is PhraseListStore.Intent.RestorePhrases -> restorePhrases(intent.phrases, emptyList())
-                PhraseListStore.Intent.UndoLastDeletion -> undoLastDeletion()
-                PhraseListStore.Intent.DismissDeletionUndo -> dispatch(Msg.UndoDismissed)
+                is PhraseListStore.Intent.UndoLastDeletion -> undoLastDeletion(intent.undoId)
+                is PhraseListStore.Intent.DismissDeletionUndo -> dispatch(Msg.UndoDismissed(intent.undoId))
             }
         }
 
@@ -241,10 +241,11 @@ class PhraseListStoreFactory(
             }
         }
 
-        private fun undoLastDeletion() {
+        private fun undoLastDeletion(undoId: Long) {
             scope.launch {
                 mutationMutex.withLock {
                     val undo = state().lastDeletedUndo ?: return@withLock
+                    if (undo.id != undoId) return@withLock
                     restorePhrasesUnlocked(undo.phrases, undo.originalIndices)
                 }
             }
@@ -261,28 +262,11 @@ class PhraseListStoreFactory(
 
         private suspend fun restorePhrasesUnlocked(phrases: List<Phrase>, originalIndices: List<Int>) {
             try {
-                val existingIds = phraseRepository.getAll().mapTo(mutableSetOf()) { it.id }
-                val inserted = mutableListOf<Pair<String, Int>>()
-                phrases.forEachIndexed { i, phrase ->
-                    if (phrase.id.isNotBlank() && existingIds.add(phrase.id)) {
-                        phraseRepository.add(phrase)
-                        originalIndices.getOrNull(i)?.let { targetIndex ->
-                            inserted += phrase.id to targetIndex
-                        }
-                    }
+                val baseIndex = phraseRepository.getAll().size
+                val entries = phrases.mapIndexed { index, phrase ->
+                    phrase to (originalIndices.getOrNull(index) ?: (baseIndex + index))
                 }
-                if (inserted.isNotEmpty()) {
-                    // Reposition in ascending original-index order so every restored item
-                    // lands back in its exact prior slot even when interleaved.
-                    inserted.sortedBy { it.second }.forEach { (id, targetIndex) ->
-                        val all = phraseRepository.getAll()
-                        val currentIndex = all.indexOfFirst { it.id == id }
-                        val clampedTarget = targetIndex.coerceIn(0, all.lastIndex.coerceAtLeast(0))
-                        if (currentIndex >= 0 && currentIndex != clampedTarget) {
-                            phraseRepository.move(currentIndex, clampedTarget)
-                        }
-                    }
-                }
+                phraseRepository.restoreAtIndices(entries)
                 val (loadedPhrases, categories) = reloadUnlocked()
                 dispatch(Msg.UndoRestored(loadedPhrases, categories))
             } catch (ce: CancellationException) {
@@ -317,7 +301,7 @@ class PhraseListStoreFactory(
                     error = null,
                     lastDeletedUndo = null,
                 )
-                Msg.UndoDismissed -> copy(lastDeletedUndo = null)
+                is Msg.UndoDismissed -> if (lastDeletedUndo?.id == msg.undoId) copy(lastDeletedUndo = null) else this
                 is Msg.CategorySelected -> copy(selectedCategoryId = msg.categoryId)
                 is Msg.ErrorOccurred -> copy(error = msg.error, isLoading = false)
                 is Msg.PhraseUpdated -> copy(phrases = phrases.map { if (it.id == msg.phrase.id) msg.phrase else it })

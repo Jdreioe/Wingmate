@@ -38,12 +38,34 @@ class IosPhraseRepository : PhraseRepository {
         store.update(::emptyList) { it.filterNot { phrase -> phrase.id == id } }
     }
 
+    override suspend fun deleteAll(ids: List<String>) {
+        if (ids.isEmpty()) return
+        val idSet = ids.toSet()
+        store.update(::emptyList) { it.filterNot { phrase -> phrase.id in idSet } }
+    }
+
     override suspend fun move(fromIndex: Int, toIndex: Int) {
         store.update(::emptyList) { existing ->
             if (fromIndex !in existing.indices) return@update existing
             existing.toMutableList().apply {
                 val item = removeAt(fromIndex)
                 add(toIndex.coerceIn(0, size), item)
+            }
+        }
+    }
+
+    override suspend fun restoreAtIndices(entries: List<Pair<Phrase, Int>>) {
+        if (entries.isEmpty()) return
+        store.update(::emptyList) { existing ->
+            val existingIds = existing.mapTo(mutableSetOf()) { it.id }
+            val toInsert = entries
+                .filter { (phrase, _) -> phrase.id.isNotBlank() && existingIds.add(phrase.id) }
+                .sortedBy { it.second }
+            if (toInsert.isEmpty()) return@update existing
+            existing.toMutableList().apply {
+                toInsert.forEach { (phrase, targetIndex) ->
+                    add(targetIndex.coerceIn(0, size), phrase)
+                }
             }
         }
     }

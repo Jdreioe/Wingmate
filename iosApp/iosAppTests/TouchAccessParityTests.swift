@@ -140,11 +140,31 @@ final class TouchAccessParityTests: XCTestCase {
             desiredHorizontalGapDp: Double(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP),
             desiredVerticalGapDp: Double(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP),
             desiredOuterMarginDp: Double(BoardSettingsKt.MAX_KEYGUARD_OUTER_MARGIN_DP),
-            minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP
+            minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP,
+            heightFraction: 1.0,
+            constrainHeight: true
         )
         let gap = min(narrow.horizontalGapDp, narrow.verticalGapDp)
         let cellWidth = (390 - narrow.outerMarginDp * 2 - gap * 6) / 7
         XCTAssertGreaterThanOrEqual(cellWidth, BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP - 0.001)
+
+        // Saved gridHeightFraction (50% of 400pt with 6 rows and 48pt gap) clamps against final grid height.
+        let halfHeight = BoardSettingsKt.effectiveKeyguardSpacing(
+            viewportWidthDp: 400,
+            viewportHeightDp: 400,
+            columns: 4,
+            rows: 6,
+            desiredHorizontalGapDp: Double(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP),
+            desiredVerticalGapDp: Double(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP),
+            desiredOuterMarginDp: 8,
+            minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP,
+            heightFraction: 0.5,
+            constrainHeight: true
+        )
+        let halfGap = min(halfHeight.horizontalGapDp, halfHeight.verticalGapDp)
+        let halfContentHeight = (400 - halfHeight.outerMarginDp * 2) * 0.5
+        let halfCellHeight = (halfContentHeight - halfGap * 5) / 6
+        XCTAssertGreaterThanOrEqual(halfCellHeight, BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP - 0.001)
 
         // Explicit 0 pt on a Page overrides a non-zero Screen keyguard spacing.
         let screen = BoardSettingsOverrides(

@@ -23,11 +23,32 @@ class InMemoryPhraseRepository : PhraseRepository {
     override suspend fun delete(id: String) {
         store.removeAll { it.id == id }
     }
+
+    override suspend fun deleteAll(ids: List<String>) {
+        val idSet = ids.toSet()
+        store.removeAll { it.id in idSet }
+    }
+
     override suspend fun move(fromIndex: Int, toIndex: Int) {
         if (fromIndex < 0 || fromIndex >= store.size) return
         val item = store.removeAt(fromIndex)
         val insertIndex = toIndex.coerceIn(0, store.size)
         store.add(insertIndex, item)
+    }
+
+    override suspend fun restoreAtIndices(entries: List<Pair<Phrase, Int>>) {
+        if (entries.isEmpty()) return
+        val existingIds = store.mapTo(mutableSetOf()) { it.id }
+        val toInsert = entries
+            .filter { (phrase, _) -> phrase.id.isNotBlank() && existingIds.add(phrase.id) }
+            .sortedBy { it.second }
+        if (toInsert.isEmpty()) return
+        val updated = store.toMutableList()
+        toInsert.forEach { (phrase, targetIndex) ->
+            updated.add(targetIndex.coerceIn(0, updated.size), phrase)
+        }
+        store.clear()
+        store.addAll(updated)
     }
 }
 

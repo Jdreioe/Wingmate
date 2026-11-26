@@ -156,7 +156,8 @@ struct TypingWorkspaceView: View {
                         model.dismissPendingPhraseUndo()
                     } label: {
                         Image(systemName: "xmark")
-                            .frame(minWidth: 32, minHeight: 32)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("common.close"))

@@ -36,6 +36,7 @@ extension SymbolBoardWorkspaceView {
     func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
         guard let cell else { return }
         if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
+            if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
             AccessHaptics.perform(.confirm)
             if let current = model.selectedBoardId {
                 model.pushBoardNavigationStack(current)
@@ -45,6 +46,7 @@ extension SymbolBoardWorkspaceView {
         }
         // #118 / #405: enforce per-target debounce and confirm/reject haptics for every non-link Button.
         guard model.acceptActivation(targetId: cell.buttonId) else { return }
+        if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
         if cell.actions.isEmpty {
             let behavior = model.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
@@ -168,6 +170,20 @@ extension SymbolBoardWorkspaceView {
             return expanded
         }
         return trimmed(cell.label) ?? trimmed(cell.vocalization) ?? ""
+    }
+
+    /// Resolves the spoken auditory-fishing preview for a Button.
+    /// Live prediction suggestions always win over stored labels/vocalizations; empty prediction slots stay silent.
+    func boardCellPreviewText(_ cell: BoardCellInfo?) -> String? {
+        guard let cell else { return nil }
+        let isPrediction = cell.actions.contains {
+            let lower = $0.lowercased()
+            return lower == ":prediction" || lower == ":predictions"
+        }
+        if isPrediction {
+            return trimmed(model.boardPrediction(for: cell.buttonId))
+        }
+        return trimmed(cell.vocalization) ?? trimmed(boardCellDisplayLabel(cell))
     }
 
     func boardCellAccessibilityHint(_ cell: BoardCellInfo?) -> String {

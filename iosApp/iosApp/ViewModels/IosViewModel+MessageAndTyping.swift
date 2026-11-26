@@ -367,7 +367,7 @@ extension IosViewModel {
             }
             return
         }
-        guard pendingPhraseUndo?.id != undo.id else { return }
+        guard pendingPhraseUndo?.id != undo.id, !handledPhraseUndoIds.contains(undo.id) else { return }
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
 
@@ -390,17 +390,20 @@ extension IosViewModel {
     func undoPendingPhraseDeletion() {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
-        guard pendingPhraseUndo != nil else { return }
+        guard let pending = pendingPhraseUndo else { return }
+        handledPhraseUndoIds.insert(pending.id)
         pendingPhraseUndo = nil
         AccessHaptics.perform(.confirm)
-        store?.accept(intent: Shared.PhraseListStoreIntent.UndoLastDeletion())
+        store?.accept(intent: Shared.PhraseListStoreIntent.UndoLastDeletion(undoId: pending.id))
     }
 
     func dismissPendingPhraseUndo() {
         pendingPhraseUndoTask?.cancel()
         pendingPhraseUndoTask = nil
+        guard let pending = pendingPhraseUndo else { return }
+        handledPhraseUndoIds.insert(pending.id)
         pendingPhraseUndo = nil
-        store?.accept(intent: Shared.PhraseListStoreIntent.DismissDeletionUndo())
+        store?.accept(intent: Shared.PhraseListStoreIntent.DismissDeletionUndo(undoId: pending.id))
     }
 
     func updatePhrase(id: String, text: String?, name: String?, imageUrl: String? = nil) {

@@ -193,10 +193,18 @@ class CommunicationFacadeTest {
         withTimeout(5_000) {
             while (store.state.lastDeletedUndo == null) delay(10)
         }
+        val undoId = store.state.lastDeletedUndo!!.id
         assertEquals(true, store.state.lastDeletedUndo?.includesSubItems)
         assertEquals(listOf("p-0", "p-2"), phraseRepo.getAll().map { it.id })
 
-        store.accept(PhraseListStore.Intent.UndoLastDeletion)
+        // Mismatched undo/dismiss IDs must not affect a newer deletion banner.
+        store.accept(PhraseListStore.Intent.DismissDeletionUndo(undoId + 999))
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId + 999))
+        delay(50)
+        assertEquals(undoId, store.state.lastDeletedUndo?.id)
+        assertEquals(listOf("p-0", "p-2"), phraseRepo.getAll().map { it.id })
+
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId))
         withTimeout(5_000) {
             while (store.state.lastDeletedUndo != null || phraseRepo.getAll().size != 5) delay(10)
         }
@@ -209,10 +217,12 @@ class CommunicationFacadeTest {
     @Test
     fun failedDeletionDoesNotEmitUndoState() = withFakeMain {
         val base = InMemoryPhraseRepository()
-        val phrase = Phrase(id = "p-1", text = "Stay", createdAt = 1L, recordingPath = "/tmp/stay.m4a")
+        val category = Phrase(id = "cat-1", text = "Food", linkedBoardId = "cat-1", isGridItem = false, createdAt = 1L)
+        val phrase = Phrase(id = "p-1", text = "Stay", parentId = "cat-1", createdAt = 2L, recordingPath = "/tmp/stay.m4a")
+        base.add(category)
         base.add(phrase)
         val failingRepo = object : PhraseRepository by base {
-            override suspend fun delete(id: String) {
+            override suspend fun deleteAll(ids: List<String>) {
                 throw IllegalStateException("disk full")
             }
         }
@@ -221,12 +231,12 @@ class CommunicationFacadeTest {
             while (store.state.isLoading) delay(10)
         }
 
-        store.accept(PhraseListStore.Intent.DeletePhrase(phraseId = "p-1"))
+        store.accept(PhraseListStore.Intent.DeleteCategory(categoryId = "cat-1"))
         withTimeout(5_000) {
             while (store.state.error == null) delay(10)
         }
         assertEquals(null, store.state.lastDeletedUndo)
-        assertEquals(listOf(phrase), base.getAll())
+        assertEquals(listOf(category, phrase), base.getAll())
     }
 
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */

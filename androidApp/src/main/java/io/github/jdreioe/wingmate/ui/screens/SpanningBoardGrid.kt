@@ -396,6 +396,7 @@ internal fun SpanningBoardGrid(
         }
     }
     val haptics = LocalHapticFeedback.current
+    val currentTouchExitEnabled by rememberUpdatedState(touchExitEnabled)
     fun movableIndexAt(position: Offset): Int? {
         val cell = cellAt(position) ?: return null
         return movable.indexOfFirst { it.row == cell.first && it.column == cell.second }.takeIf { it >= 0 }
@@ -431,7 +432,7 @@ internal fun SpanningBoardGrid(
                     } while (event.changes.any { it.pressed })
                     return@awaitEachGesture
                 }
-                if (!reorder.gesturesEnabled) return@awaitEachGesture
+                if (!reorder.gesturesEnabled || currentTouchExitEnabled) return@awaitEachGesture
                 val interrupted = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                     while (true) {
                         val change = awaitPointerEvent(PointerEventPass.Initial).changes

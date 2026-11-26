@@ -78,13 +78,15 @@ fun effectiveKeyguardSpacing(
     desiredVerticalGapDp: Double,
     desiredOuterMarginDp: Double,
     minimumCellSizeDp: Double = MIN_KEYGUARD_CELL_SIZE_DP,
+    heightFraction: Double = 1.0,
+    constrainHeight: Boolean = true,
 ): EffectiveKeyguardSpacing {
     val safeCols = columns.coerceAtLeast(1)
     val safeRows = rows.coerceAtLeast(1)
     val clampedMargin = desiredOuterMarginDp.coerceAtLeast(0.0)
     val clampedHGap = desiredHorizontalGapDp.coerceAtLeast(0.0)
     val clampedVGap = desiredVerticalGapDp.coerceAtLeast(0.0)
-    if (viewportWidthDp <= 0.0 || viewportHeightDp <= 0.0) {
+    if (viewportWidthDp <= 0.0 || (constrainHeight && viewportHeightDp <= 0.0)) {
         return EffectiveKeyguardSpacing(
             horizontalGapDp = clampedHGap,
             verticalGapDp = clampedVGap,
@@ -93,20 +95,25 @@ fun effectiveKeyguardSpacing(
     }
 
     val minCell = minimumCellSizeDp.coerceAtLeast(1.0)
+    val clampedFraction = heightFraction.coerceIn(0.15, 1.0)
     val maxMarginX = ((viewportWidthDp - minCell * safeCols) / 2.0).coerceAtLeast(0.0)
-    val maxMarginY = ((viewportHeightDp - minCell * safeRows) / 2.0).coerceAtLeast(0.0)
-    val effectiveMargin = minOf(clampedMargin, maxMarginX, maxMarginY)
+    val effectiveMargin = if (constrainHeight) {
+        val maxMarginY = ((viewportHeightDp - (minCell * safeRows) / clampedFraction) / 2.0).coerceAtLeast(0.0)
+        minOf(clampedMargin, maxMarginX, maxMarginY)
+    } else {
+        minOf(clampedMargin, maxMarginX)
+    }
 
     val availableWidth = (viewportWidthDp - effectiveMargin * 2.0).coerceAtLeast(0.0)
-    val availableHeight = (viewportHeightDp - effectiveMargin * 2.0).coerceAtLeast(0.0)
     val effectiveHGap = if (safeCols > 1) {
         val maxGapX = ((availableWidth - minCell * safeCols) / (safeCols - 1)).coerceAtLeast(0.0)
         minOf(clampedHGap, maxGapX)
     } else {
         clampedHGap
     }
-    val effectiveVGap = if (safeRows > 1) {
-        val maxGapY = ((availableHeight - minCell * safeRows) / (safeRows - 1)).coerceAtLeast(0.0)
+    val effectiveVGap = if (constrainHeight && safeRows > 1) {
+        val effectiveContentHeight = (viewportHeightDp - effectiveMargin * 2.0).coerceAtLeast(0.0) * clampedFraction
+        val maxGapY = ((effectiveContentHeight - minCell * safeRows) / (safeRows - 1)).coerceAtLeast(0.0)
         minOf(clampedVGap, maxGapY)
     } else {
         clampedVGap
@@ -116,6 +123,24 @@ fun effectiveKeyguardSpacing(
         verticalGapDp = effectiveVGap,
         outerMarginDp = effectiveMargin,
     )
+}
+
+/**
+ * Returns whether [rows] can fit inside [availableHeightDp] without scrolling while keeping
+ * each row at least [minimumRowHeightDp] tall. Used so large Phrase libraries stay scrollable
+ * rather than crushing Buttons under Touch Exit.
+ */
+fun rowsFitWithoutScrolling(
+    availableHeightDp: Double,
+    rows: Int,
+    verticalGapDp: Double,
+    minimumRowHeightDp: Double,
+): Boolean {
+    val safeRows = rows.coerceAtLeast(1)
+    if (availableHeightDp <= 0.0) return false
+    val requiredHeight = minimumRowHeightDp.coerceAtLeast(1.0) * safeRows +
+        verticalGapDp.coerceAtLeast(0.0) * (safeRows - 1)
+    return requiredHeight <= availableHeightDp + 0.001
 }
 
 /**

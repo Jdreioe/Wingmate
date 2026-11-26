@@ -195,7 +195,7 @@ internal fun TypingScreenTray(
     val currentMovePhrase by rememberUpdatedState(onMovePhrase)
     val currentEditPhrase by rememberUpdatedState(onEditPhrase)
     val currentDeletePhrase by rememberUpdatedState(onDeletePhrase)
-    val reorder = remember(selection, vocabularyMutationsEnabled, settings.holdToSelectMillis, settings.selectOnTouchDown, settings.selectOnTouchExit) {
+    val reorder = remember(selection, vocabularyMutationsEnabled, settings.holdToSelectMillis, settings.selectOnTouchDown) {
         if (!readOnly && vocabularyMutationsEnabled) {
             BoardReorder(
                 canMove = { button -> button.projectedPhraseId()?.let(currentPhrasesById::get) != null },
@@ -204,8 +204,9 @@ internal fun TypingScreenTray(
                     val targetPhrase = target.projectedPhraseId()?.let(currentPhrasesById::get)
                     if (movedPhrase != null && targetPhrase != null) currentMovePhrase(movedPhrase, targetPhrase)
                 },
-                // Hold-to-select, touch-down, and touch-exit own touch gestures; keep reorder to accessibility actions.
-                gesturesEnabled = settings.holdToSelectMillis <= 0 && !settings.selectOnTouchDown && !settings.selectOnTouchExit,
+                // Hold-to-select and touch-down own touch gestures; Touch Exit is gated per-grid
+                // in SpanningBoardGrid so large scrollable Phrase libraries keep reorder.
+                gesturesEnabled = settings.holdToSelectMillis <= 0 && !settings.selectOnTouchDown,
                 menu = { button, dismiss ->
                     val phrase = button.projectedPhraseId()?.let(currentPhrasesById::get)
                     DropdownMenu(expanded = phrase != null, onDismissRequest = dismiss) {

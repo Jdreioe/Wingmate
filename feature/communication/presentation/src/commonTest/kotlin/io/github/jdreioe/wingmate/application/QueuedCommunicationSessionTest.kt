@@ -396,6 +396,29 @@ class QueuedCommunicationSessionTest {
         committedSpeech.releaseFirst.complete(Unit)
         runCurrent()
         assertEquals(listOf("hello"), committedSpeech.spoken)
+        assertEquals(0, committedSession.state.value.queuedSpeechCount)
+    }
+
+    @Test
+    fun `committed speech cancels active preview without losing queue count or interrupting committed playback`() = runTest {
+        val speech = RecordingSpeechService(blockFirstRequest = true)
+        val session = session(speechService = speech)
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("preview"), null, isPreview = true))
+        runCurrent()
+        speech.firstStarted.await()
+
+        // Lifting on a Button sends CancelPreview then committed SpeakPart.
+        session.accept(CommunicationAction.CancelPreview)
+        session.accept(CommunicationAction.SpeakPart(MessagePart("committed"), null, isPreview = false))
+        session.accept(CommunicationAction.CancelPreview)
+        runCurrent()
+
+        assertEquals(listOf("preview", "committed"), speech.spoken)
+        assertEquals(1, speech.stopCount)
+        assertEquals(0, session.state.value.queuedSpeechCount)
+        assertEquals(CommunicationPlaybackStatus.Idle, session.state.value.playbackStatus)
     }
 
     private fun kotlinx.coroutines.test.TestScope.session(

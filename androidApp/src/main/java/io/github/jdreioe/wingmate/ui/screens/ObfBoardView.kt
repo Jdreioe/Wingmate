@@ -282,6 +282,39 @@ private class PreviewJobHolder {
     var job: Job? = null
 }
 
+private fun ObfButton.isPredictionButton(): Boolean =
+    type == ObfButtonType.NGramPrediction ||
+        parseObfButtonActions(this).any { it === ObfButtonActionEffect.Predictions }
+
+private fun resolveTouchExitPreviewLabel(
+    button: ObfButton,
+    boardStrings: Map<String, Map<String, String>>,
+    locale: String,
+    predictionLabels: Map<String, String>,
+): String {
+    if (button.isPredictionButton()) {
+        return predictionLabels[button.id]?.trim().orEmpty()
+    }
+    return predictionLabels[button.id]
+        ?: resolveObfLocalizedString(boardStrings, locale, button.vocalization)
+        ?: resolveObfLocalizedString(boardStrings, locale, button.label)
+        ?: ""
+}
+
+private fun resolveTouchExitActivationLabel(
+    button: ObfButton,
+    boardStrings: Map<String, Map<String, String>>,
+    locale: String,
+    predictionLabels: Map<String, String>,
+): String {
+    if (button.isPredictionButton()) {
+        return predictionLabels[button.id]?.trim().orEmpty()
+    }
+    return predictionLabels[button.id]
+        ?: resolveObfLocalizedString(boardStrings, locale, button.label)
+        ?: ""
+}
+
 @Composable
 fun ObfBoardView(
     board: ObfBoard,
@@ -541,19 +574,18 @@ internal fun ObfBoardContent(
         val desiredHorizontalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 4.0
         val desiredVerticalGapDp = effectiveBoardSettings.cellGapDp?.toDouble() ?: 8.0
         val desiredOuterMarginDp = effectiveBoardSettings.outerMarginDp?.toDouble() ?: 8.0
-        val touchExitActive = touchExitIsActive(
+        val touchExitEligible = touchExitIsActive(
             isEditMode = isEditMode,
             holdToSelectMillis = settings.holdToSelectMillis,
             selectOnTouchDown = settings.selectOnTouchDown,
             selectOnTouchExit = settings.selectOnTouchExit,
         )
-        val disableGridScroll = settings.selectOnTouchDown || touchExitActive
         val touchExitDebouncer = remember(board.id) { SelectionDebouncer() }
         val hapticView = LocalView.current
         val accessHost = LocalAccessInputHost.current
         val previewScope = rememberCoroutineScope()
         val previewJobHolder = remember(board.id) { PreviewJobHolder() }
-        DisposableEffect(board.id, touchExitActive) {
+        DisposableEffect(board.id, touchExitEligible) {
             onDispose {
                 previewJobHolder.job?.cancel()
                 previewJobHolder.job = null
@@ -593,52 +625,6 @@ internal fun ObfBoardContent(
                         }
                     }
                 }
-                val boardTouchExit = if (touchExitActive) {
-                    BoardTouchExit(
-                        isButtonSelectable = isVisible,
-                        onPreview = { button ->
-                            if (settings.auditoryFishingEnabled && accessHost?.state?.isPaused != true) {
-                                val label = predictionLabels[button.id]
-                                    ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.label)
-                                    ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.vocalization)
-                                    ?: ""
-                                if (label.isNotBlank()) {
-                                    previewJobHolder.job?.cancel()
-                                    previewJobHolder.job = previewScope.launch {
-                                        feedback.onAuditoryCue(button, label)
-                                    }
-                                }
-                            }
-                        },
-                        onActivate = { item, button ->
-                            previewJobHolder.job?.cancel()
-                            previewJobHolder.job = null
-                            feedback.onCancelAuditoryCue()
-                            val accepted = touchExitDebouncer.tryActivate(
-                                button.id,
-                                Clock.System.now().toEpochMilliseconds(),
-                                settings.selectionDebounceMillis,
-                            )
-                            if (!accepted) {
-                                hapticView.performAccessHaptic(AccessHaptic.REJECT)
-                            } else {
-                                hapticView.performAccessHaptic(AccessHaptic.CONFIRM)
-                                val label = predictionLabels[button.id]
-                                    ?: resolveObfLocalizedString(board.strings, settings.primaryLanguage, button.label)
-                                    ?: ""
-                                feedback.onActivated(button, label)
-                                onCellClick?.invoke(item.row, item.column, button) ?: onButtonClick(button)
-                            }
-                        },
-                        onCancel = {
-                            previewJobHolder.job?.cancel()
-                            previewJobHolder.job = null
-                            feedback.onCancelAuditoryCue()
-                        },
-                    )
-                } else {
-                    null
-                }
                 val gridNavModifier = if (!isEditMode) {
                     Modifier
                         .fillMaxSize()
@@ -672,6 +658,101 @@ internal fun ObfBoardContent(
                     Modifier.fillMaxSize()
                 }
                 BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    // Keep scrollable Phrase trays scrollable when too many rows would crush Buttons below usable size.
+                    val rowsFitForTouchExit = scrollingMinimumCellHeight == null ||
+                        io.github.jdreioe.wingmate.domain.obf.rowsFitWithoutScrolling(
+                            availableHeightDp = (maxHeight.value - desiredOuterMarginDp * 2.0).coerceAtLeast(0.0),
+                            rows = rows,
+                            verticalGapDp = desiredVerticalGapDp,
+                            minimumRowHeightDp = minOf(scrollingMinimumCellHeight.value.toDouble(), 44.0),
+                        )
+                    val effectiveTouchExitActive = touchExitEligible && rowsFitForTouchExit
+                    val disableGridScroll = settings.selectOnTouchDown || effectiveTouchExitActive
+                    val constrainHeight = scrollingMinimumCellHeight == null || disableGridScroll
+                    val boardTouchExit = if (effectiveTouchExitActive) {
+                        BoardTouchExit(
+                            isButtonSelectable = isVisible,
+                            onPreview = { button ->
+                                if (settings.auditoryFishingEnabled && accessHost?.state?.isPaused != true) {
+                                    val label = resolveTouchExitPreviewLabel(
+                                        button = button,
+                                        boardStrings = board.strings,
+                                        locale = settings.primaryLanguage,
+                                        predictionLabels = predictionLabels,
+                                    )
+                                    previewJobHolder.job?.cancel()
+                                    previewJobHolder.job = null
+                                    if (label.isNotBlank()) {
+                                        previewJobHolder.job = previewScope.launch {
+                                            feedback.onAuditoryCue(button, label)
+                                        }
+                                    } else {
+                                        feedback.onCancelAuditoryCue()
+                                    }
+                                }
+                            },
+                            onActivate = { item, button ->
+                                previewJobHolder.job?.cancel()
+                                previewJobHolder.job = null
+                                feedback.onCancelAuditoryCue()
+                                val accepted = touchExitDebouncer.tryActivate(
+                                    button.id,
+                                    Clock.System.now().toEpochMilliseconds(),
+                                    settings.selectionDebounceMillis,
+                                )
+                                if (!accepted) {
+                                    hapticView.performAccessHaptic(AccessHaptic.REJECT)
+                                } else {
+                                    hapticView.performAccessHaptic(AccessHaptic.CONFIRM)
+                                    val label = resolveTouchExitActivationLabel(
+                                        button = button,
+                                        boardStrings = board.strings,
+                                        locale = settings.primaryLanguage,
+                                        predictionLabels = predictionLabels,
+                                    )
+                                    feedback.onActivated(button, label)
+                                    onCellClick?.invoke(item.row, item.column, button) ?: onButtonClick(button)
+                                }
+                            },
+                            onCancel = {
+                                previewJobHolder.job?.cancel()
+                                previewJobHolder.job = null
+                                feedback.onCancelAuditoryCue()
+                            },
+                        )
+                    } else {
+                        null
+                    }
+                    val prelimMarginDp = minOf(
+                        desiredOuterMarginDp,
+                        ((maxWidth.value - io.github.jdreioe.wingmate.domain.obf.MIN_KEYGUARD_CELL_SIZE_DP * columns) / 2.0)
+                            .coerceAtLeast(0.0),
+                        if (constrainHeight) {
+                            ((maxHeight.value - io.github.jdreioe.wingmate.domain.obf.MIN_KEYGUARD_CELL_SIZE_DP * rows) / 2.0)
+                                .coerceAtLeast(0.0)
+                        } else {
+                            desiredOuterMarginDp
+                        },
+                    ).dp
+                    val prelimAvailableHeight = (maxHeight - prelimMarginDp * 2).coerceAtLeast(0.dp)
+                    val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
+                        settings.inputFieldScale.coerceIn(0.5f, 2f)
+                    val minimumContentHeight = minimumCellHeight * rows + desiredVerticalGapDp.dp * (rows - 1)
+                    val defaultHeightFraction = if (board.compactGrid && prelimAvailableHeight > 0.dp) {
+                        (minimumContentHeight / prelimAvailableHeight).coerceIn(0.15f, 1f)
+                    } else {
+                        1f
+                    }
+                    var previewHeightFraction by remember(
+                        board.id,
+                        board.gridHeightFraction,
+                        maxHeight,
+                        desiredVerticalGapDp,
+                        desiredOuterMarginDp,
+                        constrainHeight,
+                    ) {
+                        mutableFloatStateOf((board.gridHeightFraction ?: defaultHeightFraction).coerceIn(0.15f, 1f))
+                    }
                     val effectiveSpacing = io.github.jdreioe.wingmate.domain.obf.effectiveKeyguardSpacing(
                         viewportWidthDp = maxWidth.value.toDouble(),
                         viewportHeightDp = maxHeight.value.toDouble(),
@@ -680,27 +761,13 @@ internal fun ObfBoardContent(
                         desiredHorizontalGapDp = desiredHorizontalGapDp,
                         desiredVerticalGapDp = desiredVerticalGapDp,
                         desiredOuterMarginDp = desiredOuterMarginDp,
+                        heightFraction = previewHeightFraction.toDouble(),
+                        constrainHeight = constrainHeight,
                     )
                     val horizontalGapDp = effectiveSpacing.horizontalGapDp.dp
                     val verticalGapDp = effectiveSpacing.verticalGapDp.dp
                     val outerMarginDp = effectiveSpacing.outerMarginDp.dp
                     val availableGridHeight = (maxHeight - outerMarginDp * 2).coerceAtLeast(0.dp)
-                    val minimumCellHeight = (if (board.compactGrid) 72.dp else 96.dp) *
-                        settings.inputFieldScale.coerceIn(0.5f, 2f)
-                    val minimumContentHeight = minimumCellHeight * rows + verticalGapDp * (rows - 1)
-                    val defaultHeightFraction = if (board.compactGrid && availableGridHeight > 0.dp) {
-                        (minimumContentHeight / availableGridHeight).coerceIn(0.15f, 1f)
-                    } else {
-                        1f
-                    }
-                    var previewHeightFraction by remember(
-                        board.id,
-                        board.gridHeightFraction,
-                        availableGridHeight,
-                        verticalGapDp,
-                    ) {
-                        mutableFloatStateOf(board.gridHeightFraction ?: defaultHeightFraction)
-                    }
                     val fittedHeight = availableGridHeight * previewHeightFraction
                     // Touch-down and Touch Exit turn scrolling off, so every row must fit.
                     val contentHeight = scrollingMinimumCellHeight

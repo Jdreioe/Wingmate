@@ -204,6 +204,7 @@ final class IosViewModel: ObservableObject {
     var lookedUpPageIds: Set<String> = []
     @Published var pendingPhraseUndo: PendingPhraseUndo? = nil
     var pendingPhraseUndoTask: Task<Void, Never>? = nil
+    var handledPhraseUndoIds: Set<Int64> = []
 
     init() {
         accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)

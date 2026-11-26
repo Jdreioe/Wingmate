@@ -308,5 +308,39 @@ class BoardSettingsTest {
         assertEquals(0.0, tiny.outerMarginDp)
         assertEquals(0.0, tiny.horizontalGapDp)
         assertEquals(0.0, tiny.verticalGapDp)
+
+        // Saved gridHeightFraction (50% of 400dp with 6 rows and 48dp gap) clamps vertical gap against final height.
+        val halfHeight = effectiveKeyguardSpacing(
+            viewportWidthDp = 400.0,
+            viewportHeightDp = 400.0,
+            columns = 4,
+            rows = 6,
+            desiredHorizontalGapDp = 48.0,
+            desiredVerticalGapDp = 48.0,
+            desiredOuterMarginDp = 8.0,
+            heightFraction = 0.5,
+        )
+        val halfContentHeight = (400.0 - halfHeight.outerMarginDp * 2.0) * 0.5
+        val halfCellHeight = (halfContentHeight - halfHeight.verticalGapDp * 5.0) / 6.0
+        assertTrue(halfCellHeight >= MIN_KEYGUARD_CELL_SIZE_DP - 0.001, "Expected cellHeight >= 24, got $halfCellHeight")
+
+        // Scrollable Phrase trays (constrainHeight = false) preserve default margin and vertical gaps with many rows.
+        val scrollable = effectiveKeyguardSpacing(
+            viewportWidthDp = 390.0,
+            viewportHeightDp = 260.0,
+            columns = 3,
+            rows = 12,
+            desiredHorizontalGapDp = 4.0,
+            desiredVerticalGapDp = 8.0,
+            desiredOuterMarginDp = 8.0,
+            constrainHeight = false,
+        )
+        assertEquals(8.0, scrollable.outerMarginDp)
+        assertEquals(8.0, scrollable.verticalGapDp)
+        assertEquals(4.0, scrollable.horizontalGapDp)
+
+        // Small Phrase trays fit without scrolling; large Phrase libraries stay scrollable.
+        assertTrue(rowsFitWithoutScrolling(availableHeightDp = 200.0, rows = 3, verticalGapDp = 8.0, minimumRowHeightDp = 44.0))
+        assertFalse(rowsFitWithoutScrolling(availableHeightDp = 200.0, rows = 30, verticalGapDp = 8.0, minimumRowHeightDp = 44.0))
     }
 }
