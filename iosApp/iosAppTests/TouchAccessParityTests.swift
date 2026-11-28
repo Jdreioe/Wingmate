@@ -284,9 +284,9 @@ final class TouchAccessParityTests: XCTestCase {
     @MainActor
     func testIosViewModelSyncsRearmDelayAtInit() {
         let model = IosViewModel()
-        XCTAssertEqual(model.accessInput.rearmDelayMillis, ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
-        model.setDwellRearmDelayMillis(250)
-        XCTAssertEqual(model.accessInput.rearmDelayMillis, 250)
+        XCTAssertEqual(model.settings.accessInput.rearmDelayMillis, ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
+        model.settings.setDwellRearmDelayMillis(250)
+        XCTAssertEqual(model.settings.accessInput.rearmDelayMillis, 250)
     }
 
     @MainActor
@@ -307,16 +307,16 @@ final class TouchAccessParityTests: XCTestCase {
             error: nil,
             lastDeletedUndo: idleUndo
         )
-        model.syncPhraseUndo(from: deletedState)
-        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
+        model.communication.syncPhraseUndo(from: deletedState)
+        XCTAssertEqual(model.communication.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
 
         // Tapping Undo disables Undo and Dismiss while restore is in flight and keeps the banner visible.
-        model.undoPendingPhraseDeletion()
-        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
+        model.communication.undoPendingPhraseDeletion()
+        XCTAssertEqual(model.communication.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
 
         // Dismiss is ignored while restore is in flight.
-        model.dismissPendingPhraseUndo()
-        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
+        model.communication.dismissPendingPhraseUndo()
+        XCTAssertEqual(model.communication.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
 
         // An unrelated store error while restoreStatus is still .restoring must NOT re-enable Undo.
         let restoringUndo = Shared.PhraseListStoreDeletedPhraseUndo(
@@ -334,8 +334,8 @@ final class TouchAccessParityTests: XCTestCase {
             error: "unrelated update error",
             lastDeletedUndo: restoringUndo
         )
-        model.syncPhraseUndo(from: unrelatedErrorState)
-        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
+        model.communication.syncPhraseUndo(from: unrelatedErrorState)
+        XCTAssertEqual(model.communication.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: true))
 
         // A restore failure scoped to this undo entry re-enables Undo so the Communicator can retry.
         let failedUndo = Shared.PhraseListStoreDeletedPhraseUndo(
@@ -353,11 +353,11 @@ final class TouchAccessParityTests: XCTestCase {
             error: "disk full",
             lastDeletedUndo: failedUndo
         )
-        model.syncPhraseUndo(from: failedState)
-        XCTAssertEqual(model.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
+        model.communication.syncPhraseUndo(from: failedState)
+        XCTAssertEqual(model.communication.pendingPhraseUndo, PendingPhraseUndo(id: 42, includesSubItems: false, isRestoring: false))
 
         // Retrying and succeeding clears lastDeletedUndo and hides the banner.
-        model.undoPendingPhraseDeletion()
+        model.communication.undoPendingPhraseDeletion()
         let restoredState = Shared.PhraseListStoreState(
             phrases: [],
             categories: [],
@@ -366,14 +366,14 @@ final class TouchAccessParityTests: XCTestCase {
             error: nil,
             lastDeletedUndo: nil
         )
-        model.syncPhraseUndo(from: restoredState)
-        XCTAssertNil(model.pendingPhraseUndo)
+        model.communication.syncPhraseUndo(from: restoredState)
+        XCTAssertNil(model.communication.pendingPhraseUndo)
     }
 
     @MainActor
     func testIosTouchExitBlocksStalePageHandoffUntilNewPageCellsLoad() async {
         let model = IosViewModel()
-        model.selectionDebounceMillis = 500
+        model.settings.selectionDebounceMillis = 500
         let pageA = ObfBoard(
             format: "open-board-0.1",
             id: "page-a",
@@ -452,53 +452,53 @@ final class TouchAccessParityTests: XCTestCase {
         )
 
         var activatedTargets: [(String, String)] = []
-        model.selectedBoardId = "page-a"
-        model.selectedBoard = pageA
-        model.boardCells = [pageACell]
-        model.loadedBoardCellsPageId = "page-a"
-        XCTAssertTrue(model.boardCellsReady(for: "page-a"))
-        XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+        model.screens.selectedBoardId = "page-a"
+        model.screens.selectedBoard = pageA
+        model.screens.boardCells = [pageACell]
+        model.screens.loadedBoardCellsPageId = "page-a"
+        XCTAssertTrue(model.screens.boardCellsReady(for: "page-a"))
+        XCTAssertFalse(model.screens.boardCellsReady(for: "page-b"))
 
-        let pageATargetId = model.screenButtonAccessTargetId(pageId: "page-a", buttonId: "b1")
-        model.registerScreenButtonAccessTarget(pageId: "page-a", row: 0, col: 0, buttonId: "b1") { cell in
+        let pageATargetId = model.screens.screenButtonAccessTargetId(pageId: "page-a", buttonId: "b1")
+        model.screens.registerScreenButtonAccessTarget(pageId: "page-a", row: 0, col: 0, buttonId: "b1") { cell in
             activatedTargets.append(("page-a", cell.label ?? ""))
         }
 
         // Starting navigation to page-b immediately invalidates page-a before page-b loads.
-        model.loadedBoardCellsPageId = nil
-        model.selectedBoardId = "page-b"
-        XCTAssertFalse(model.boardCellsReady(for: "page-a"))
-        XCTAssertFalse(model.boardCellsReady(for: "page-b"))
+        model.screens.loadedBoardCellsPageId = nil
+        model.screens.selectedBoardId = "page-b"
+        XCTAssertFalse(model.screens.boardCellsReady(for: "page-a"))
+        XCTAssertFalse(model.screens.boardCellsReady(for: "page-b"))
 
         // Attempting activation of an old cell or registered dwell/switch target during handoff
         // must be ignored before debounce or speech.
-        await model.activateBoardCell(pageACell, onPageId: "page-a", checkDebounce: true)
-        model.applyAccessInput(AccessInputEffectActivate(targetId: pageATargetId))
+        await model.screens.activateBoardCell(pageACell, onPageId: "page-a", checkDebounce: true)
+        model.settings.applyAccessInput(AccessInputEffectActivate(targetId: pageATargetId))
         XCTAssertTrue(activatedTargets.isEmpty)
 
         // Rendering page-b before its cells arrive still keeps activation and registered targets gated.
-        model.selectedBoard = pageB
-        XCTAssertFalse(model.boardCellsReady(for: "page-b"))
-        let pageBTargetId = model.screenButtonAccessTargetId(pageId: "page-b", buttonId: "b1")
-        model.registerScreenButtonAccessTarget(pageId: "page-b", row: 0, col: 0, buttonId: "b1") { cell in
+        model.screens.selectedBoard = pageB
+        XCTAssertFalse(model.screens.boardCellsReady(for: "page-b"))
+        let pageBTargetId = model.screens.screenButtonAccessTargetId(pageId: "page-b", buttonId: "b1")
+        model.screens.registerScreenButtonAccessTarget(pageId: "page-b", row: 0, col: 0, buttonId: "b1") { cell in
             activatedTargets.append(("page-b", cell.label ?? ""))
         }
-        await model.activateBoardCell(pageACell, onPageId: "page-b", checkDebounce: true)
-        model.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
+        await model.screens.activateBoardCell(pageACell, onPageId: "page-b", checkDebounce: true)
+        model.settings.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
         XCTAssertTrue(activatedTargets.isEmpty)
 
         // Neither stale attempt consumed the debounce slot for page-a or page-b.
-        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: "page-a", buttonId: "b1")))
-        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(pageId: "page-b", buttonId: "b1")))
+        XCTAssertTrue(model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(pageId: "page-a", buttonId: "b1")))
+        XCTAssertTrue(model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(pageId: "page-b", buttonId: "b1")))
 
         // Once page-b's cells finish loading with the same Button ID ("b1") and different text,
         // page-a's old registered callback stays inert and page-b's callback resolves page-b's live Button.
-        model.boardCells = [pageBCell]
-        model.loadedBoardCellsPageId = "page-b"
-        XCTAssertTrue(model.boardCellsReady(for: "page-b"))
-        model.applyAccessInput(AccessInputEffectActivate(targetId: pageATargetId))
+        model.screens.boardCells = [pageBCell]
+        model.screens.loadedBoardCellsPageId = "page-b"
+        XCTAssertTrue(model.screens.boardCellsReady(for: "page-b"))
+        model.settings.applyAccessInput(AccessInputEffectActivate(targetId: pageATargetId))
         XCTAssertTrue(activatedTargets.isEmpty)
-        model.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
+        model.settings.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
         XCTAssertEqual(activatedTargets.count, 1)
         XCTAssertEqual(activatedTargets.first?.0, "page-b")
         XCTAssertEqual(activatedTargets.first?.1, "New Button")
@@ -507,8 +507,8 @@ final class TouchAccessParityTests: XCTestCase {
         var replacedCell = pageBCell
         replacedCell.buttonId = "b2"
         replacedCell.label = "Replaced Button"
-        model.boardCells = [replacedCell]
-        model.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
+        model.screens.boardCells = [replacedCell]
+        model.settings.applyAccessInput(AccessInputEffectActivate(targetId: pageBTargetId))
         XCTAssertEqual(activatedTargets.count, 1)
     }
 
@@ -516,74 +516,75 @@ final class TouchAccessParityTests: XCTestCase {
     func testIosBoardLayoutRevisionTracksOnlyRealLayoutChanges() {
         let model = IosViewModel()
         let field = BoardFieldItem(row: 0, column: 0, rowSpan: 1, columnSpan: 1, buttonId: "btn-1")
-        model.boardFieldItems = [field]
-        let rendered = model.boardLayoutRevision
+        model.screens.boardFieldItems = [field]
+        let rendered = model.screens.boardLayoutRevision
 
         // Republishing identical data (e.g. a no-op background sync) keeps a held gesture valid.
-        model.boardFieldItems = [field]
-        model.resolvedBoardCellGapDp = nil
-        XCTAssertEqual(model.boardLayoutRevision, rendered)
+        model.screens.boardFieldItems = [field]
+        model.screens.resolvedBoardCellGapDp = nil
+        XCTAssertEqual(model.screens.boardLayoutRevision, rendered)
 
         // A same-Page update that moves Buttons invalidates the revision a gesture captured at render.
-        model.boardFieldItems = [BoardFieldItem(row: 0, column: 0, rowSpan: 1, columnSpan: 2, buttonId: "btn-1")]
-        XCTAssertNotEqual(model.boardLayoutRevision, rendered)
+        model.screens.boardFieldItems = [BoardFieldItem(row: 0, column: 0, rowSpan: 1, columnSpan: 2, buttonId: "btn-1")]
+        XCTAssertNotEqual(model.screens.boardLayoutRevision, rendered)
 
-        let afterSpan = model.boardLayoutRevision
-        model.resolvedBoardCellGapDp = 12
-        XCTAssertNotEqual(model.boardLayoutRevision, afterSpan)
+        let afterSpan = model.screens.boardLayoutRevision
+        model.screens.resolvedBoardCellGapDp = 12
+        XCTAssertNotEqual(model.screens.boardLayoutRevision, afterSpan)
     }
 
     @MainActor
     func testIosScreenButtonDebounceIsScopedByPageId() {
         let model = IosViewModel()
-        model.selectionDebounceMillis = 500
-        model.selectedBoardId = "page-a"
+        model.settings.selectionDebounceMillis = 500
+        model.screens.selectedBoardId = "page-a"
 
-        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
+        XCTAssertTrue(model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(buttonId: "btn-1")))
         // Immediate repeat on the same Page is debounced.
-        XCTAssertFalse(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
+        XCTAssertFalse(model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(buttonId: "btn-1")))
 
         // Navigating to another Page with the same Button ID allows legitimate activation immediately.
-        model.selectedBoardId = "page-b"
-        XCTAssertTrue(model.acceptActivation(targetId: model.screenButtonDebounceKey(buttonId: "btn-1")))
+        model.screens.selectedBoardId = "page-b"
+        XCTAssertTrue(model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(buttonId: "btn-1")))
     }
 
     @MainActor
     func testIosSamePageReloadPreservesReadinessAndFailedLoadSetsRetryState() async throws {
         let model = IosViewModel()
-        let createdSet = try await model.boardsFacade.createBoardSet(
+        let boardsFacade = IosDiBridge().boardsFacade()
+        let createdSet = try await boardsFacade.createBoardSet(
             name: "Reload Test Screen",
             rows: 1,
             columns: 2,
             rootBoardName: "Home"
         )
         let pageId = createdSet.rootBoardId
-        model.selectedBoardId = pageId
-        await model.loadSelectedBoard()
-        XCTAssertTrue(model.boardCellsReady(for: pageId))
-        XCTAssertNil(model.boardCellsLoadFailedPageId)
+        model.screens.selectedBoardId = pageId
+        await model.screens.loadSelectedBoard()
+        XCTAssertTrue(model.screens.boardCellsReady(for: pageId))
+        XCTAssertNil(model.screens.boardCellsLoadFailedPageId)
 
         // Reloading the same Page (e.g. settings save, lock toggle, sync) must not clear
         // loadedBoardCellsPageId or unmount the grid.
         var observedLoadedIds: [String?] = []
-        let cancellable = model.$loadedBoardCellsPageId
+        let cancellable = model.screens.$loadedBoardCellsPageId
             .dropFirst()
             .sink { observedLoadedIds.append($0) }
         defer { cancellable.cancel() }
 
-        await model.loadSelectedBoard()
-        XCTAssertTrue(model.boardCellsReady(for: pageId))
+        await model.screens.loadSelectedBoard()
+        XCTAssertTrue(model.screens.boardCellsReady(for: pageId))
         XCTAssertFalse(observedLoadedIds.contains(nil), "Same-Page reload must not clear readiness")
 
         // A missing/failed Page load must mark boardCellsLoadFailedPageId so retry UI appears
         // without polluting the shared workspace status banner.
         let missingPageId = "missing-page-\(UUID().uuidString)"
-        model.selectedBoardId = missingPageId
-        await model.loadSelectedBoard()
-        XCTAssertFalse(model.boardCellsReady(for: missingPageId))
-        XCTAssertEqual(model.boardCellsLoadFailedPageId, missingPageId)
-        XCTAssertNil(model.boardStatusMessage)
+        model.screens.selectedBoardId = missingPageId
+        await model.screens.loadSelectedBoard()
+        XCTAssertFalse(model.screens.boardCellsReady(for: missingPageId))
+        XCTAssertEqual(model.screens.boardCellsLoadFailedPageId, missingPageId)
+        XCTAssertNil(model.screens.boardStatusMessage)
 
-        try? await model.boardsFacade.deleteBoardSet(id: createdSet.id)
+        try? await boardsFacade.deleteBoardSet(id: createdSet.id)
     }
 }

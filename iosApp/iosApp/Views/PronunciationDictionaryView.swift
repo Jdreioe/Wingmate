@@ -2,22 +2,25 @@ import SwiftUI
 import Shared
 
 struct PronunciationDictionaryView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var model: PronunciationDictionaryModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var showAddSheet = false
     
     var body: some View {
         List {
-            if let error = model.pronunciationError {
+            if let error = model.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
             }
-            if model.pronunciations.isEmpty {
+            if model.loadState == .loading && model.entries.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            } else if model.entries.isEmpty {
                 Text("pronunciation.empty")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(model.pronunciations, id: \.word) { entry in
+                ForEach(model.entries, id: \.word) { entry in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(entry.word)
                             .font(.headline)
@@ -32,8 +35,8 @@ struct PronunciationDictionaryView: View {
                 }
                 .onDelete { indexSet in
                     for index in indexSet {
-                        let word = model.pronunciations[index].word
-                        model.deletePronunciation(word: word)
+                        let word = model.entries[index].word
+                        model.delete(word: word)
                     }
                 }
             }
@@ -44,19 +47,20 @@ struct PronunciationDictionaryView: View {
                 Button(action: { showAddSheet = true }) {
                     Image(systemName: "plus")
                 }
+                .disabled(model.isSaving)
             }
         }
         .sheet(isPresented: $showAddSheet) {
             AddPronunciationSheet(model: model)
         }
         .task {
-            await model.loadPronunciations()
+            await model.load()
         }
     }
 }
 
 struct AddPronunciationSheet: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var model: PronunciationDictionaryModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var word = ""
@@ -121,7 +125,7 @@ struct AddPronunciationSheet: View {
                 
                 Section {
                     Button("common.save") {
-                        model.addPronunciation(word: word, phoneme: phoneme, alphabet: alphabet)
+                        model.add(word: word, phoneme: phoneme, alphabet: alphabet)
                         dismiss()
                     }
                     .disabled(

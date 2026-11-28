@@ -26,9 +26,9 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
     var body: some View {
         content()
             .sheet(isPresented: $showVoiceSheet) {
-                VoiceSelectionSheet(selected: model.selectedVoice, primaryLanguage: model.primaryLanguage, onClose: { showVoiceSheet = false }) { v in
+                VoiceSelectionSheet(selected: model.speech.selectedVoice, primaryLanguage: model.speech.primaryLanguage, onClose: { showVoiceSheet = false }) { v in
                     Task {
-                        await model.chooseVoice(v)
+                        await model.speech.chooseVoice(v)
                         await MainActor.run { showVoiceSheet = false }
                     }
                 }
@@ -36,20 +36,22 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showLanguageSheet) {
-                LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages,
-                                       selected: model.primaryLanguage,
+                LanguageSelectionSheet(languages: model.speech.availableLanguages.isEmpty ? [model.speech.primaryLanguage] : model.speech.availableLanguages,
+                                       selected: model.speech.primaryLanguage,
                                        onClose: { showLanguageSheet = false }) { lang in
-                    model.updateLanguage(lang)
+                    model.speech.updateLanguage(lang)
                     showLanguageSheet = false
                 }
                 .presentationDetents([.height(300), .medium, .large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showSecondaryLanguageSheet) {
-                LanguageSelectionSheet(languages: model.availableLanguages.isEmpty ? [model.secondaryLanguage] : model.availableLanguages.filter { $0 != model.primaryLanguage },
-                                       selected: model.secondaryLanguage,
+                LanguageSelectionSheet(languages: model.speech.availableLanguages.isEmpty ? [model.speech.secondaryLanguage] : model.speech.availableLanguages.filter { $0 != model.speech.primaryLanguage },
+                                       selected: model.speech.secondaryLanguage,
                                        onClose: { showSecondaryLanguageSheet = false }) { lang in
-                    model.updateSecondaryLanguage(lang)
+                    model.speech.updateSecondaryLanguage(lang) {
+                        model.communication.refreshSessionLanguageHighlights()
+                    }
                     showSecondaryLanguageSheet = false
                 }
                 .presentationDetents([.height(300), .medium, .large])
@@ -57,7 +59,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
             }
             .sheet(isPresented: $showAddCategory) {
                 AddCategorySheet(onClose: { showAddCategory = false }) { name in
-                    model.addCategory(name: name)
+                    model.communication.addCategory(name: name)
                     showAddCategory = false
                 }
                 .presentationDetents([.height(200), .medium])
@@ -65,8 +67,8 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                 .presentationCornerRadius(20)
             }
             .sheet(isPresented: $showAddPhrase) {
-                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath, symbolSearch: { await model.searchSymbols(query: $0, symbolPackage: $1) }) { text, alternativeText, imageUrl, recordingPath in
-                    model.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl, recordingPath: recordingPath)
+                AddPhraseSheet(onClose: { showAddPhrase = false }, recorder: recorder, saveRecordingPath: saveRecordingPath, symbolSearch: { await model.communication.searchSymbols(query: $0, symbolPackage: $1) }) { text, alternativeText, imageUrl, recordingPath in
+                    model.communication.addPhrase(text: text, alternativeText: alternativeText, imageUrl: imageUrl, recordingPath: recordingPath)
                     showAddPhrase = false
                 }
                 .presentationDetents([.height(400), .medium, .large])
@@ -84,7 +86,7 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
             }
             .sheet(isPresented: $showPronunciationSheet) {
                 NavigationStack {
-                    PronunciationDictionaryView(model: model)
+                    PronunciationDictionaryView(model: model.pronunciationDictionary)
                 }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -110,12 +112,12 @@ struct ContentViewSheetsAndEvents<Content: View>: View {
                         phrase: phrase,
                         onClose: { editingPhrase = nil },
                         onSave: { updatedText, updatedName, updatedImageUrl in
-                            model.updatePhrase(id: phrase.id, text: updatedText, name: updatedName, imageUrl: updatedImageUrl)
+                            model.communication.updatePhrase(id: phrase.id, text: updatedText, name: updatedName, imageUrl: updatedImageUrl)
                             editingPhrase = nil
                         },
                         recorder: recorder,
                         saveRecordingPath: saveRecordingPath,
-                        symbolSearch: { await model.searchSymbols(query: $0, symbolPackage: $1) }
+                        symbolSearch: { await model.communication.searchSymbols(query: $0, symbolPackage: $1) }
                     )
                     .presentationDetents([.height(450), .medium, .large])
                     .presentationDragIndicator(.visible)

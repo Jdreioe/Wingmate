@@ -119,13 +119,13 @@ struct SyncSettingsView: View {
             if let action = pendingAction {
                 pendingAction = nil
                 Task {
-                    if await model.editingIsAuthorized() {
+                    if await model.editingAccess.isAuthorized() {
                         action()
                     }
                 }
             }
         }) {
-            EditingAccessPinSheet(model: model, mode: .unlock, onSuccess: {
+            EditingAccessPinSheet(editingAccess: model.editingAccess, mode: .unlock, onSuccess: {
                 showUnlockSheet = false
             }, onCancel: {
                 pendingAction = nil
@@ -168,7 +168,7 @@ struct SyncSettingsView: View {
 
     private func runAuthorized(_ action: @escaping () -> Void) {
         Task {
-            if await model.editingIsAuthorized() {
+            if await model.editingAccess.isAuthorized() {
                 action()
             } else {
                 pendingAction = action
@@ -185,7 +185,7 @@ struct SyncSettingsView: View {
             let result = try? await IosDiBridge().remoteScreenActions().connectCloudSync(provider: provider)
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -204,7 +204,7 @@ struct SyncSettingsView: View {
             )
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -216,7 +216,7 @@ struct SyncSettingsView: View {
             let result = try? await IosDiBridge().remoteScreenActions().disconnectSyncConnection(connectionId: id)
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -228,7 +228,7 @@ struct SyncSettingsView: View {
             let result = try? await IosDiBridge().remoteScreenActions().syncNowAll()
             statusMessage = result?.message
             await reload()
-            await model.loadBoardSets()
+            await model.screens.loadBoardSets()
         }
     }
 }

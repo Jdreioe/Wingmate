@@ -56,21 +56,21 @@ struct TypingWorkspaceView: View {
     }
 
     private var actionStripActions: [Shared.TypingTrayAction] {
-        (model.typingTray?.elements ?? [])
+        (model.communication.typingTray?.elements ?? [])
             .filter { $0.kind.name == "ActionStrip" }
             .flatMap { $0.actions }
-            .filter { $0.isVisibleForTtsEngineNamed(engineName: model.ttsEngine) }
+            .filter { $0.isVisibleForTtsEngineNamed(engineName: model.speech.ttsEngine) }
     }
 
     private var pagePhrases: [Shared.Phrase] {
         switch page {
-        case .category(let id): return model.state.phrases.filter { $0.parentId == id }
-        case .all, .history, .likelyNext: return model.state.phrases
+        case .category(let id): return model.communication.state.phrases.filter { $0.parentId == id }
+        case .all, .history, .likelyNext: return model.communication.state.phrases
         }
     }
 
     private var inputBinding: Binding<String> {
-        Binding(get: { model.input }, set: { model.onInputChanged($0) })
+        Binding(get: { model.communication.input }, set: { model.communication.onInputChanged($0) })
     }
 
     var body: some View {
@@ -109,16 +109,16 @@ struct TypingWorkspaceView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 fullscreenButton
-                    .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                    .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanTopBarEnabled)
             }
         }
         .onAppear {
             // The workspace starts on the Page the Phrase store has selected, so the shown
             // Page and the Category new Phrases go into agree.
-            if let id = model.state.selectedCategoryId, model.state.categories.contains(where: { $0.id == id }) {
+            if let id = model.communication.state.selectedCategoryId, model.communication.state.categories.contains(where: { $0.id == id }) {
                 page = .category(id)
             } else {
-                model.selectCategory(id: nil)
+                model.communication.selectCategory(id: nil)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
@@ -132,7 +132,7 @@ struct TypingWorkspaceView: View {
         }
         .sheet(isPresented: Binding(get: { pendingMutation != nil }, set: { if !$0 { pendingMutation = nil } })) {
             EditingAccessUnlockSheet(
-                model: model,
+                editingAccess: model.editingAccess,
                 onUnlocked: {
                     let mutation = pendingMutation
                     pendingMutation = nil
@@ -143,18 +143,18 @@ struct TypingWorkspaceView: View {
         }
         .fullScreenCover(isPresented: $isMessageFullscreen) { fullscreenMessage }
         .overlay(alignment: .bottom) {
-            if let undo = model.pendingPhraseUndo {
+            if let undo = model.communication.pendingPhraseUndo {
                 HStack(spacing: 12) {
                     Text(LocalizedStringKey(undo.includesSubItems ? "phrase.deleted_with_subitems" : "phrase.deleted"))
                         .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button("action.undo") {
-                        model.undoPendingPhraseDeletion()
+                        model.communication.undoPendingPhraseDeletion()
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(undo.isRestoring)
                     Button {
-                        model.dismissPendingPhraseUndo()
+                        model.communication.dismissPendingPhraseUndo()
                     } label: {
                         Image(systemName: "xmark")
                             .frame(minWidth: 44, minHeight: 44)
@@ -173,7 +173,7 @@ struct TypingWorkspaceView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: model.pendingPhraseUndo)
+        .animation(.easeInOut(duration: 0.2), value: model.communication.pendingPhraseUndo)
     }
 
     // MARK: - Compact Layout (Outer Display / Standard iPhone / Narrow Split)
@@ -184,7 +184,7 @@ struct TypingWorkspaceView: View {
             statusRows
             // Free space above the Message bar; the bar and its input surface stay at the bottom.
             Spacer(minLength: 0)
-            if onScreenKeyboard && model.likelyNextAvailable {
+            if onScreenKeyboard && model.communication.likelyNextAvailable {
                 likelyNextRow
             }
             rowsAboveBar
@@ -192,9 +192,9 @@ struct TypingWorkspaceView: View {
             // Only for a hardware keyboard; the on-screen one brings its own suggestions.
             if messageFocused && !onScreenKeyboard {
                 PredictionBar(
-                    result: model.predictions,
-                    onWordSelected: { model.applyWordPrediction($0) },
-                    onLetterSelected: { model.applyLetterPrediction($0) },
+                    result: model.communication.predictions,
+                    onWordSelected: { model.communication.applyWordPrediction($0) },
+                    onLetterSelected: { model.communication.applyLetterPrediction($0) },
                     fontSizeScale: 1.0
                 )
             }
@@ -235,15 +235,15 @@ struct TypingWorkspaceView: View {
                         wideTopSpeechControls
                             .frame(width: min(220, size.width * 0.3))
                     }
-                    if let held = model.heldMessageText {
+                    if let held = model.communication.heldMessageText {
                         HeldMessageRow(model: model, heldText: held)
                     }
                     #if DEBUG
                     if messageFocused && !onScreenKeyboard {
                         PredictionBar(
-                            result: model.predictions,
-                            onWordSelected: { model.applyWordPrediction($0) },
-                            onLetterSelected: { model.applyLetterPrediction($0) },
+                            result: model.communication.predictions,
+                            onWordSelected: { model.communication.applyWordPrediction($0) },
+                            onLetterSelected: { model.communication.applyLetterPrediction($0) },
                             fontSizeScale: 1.0
                         )
                     }
@@ -280,15 +280,15 @@ struct TypingWorkspaceView: View {
         VStack(spacing: 10) {
             statusRows
             wideMessageInput(height: messageHeight)
-            if onScreenKeyboard && model.likelyNextAvailable {
+            if onScreenKeyboard && model.communication.likelyNextAvailable {
                 likelyNextRow
             }
             #if DEBUG
             if messageFocused && !onScreenKeyboard {
                 PredictionBar(
-                    result: model.predictions,
-                    onWordSelected: { model.applyWordPrediction($0) },
-                    onLetterSelected: { model.applyLetterPrediction($0) },
+                    result: model.communication.predictions,
+                    onWordSelected: { model.communication.applyWordPrediction($0) },
+                    onLetterSelected: { model.communication.applyLetterPrediction($0) },
                     fontSizeScale: 1.0
                 )
             }
@@ -301,18 +301,18 @@ struct TypingWorkspaceView: View {
     private func wideMessageInput(height: CGFloat) -> some View {
         MultiLineInput(
             text: inputBinding,
-            selectedRange: Binding(get: { model.inputSelectionRange }, set: { model.inputSelectionRange = $0 }),
+            selectedRange: Binding(get: { model.communication.inputSelectionRange }, set: { model.communication.inputSelectionRange = $0 }),
             isFocused: $messageFocused,
             placeholder: NSLocalizedString("tts.placeholder", comment: ""),
             fontSize: CGFloat(uiInputFontSize),
             minHeight: height,
             maxHeight: max(height, CGFloat(uiTextFieldHeight) * 2.2),
-            scanEnabled: model.scanningEnabled,
-            includeInScanArea: model.scanInputFieldEnabled,
-            secondaryLanguage: model.secondaryLanguage,
-            secondaryLanguageRanges: model.secondaryLanguageRanges,
-            allowsSecondaryLanguageAction: model.hasUsableSecondaryLanguage,
-            onMarkSelectionAsSecondaryLanguage: { model.markSelectionAsSecondaryLanguage(range: $0) }
+            scanEnabled: model.settings.scanningEnabled,
+            includeInScanArea: model.settings.scanInputFieldEnabled,
+            secondaryLanguage: model.speech.secondaryLanguage,
+            secondaryLanguageRanges: model.communication.secondaryLanguageRanges,
+            allowsSecondaryLanguageAction: model.communication.hasUsableSecondaryLanguage,
+            onMarkSelectionAsSecondaryLanguage: { model.communication.markSelectionAsSecondaryLanguage(range: $0) }
         )
         .animation(.easeInOut(duration: 0.2), value: onScreenKeyboard)
     }
@@ -320,7 +320,7 @@ struct TypingWorkspaceView: View {
     @ViewBuilder
     private func wideTypingScreenSurface(showActionStrip: Bool) -> some View {
         Group {
-            if let typingTray = model.typingTray {
+            if let typingTray = model.communication.typingTray {
                 TypingTrayView(
                     model: model,
                     tray: typingTray,
@@ -335,10 +335,10 @@ struct TypingWorkspaceView: View {
                     onShowKeyboard: { messageFocused = true },
                     showActionStrip: showActionStrip
                 )
-            } else if model.typingTrayFailed {
+            } else if model.communication.typingTrayFailed {
                 VStack(spacing: 12) {
                     Text("typing.tray.unavailable").multilineTextAlignment(.center)
-                    Button("common.retry") { Task { await model.loadTypingTray() } }
+                    Button("common.retry") { Task { await model.communication.loadTypingTray() } }
                         .buttonStyle(.borderedProminent)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -351,8 +351,8 @@ struct TypingWorkspaceView: View {
     }
 
     private var wideTopSpeechControls: some View {
-        let paused = model.playback.name == "Paused"
-        let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
+        let paused = model.communication.playback.name == "Paused"
+        let playing = model.communication.playback.name == "Playing" || model.communication.playback.name == "Preparing"
         let speechActive = paused || playing
         return VStack(spacing: 8) {
             wideSpeakButton(paused: paused, playing: playing, height: 60)
@@ -364,8 +364,8 @@ struct TypingWorkspaceView: View {
     }
 
     private func wideControlPanel(availableHeight: CGFloat) -> some View {
-        let paused = model.playback.name == "Paused"
-        let playing = model.playback.name == "Playing" || model.playback.name == "Preparing"
+        let paused = model.communication.playback.name == "Paused"
+        let playing = model.communication.playback.name == "Playing" || model.communication.playback.name == "Preparing"
         let speechActive = paused || playing
         let roomy = availableHeight >= 460
         let speakHeight: CGFloat = roomy ? min(max(CGFloat(uiPlayIconSize) * 2.0, 68), 92) : 56
@@ -384,7 +384,7 @@ struct TypingWorkspaceView: View {
             }
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
-                    if let held = model.heldMessageText {
+                    if let held = model.communication.heldMessageText {
                         wideHeldMessageCard(heldText: held)
                     }
                     if !panelActions.isEmpty {
@@ -397,7 +397,7 @@ struct TypingWorkspaceView: View {
                 }
                 .padding(.bottom, 4)
             }
-            .scrollDisabled(model.selectOnTouchDown)
+            .scrollDisabled(model.settings.selectOnTouchDown)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemBackground)))
@@ -407,9 +407,9 @@ struct TypingWorkspaceView: View {
         let targetId = "typing:speak"
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         let action: () -> Void = {
-            if paused { model.resumeSpeech() }
-            else if playing { model.pauseSpeech() }
-            else { model.speakMessage() }
+            if paused { model.communication.resumeSpeech() }
+            else if playing { model.communication.pauseSpeech() }
+            else { model.communication.speakMessage() }
         }
         return Button(action: action) {
             HStack(spacing: 10) {
@@ -425,20 +425,20 @@ struct TypingWorkspaceView: View {
             .background(shape.fill(Color.accentColor))
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .accessibilityLabel(Text(LocalizedStringKey(paused ? "playback.resume" : playing ? "playback.pause" : "playback.play")))
         .accessibilityHint(Text(LocalizedStringKey(paused || playing ? "" : "accessibility.playback.play_hint")))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-        .onAppear { model.registerAccessTarget(targetId, action: action) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
-        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
         .accessTargetFocus(model: model, targetId: targetId)
     }
 
     private func wideStopButton(enabled: Bool, height: CGFloat) -> some View {
         let targetId = "typing:stop"
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-        return Button(action: model.stopSpeech) {
+        return Button(action: model.communication.stopSpeech) {
             VStack(spacing: 4) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 18, weight: .semibold))
@@ -451,14 +451,14 @@ struct TypingWorkspaceView: View {
             .background(shape.fill(Color(.tertiarySystemFill)))
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
         .accessibilityLabel(Text("playback.stop"))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-        .onAppear { model.registerAccessTarget(targetId, action: model.stopSpeech) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
-        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: model.communication.stopSpeech) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
         .accessTargetFocus(model: model, targetId: targetId)
     }
 
@@ -481,12 +481,12 @@ struct TypingWorkspaceView: View {
             .background(shape.fill(Color(.tertiarySystemFill)))
             .contentShape(shape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .accessibilityLabel(Text(LocalizedStringKey(showing ? "typing.hide_keyboard" : "typing.show_keyboard")))
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
-        .onAppear { model.registerAccessTarget(targetId, action: action) }
-        .onDisappear { model.unregisterAccessTarget(targetId) }
-        .onHover { if $0 { model.accessEnter(targetId) } else { model.accessExit(targetId) } }
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
         .accessTargetFocus(model: model, targetId: targetId)
     }
 
@@ -501,34 +501,34 @@ struct TypingWorkspaceView: View {
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Button(action: model.toggleHoldThatThought) {
+            Button(action: model.communication.toggleHoldThatThought) {
                 Label("typing.held_message.swap", systemImage: "arrow.left.arrow.right")
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemFill)))
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
             .accessibilityHint(Text("accessibility.playback.restore_thought_hint"))
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.tertiarySystemBackground)))
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
     }
 
     // MARK: - Rows
 
     @ViewBuilder
     private var statusRows: some View {
-        if let error = model.state.error {
+        if let error = model.communication.state.error {
             HStack(spacing: 8) {
                 Text("common.error").bold()
                 Text(error).frame(maxWidth: .infinity, alignment: .leading)
-                Button("common.retry") { model.retryPhraseLoad() }.buttonStyle(.bordered)
+                Button("common.retry") { model.communication.retryPhraseLoad() }.buttonStyle(.bordered)
             }
             .foregroundStyle(.red)
         }
-        if model.state.isLoading {
+        if model.communication.state.isLoading {
             ProgressView().frame(maxWidth: .infinity)
         }
     }
@@ -542,18 +542,18 @@ struct TypingWorkspaceView: View {
                 onShowKeyboard: {},
                 leading: AnyView(HStack(spacing: 8) {
                     fullscreenButton
-                    if model.hasHeldThought {
-                        Button(action: model.toggleHoldThatThought) {
+                    if model.communication.hasHeldThought {
+                        Button(action: model.communication.toggleHoldThatThought) {
                             Label("typing.held_message.swap", systemImage: "arrow.left.arrow.right")
                                 .frame(maxHeight: .infinity)
                         }
                         .buttonStyle(.bordered)
-                        .accessibilityLabel(Text(String(format: NSLocalizedString("typing.held_message", comment: ""), model.heldMessageText ?? "")))
+                        .accessibilityLabel(Text(String(format: NSLocalizedString("typing.held_message", comment: ""), model.communication.heldMessageText ?? "")))
                     }
                 })
             )
             .frame(height: 56)
-            .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
         } else {
             if onScreenKeyboard && !actionStripActions.isEmpty {
                 TypingActionStrip(
@@ -564,9 +564,9 @@ struct TypingWorkspaceView: View {
                 )
                 .frame(height: 56)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityHidden(model.scanningEnabled && !model.scanPlaybackAreaEnabled)
+                .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
             }
-            if let held = model.heldMessageText {
+            if let held = model.communication.heldMessageText {
                 HeldMessageRow(model: model, heldText: held)
             }
             if messageFocused && !pagePhrases.isEmpty {
@@ -581,17 +581,17 @@ struct TypingWorkspaceView: View {
             if !oneRowWhileTyping { Text("typing.likely_next").font(.caption).foregroundStyle(.secondary) }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 8) {
-                    ForEach(model.likelyNextPhrases.prefix(4), id: \.id) { phrase in
+                    ForEach(model.communication.likelyNextPhrases.prefix(4), id: \.id) { phrase in
                         PhraseItemView(model: model, phrase: phrase, recorder: recorder, editable: false,
                             minHeight: oneRowWhileTyping ? 48 : 56, onEdit: {}, requestMic: { _ in }, onDelete: { _ in })
                             .frame(width: 160)
                     }
                 }
             }
-            .scrollDisabled(model.selectOnTouchDown)
+            .scrollDisabled(model.settings.selectOnTouchDown)
             .frame(height: oneRowWhileTyping ? 56 : 88)
         }
-        .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled)
     }
 
     private var compactPhraseRow: some View {
@@ -602,20 +602,20 @@ struct TypingWorkspaceView: View {
                         model: model,
                         phrase: phrase,
                         recorder: recorder,
-                        editable: model.holdToSelectMillis <= 0 && !model.selectOnTouchDown,
+                        editable: model.settings.holdToSelectMillis <= 0 && !model.settings.selectOnTouchDown,
                         minHeight: 72,
                         onEdit: { requestMutation { editingPhrase = phrase } },
                         requestMic: { id in requestMutation { requestMicAndStart(id) } },
-                        onDelete: { id in requestMutation { model.deletePhrase(id: id) } }
+                        onDelete: { id in requestMutation { model.communication.deletePhrase(id: id) } }
                     )
                     .frame(width: 128)
                 }
             }
             .padding(.vertical, 4)
         }
-        .scrollDisabled(model.selectOnTouchDown)
+        .scrollDisabled(model.settings.selectOnTouchDown)
         .frame(height: 88)
-        .accessibilityHidden(model.scanningEnabled && !model.scanPhraseGridEnabled)
+        .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled)
     }
 
     // MARK: - Tray
@@ -624,7 +624,7 @@ struct TypingWorkspaceView: View {
     private func tray(height: CGFloat, bottomSafeInset: CGFloat) -> some View {
         VStack(spacing: 0) {
             trayHandle(currentHeight: height)
-            if let typingTray = model.typingTray {
+            if let typingTray = model.communication.typingTray {
                 TypingTrayView(
                     model: model,
                     tray: typingTray,
@@ -638,10 +638,10 @@ struct TypingWorkspaceView: View {
                     requestMic: requestMicAndStart,
                     onShowKeyboard: { messageFocused = true }
                 )
-            } else if model.typingTrayFailed {
+            } else if model.communication.typingTrayFailed {
                 VStack(spacing: 12) {
                     Text("typing.tray.unavailable").multilineTextAlignment(.center)
-                    Button("common.retry") { Task { await model.loadTypingTray() } }
+                    Button("common.retry") { Task { await model.communication.loadTypingTray() } }
                         .buttonStyle(.borderedProminent)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -690,13 +690,13 @@ struct TypingWorkspaceView: View {
     private var fullscreenMessage: some View {
         GeometryReader { proxy in
             let messageBody = ScrollView {
-                Text(model.input.isEmpty ? NSLocalizedString("tts.placeholder", comment: "") : model.input)
+                Text(model.communication.input.isEmpty ? NSLocalizedString("tts.placeholder", comment: "") : model.communication.input)
                     .font(.system(size: max(36, CGFloat(uiInputFontSize) * 2.4)))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
             let controlsFooter = VStack(spacing: 16) {
-                SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.speakMessage() }
+                SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.communication.speakMessage() }
                 Button("common.done") { isMessageFullscreen = false }
                     .font(.headline)
                     .buttonStyle(.bordered)
@@ -726,7 +726,7 @@ struct TypingWorkspaceView: View {
                             .font(.headline)
                     }
                     messageBody
-                    SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.speakMessage() }
+                    SpeechControls(model: model, buttonSize: 64, speakSize: 88) { model.communication.speakMessage() }
                 }
                 .padding(24)
                 .background(Color(.systemBackground))
@@ -739,7 +739,7 @@ struct TypingWorkspaceView: View {
     /// Runs a vocabulary change now, or after Editing access is unlocked.
     private func requestMutation(_ mutation: @escaping () -> Void) {
         Task {
-            if await model.editingIsAuthorized() {
+            if await model.editingAccess.isAuthorized() {
                 mutation()
             } else {
                 pendingMutation = mutation

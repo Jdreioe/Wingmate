@@ -53,13 +53,13 @@ extension SymbolBoardWorkspaceView {
                         Task {
                             switch sheet {
                             case .renameSet:
-                                await model.renameSelectedBoardSet(managementName)
+                                await model.screens.renameSelectedBoardSet(managementName)
                             case .renameBoard:
-                                await model.renameSelectedBoard(managementName)
+                                await model.screens.renameSelectedBoard(managementName)
                             case .resizeBoard:
-                                await model.resizeSelectedBoard(rows: managementRows, columns: managementColumns)
+                                await model.screens.resizeSelectedBoard(rows: managementRows, columns: managementColumns)
                             case .backgroundColor:
-                                await model.setSelectedBoardBackgroundColor(
+                                await model.screens.setSelectedBoardBackgroundColor(
                                     useCustomManagementBackground ? hexFromColor(managementBackgroundColor) : nil
                                 )
                             }
@@ -83,7 +83,7 @@ extension SymbolBoardWorkspaceView {
     }
 
     var speechImportSheet: some View {
-        let pages = model.previewSpeech(name: speechName, text: speechText, paragraphsPerPage: speechParagraphsPerPage)
+        let pages = model.screens.previewSpeech(name: speechName, text: speechText, paragraphsPerPage: speechParagraphsPerPage)
         return NavigationStack {
             Form {
                 Section {
@@ -109,21 +109,21 @@ extension SymbolBoardWorkspaceView {
                     Text(String(format: NSLocalizedString("speech_import.preview", comment: ""), pages.count))
                 }
             }
-            .disabled(model.isCreatingBoardSet)
+            .disabled(model.screens.isCreatingBoardSet)
             .navigationTitle(Text("speech_import.title"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("common.cancel") { showSpeechImport = false }
-                        .disabled(model.isCreatingBoardSet)
+                        .disabled(model.screens.isCreatingBoardSet)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    if model.isCreatingBoardSet {
+                    if model.screens.isCreatingBoardSet {
                         ProgressView()
                     } else {
                         Button("speech_import.create") {
                             speechImportFailed = false
                             Task {
-                                if let id = await model.importSpeech(
+                                if let id = await model.screens.importSpeech(
                                     name: speechName, text: speechText, paragraphsPerPage: speechParagraphsPerPage
                                 ) {
                                     showSpeechImport = false
@@ -142,7 +142,7 @@ extension SymbolBoardWorkspaceView {
             .alert("speech_import.error", isPresented: $speechImportFailed) {
                 Button("common.ok", role: .cancel) { }
             }
-            .interactiveDismissDisabled(model.isCreatingBoardSet)
+            .interactiveDismissDisabled(model.screens.isCreatingBoardSet)
         }
     }
 
@@ -182,9 +182,9 @@ extension SymbolBoardWorkspaceView {
                         showCreateBoardsetSheet = false
                         Task {
                             if createBoardsetKind == .blank {
-                                await model.createBoardSet(name: createBoardsetName, rows: createBoardsetRows, columns: createBoardsetColumns)
+                                await model.screens.createBoardSet(name: createBoardsetName, rows: createBoardsetRows, columns: createBoardsetColumns)
                             } else {
-                                await model.createKeyboardBoardSet(name: createBoardsetName, preset: createBoardsetKind.rawValue)
+                                await model.screens.createKeyboardBoardSet(name: createBoardsetName, preset: createBoardsetKind.rawValue)
                             }
                             createBoardsetName = ""
                             createBoardsetRows = 4
@@ -211,7 +211,7 @@ extension SymbolBoardWorkspaceView {
                         Text(String(format: NSLocalizedString("boardset.columns", comment: ""), addBoardColumns))
                     }
                 }
-                if model.selectedBoardKeyboardLayout != nil {
+                if model.screens.selectedBoardKeyboardLayout != nil {
                     Section("boardset.keyboard_layout") {
                         Picker("boardset.keyboard_layout", selection: $addBoardKeyboardLayout) {
                             Text("boardset.create_keyboard_qwerty").tag("qwerty")
@@ -231,15 +231,15 @@ extension SymbolBoardWorkspaceView {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.save") {
                         Task {
-                            if model.selectedBoardKeyboardLayout != nil {
-                                await model.addKeyboardBoardToSelectedSet(
+                            if model.screens.selectedBoardKeyboardLayout != nil {
+                                await model.screens.addKeyboardBoardToSelectedSet(
                                     name: addBoardName,
                                     rows: addBoardRows,
                                     columns: addBoardColumns,
                                     layout: addBoardKeyboardLayout
                                 )
                             } else {
-                                await model.addBoardToSelectedSet(name: addBoardName, rows: addBoardRows, columns: addBoardColumns)
+                                await model.screens.addBoardToSelectedSet(name: addBoardName, rows: addBoardRows, columns: addBoardColumns)
                             }
                             addBoardName = ""
                             addBoardRows = 4
@@ -247,7 +247,7 @@ extension SymbolBoardWorkspaceView {
                             showAddBoardSheet = false
                         }
                     }
-                    .disabled(!model.canEditSelectedBoardSet)
+                    .disabled(!model.screens.canEditSelectedBoardSet)
                 }
             }
         }
@@ -270,7 +270,7 @@ extension SymbolBoardWorkspaceView {
                     Text("boardset.cell.hidden_footer")
                 }
 
-                if model.ttsEngine.contains("AZURE") {
+                if model.speech.ttsEngine.contains("AZURE") {
                     Section {
                         Toggle("boardset.cell.math", isOn: $editingMathMode)
                     } footer: {
@@ -278,7 +278,7 @@ extension SymbolBoardWorkspaceView {
                     }
                 }
 
-                if model.canEditSelectedBoardSet, editingCellHasButton {
+                if model.screens.canEditSelectedBoardSet, editingCellHasButton {
                     Section {
                         HStack(spacing: 12) {
                             fieldNudgeButton("boardset.cell.move.up", systemImage: "arrow.up") {
@@ -329,7 +329,7 @@ extension SymbolBoardWorkspaceView {
                     }
                 }
 
-                if model.selectedBoardKeyboardLayout != nil {
+                if model.screens.selectedBoardKeyboardLayout != nil {
                     Section("boardset.cell.keyboard_action") {
                         TextField("boardset.cell.insert_text", text: $editingInsertedText)
                             .textInputAutocapitalization(.never)
@@ -520,7 +520,7 @@ extension SymbolBoardWorkspaceView {
                         Picker("boardset.cell.linked_board", selection: $editingLinkedBoardId) {
                             Text("boardset.cell.choose_page").tag("")
                             ForEach(linkableBoardIds, id: \.self) { boardId in
-                                Text(model.boardDisplayName(id: boardId)).tag(boardId)
+                                Text(model.screens.boardDisplayName(id: boardId)).tag(boardId)
                             }
                         }
                     }
@@ -619,11 +619,11 @@ extension SymbolBoardWorkspaceView {
                     ToolbarItem(placement: .bottomBar) {
                         Button("boardset.cell.clear", role: .destructive) {
                             Task {
-                                await model.clearSelectedBoardCell(row: editingRow, col: editingCol)
+                                await model.screens.clearSelectedBoardCell(row: editingRow, col: editingCol)
                                 showEditCellSheet = false
                             }
                         }
-                        .disabled(!model.canEditSelectedBoardSet)
+                        .disabled(!model.screens.canEditSelectedBoardSet)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -634,7 +634,7 @@ extension SymbolBoardWorkspaceView {
                             let followedText = trimmed(editingVocalization) ?? trimmed(editingLabel) ?? ""
                             let insertedText = editingInsertedTextFollowsLabel ? followedText : editingInsertedText
                             let actions = editingActions + (insertedText.isEmpty ? [] : ["+\(insertedText)"])
-                            await model.upsertSelectedBoardCell(
+                            await model.screens.upsertSelectedBoardCell(
                                 row: editingRow,
                                 col: editingCol,
                                 label: editingLabel,
@@ -654,7 +654,7 @@ extension SymbolBoardWorkspaceView {
                                 clearRecording: editingClearsRecording
                             )
                             if case .custom(let span) = editingSpan, editingCellHasButton {
-                                await model.resizeSelectedBoardField(
+                                await model.screens.resizeSelectedBoardField(
                                     row: editingRow,
                                     col: editingCol,
                                     rows: span.rows,
@@ -664,7 +664,7 @@ extension SymbolBoardWorkspaceView {
                             showEditCellSheet = false
                         }
                     }
-                    .disabled(!model.canEditSelectedBoardSet || trimmed(editingLabel) == nil || (editingOpensPage && trimmed(editingLinkedBoardId) == nil))
+                    .disabled(!model.screens.canEditSelectedBoardSet || trimmed(editingLabel) == nil || (editingOpensPage && trimmed(editingLinkedBoardId) == nil))
                 }
             }
         }
@@ -672,11 +672,11 @@ extension SymbolBoardWorkspaceView {
 
     var cellLanguageChoices: [(tag: String, title: String)] {
         var choices: [(tag: String, title: String)] = []
-        let primary = model.primaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let primary = model.speech.primaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if !primary.isEmpty {
             choices.append((primary, String(format: NSLocalizedString("boardset.cell.language.primary", comment: ""), primary)))
         }
-        let secondary = model.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secondary = model.speech.secondaryLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         if !secondary.isEmpty, secondary != primary {
             choices.append((secondary, String(format: NSLocalizedString("boardset.cell.language.secondary", comment: ""), secondary)))
         }
@@ -696,7 +696,7 @@ extension SymbolBoardWorkspaceView {
     }
 
     var linkableBoardIds: [String] {
-        guard let set = model.selectedBoardSet else { return [] }
-        return set.boardIds.filter { $0 != model.selectedBoardId }
+        guard let set = model.screens.selectedBoardSet else { return [] }
+        return set.boardIds.filter { $0 != model.screens.selectedBoardId }
     }
 }

@@ -26,7 +26,7 @@ private struct AccessTargetFocusModifier: ViewModifier {
             .focusable()
             .focused($focused)
             .onChange(of: focused) { _, value in
-                if value { model.accessFocus(targetId) } else { model.accessBlur(targetId) }
+                if value { model.settings.accessFocus(targetId) } else { model.settings.accessBlur(targetId) }
             }
     }
 }
@@ -364,19 +364,19 @@ struct PhraseItemView: View {
         let recordingPath = phrase.recordingPath.flatMap { $0.isEmpty ? nil : $0 }
 
         let tile = Button(action: {
-            guard model.holdToSelectMillis <= 0 else { return }
-            if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-            model.activateTypingPhrase(phrase)
+            guard model.settings.holdToSelectMillis <= 0 else { return }
+            if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+            model.communication.activateTypingPhrase(phrase)
         }) {
             VStack(alignment: .leading, spacing: 6) {
-                if model.labelAtTop && model.showButtonLabels {
+                if model.settings.labelAtTop && model.settings.showButtonLabels {
                     Text(phrase.text)
                         .font(.body)
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if model.showButtonSymbols, let imageUrl = phrase.imageUrl,
+                if model.settings.showButtonSymbols, let imageUrl = phrase.imageUrl,
                    let url = URL(string: imageUrl) {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -396,7 +396,7 @@ struct PhraseItemView: View {
                     }
                 }
 
-                if !model.labelAtTop && model.showButtonLabels {
+                if !model.settings.labelAtTop && model.settings.showButtonLabels {
                     Text(phrase.text)
                         .font(.body)
                         .lineLimit(3)
@@ -405,46 +405,46 @@ struct PhraseItemView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: resolvedMinHeight, alignment: .topLeading)
-            .background(tileShape.fill(model.highContrastMode ? Color(.systemBackground) : bgColor))
+            .background(tileShape.fill(model.settings.highContrastMode ? Color(.systemBackground) : bgColor))
             .overlay {
-                if model.highContrastMode { tileShape.stroke(Color.primary, lineWidth: 2) }
+                if model.settings.highContrastMode { tileShape.stroke(Color.primary, lineWidth: 2) }
             }
             .contentShape(tileShape)
         }
-        .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown && model.holdToSelectMillis <= 0))
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown && model.settings.holdToSelectMillis <= 0))
         .simultaneousGesture(
-            LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
+            LongPressGesture(minimumDuration: max(0.01, model.settings.holdToSelectMillis / 1_000))
                 .onEnded { _ in
-                    guard model.holdToSelectMillis > 0 else { return }
-                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                    model.activateTypingPhrase(phrase)
+                    guard model.settings.holdToSelectMillis > 0 else { return }
+                    if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                    model.communication.activateTypingPhrase(phrase)
                 }
         )
         .onHover { hovering in
             if hovering {
-                model.accessEnter(accessTargetId)
-                if model.auditoryFishingEnabled && !model.inputIsPaused { model.previewSpeech(accessibleName) }
+                model.settings.accessEnter(accessTargetId)
+                if model.settings.auditoryFishingEnabled && !model.settings.inputIsPaused { model.communication.previewSpeech(accessibleName) }
             } else {
-                model.accessExit(accessTargetId)
+                model.settings.accessExit(accessTargetId)
             }
         }
-        .onAppear { model.registerAccessTarget(accessTargetId, handlesHaptics: true) { model.activateTypingPhrase(phrase) } }
-        .onDisappear { model.unregisterAccessTarget(accessTargetId) }
+        .onAppear { model.settings.registerAccessTarget(accessTargetId, handlesHaptics: true) { model.communication.activateTypingPhrase(phrase) } }
+        .onDisappear { model.settings.unregisterAccessTarget(accessTargetId) }
         .accessTargetFocus(model: model, targetId: accessTargetId)
         .overlay {
-            if model.highlightedButtonId == accessTargetId {
+            if model.settings.highlightedButtonId == accessTargetId {
                 SelectionHighlightOutline(shape: tileShape)
             }
         }
         .overlay {
-            if model.accessTargetId == accessTargetId && model.pointerEmphasisStyle != "System" {
-                tileShape.stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
-                    .padding(6 / model.pointerEmphasisScale)
+            if model.settings.accessTargetId == accessTargetId && model.settings.pointerEmphasisStyle != "System" {
+                tileShape.stroke(Color.accentColor, lineWidth: 3 * model.settings.pointerEmphasisScale)
+                    .padding(6 / model.settings.pointerEmphasisScale)
                     .accessibilityHidden(true)
                     .allowsHitTesting(false)
             }
-            if model.accessTargetId == accessTargetId && model.accessDwellProgress > 0 {
-                tileShape.trim(from: 0, to: model.accessDwellProgress)
+            if model.settings.accessTargetId == accessTargetId && model.settings.accessDwellProgress > 0 {
+                tileShape.trim(from: 0, to: model.settings.accessDwellProgress)
                     .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                     .accessibilityHidden(true)
                     .allowsHitTesting(false)
@@ -452,9 +452,9 @@ struct PhraseItemView: View {
         }
         .accessibilityLabel(Text(accessibleName.isEmpty ? NSLocalizedString("common.no_name", comment: "") : accessibleName))
         .accessibilityHint(Text("accessibility.phrase.insert_hint"))
-        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.speakPhrase(phrase) }
+        .accessibilityAction(named: Text("accessibility.phrase.speak_action")) { model.communication.speakPhrase(phrase) }
 
-        if editable && !model.selectOnTouchDown {
+        if editable && !model.settings.selectOnTouchDown {
             tile
                 .accessibilityAction(named: Text("accessibility.phrase.edit_action")) { onEdit() }
                 .accessibilityAction(named: Text("accessibility.phrase.delete_action")) { onDelete(phrase.id) }
@@ -469,7 +469,7 @@ struct PhraseItemView: View {
                 }
                 .contextMenu {
                     Button { onEdit() } label: { Label("phrase.edit", systemImage: "pencil") }
-                    Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
+                    Button { model.communication.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
                     if let recordingPath {
                         Button { recorder.play(url: URL(fileURLWithPath: recordingPath)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
                         Button { requestMic(phrase.id) } label: { Label("phrase.record.replace", systemImage: "mic") }
@@ -487,7 +487,7 @@ struct PhraseItemView: View {
         } else {
             tile
                 .contextMenu {
-                    Button { model.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
+                    Button { model.communication.speakPhrase(phrase) } label: { Label("phrase.play_tts", systemImage: "speaker.wave.2.fill") }
                     if let recordingPath {
                         Button { recorder.play(url: URL(fileURLWithPath: recordingPath)) } label: { Label("phrase.play_recording", systemImage: "waveform") }
                     }

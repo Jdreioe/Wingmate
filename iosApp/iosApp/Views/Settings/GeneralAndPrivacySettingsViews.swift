@@ -4,26 +4,27 @@ import UniformTypeIdentifiers
 
 struct GeneralSettingsView: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var settings: AppSettingsModel
     let onRestartSetup: () -> Void
 
     var body: some View {
         Form {
             Section {
                 Picker("settings.general.startup_mode", selection: Binding(
-                    get: { model.startupUsesScreens }, set: { model.setStartupUsesScreens($0) }
+                    get: { settings.startupUsesScreens }, set: { settings.setStartupUsesScreens($0) }
                 )) {
                     Text("settings.general.keyboard").tag(false)
                     Text("settings.general.screens").tag(true)
                 }
                 .pickerStyle(.segmented)
 
-                if model.startupUsesScreens {
+                if settings.startupUsesScreens {
                     Picker("settings.general.startup_screen", selection: Binding(
-                        get: { model.startupBoardSetId ?? "" },
-                        set: { model.setStartupBoardSetId($0.isEmpty ? nil : $0) }
+                        get: { settings.startupBoardSetId ?? "" },
+                        set: { settings.setStartupBoardSetId($0.isEmpty ? nil : $0) }
                     )) {
                         Text("settings.general.screen_library").tag("")
-                        ForEach(model.boardSets) { set in
+                        ForEach(model.screens.boardSets) { set in
                             Text(set.name).tag(set.id)
                         }
                     }
@@ -35,7 +36,7 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                EditingAccessSettingsView(model: model)
+                EditingAccessSettingsView(editingAccess: model.editingAccess)
             } header: {
                 Text("editing_access.title")
             } footer: {
@@ -54,22 +55,22 @@ struct GeneralSettingsView: View {
 }
 
 struct EditingAccessSettingsView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var editingAccess: EditingAccessModel
     @State private var pinMode: EditingAccessPinMode?
 
     var body: some View {
         Group {
-            if !model.editingAccessSupported {
+            if !editingAccess.supported {
                 Text("editing_access.unavailable").foregroundStyle(.red)
             } else {
-                if model.editingAccessEnabled {
+                if editingAccess.enabled {
                     Button("editing_access.change") { pinMode = .change }
                         .frame(minHeight: 44)
                 } else {
                     Button("editing_access.enable") { pinMode = .create }
                         .frame(minHeight: 44)
                 }
-                if model.editingAccessEnabled {
+                if editingAccess.enabled {
                     Button("editing_access.disable", role: .destructive) {
                         pinMode = .disable
                     }
@@ -77,9 +78,9 @@ struct EditingAccessSettingsView: View {
                 }
             }
         }
-        .task { await model.refreshEditingAccess() }
+        .task { _ = await editingAccess.refresh() }
         .sheet(item: $pinMode) { mode in
-            EditingAccessPinSheet(model: model, mode: mode, onSuccess: {
+            EditingAccessPinSheet(editingAccess: editingAccess, mode: mode, onSuccess: {
                 pinMode = nil
             }, onCancel: { pinMode = nil })
         }
@@ -88,29 +89,25 @@ struct EditingAccessSettingsView: View {
 
 struct PrivacySettingsView: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var settings: AppSettingsModel
+    @ObservedObject var backup: BackupModel
     @State private var importingBackup = false
-    @State private var backupStatus: String? = nil
     @State private var confirmRestoreURL: URL? = nil
 
     var body: some View {
         Form {
             Section {
                 Button("backup.create") {
-                    Task {
-                        do {
-                            let result = try await model.shareCompleteBackup()
-                            backupStatus = result.isSuccess
-                                ? NSLocalizedString("backup.exported", comment: "")
-                                : result.message ?? NSLocalizedString("backup.failed", comment: "")
-                        } catch is CancellationError {
-                            return
-                        } catch {
-                            backupStatus = NSLocalizedString("backup.failed", comment: "")
-                        }
-                    }
+                    backup.exportBackup()
                 }
+                .disabled(backup.state.isBusy)
                 Button("backup.restore") { importingBackup = true }
-                if let backupStatus { Text(backupStatus).font(.footnote) }
+                    .disabled(backup.state.isBusy)
+                if backup.state.isBusy {
+                    ProgressView()
+                } else if let backupStatus = backup.state.statusMessage {
+                    Text(backupStatus).font(.footnote)
+                }
             } header: {
                 Text("backup.title")
             } footer: {
@@ -119,11 +116,26 @@ struct PrivacySettingsView: View {
 
             Section {
                 Toggle("settings.privacy.show_history", isOn: Binding(
-                    get: { model.historyVisible },
-                    set: { model.setHistoryVisible($0) }
+                    get: { settings.historyVisible },
+                    set: { visible in
+                        if !visible {
+                            model.communication.clearHistoryDisplay()
+                        }
+                        settings.setHistoryVisible(visible) {
+                            if visible { await model.communication.loadHistory() }
+                        }
+                    }
                 ))
-                Toggle("settings.likely_next", isOn: Binding(get: { model.likelyNextPageEnabled }, set: { model.setLikelyNextPageEnabled($0) }))
-                    .disabled(!model.historyVisible)
+                Toggle("settings.likely_next", isOn: Binding(
+                    get: { settings.likelyNextPageEnabled },
+                    set: { enabled in
+                        if !enabled { model.communication.clearLikelyNextDisplay() }
+                        settings.setLikelyNextPageEnabled(enabled) {
+                            await model.communication.loadHistory()
+                        }
+                    }
+                ))
+                    .disabled(!settings.historyVisible)
                 Text("settings.likely_next.footer").font(.footnote).foregroundStyle(.secondary)
             } header: {
                 Text("settings.privacy.local_data")
@@ -132,10 +144,10 @@ struct PrivacySettingsView: View {
             }
 
             Section {
-                ForEach(model.boardSets) { set in
+                ForEach(model.screens.boardSets) { set in
                     Toggle(set.name, isOn: Binding(
                         get: { set.cacheWholeSentences },
-                        set: { model.setBoardSetSentenceCaching(id: set.id, enabled: $0) }
+                        set: { model.screens.setBoardSetSentenceCaching(id: set.id, enabled: $0) }
                     ))
                 }
             } header: {
@@ -146,12 +158,12 @@ struct PrivacySettingsView: View {
 
             Section {
                 Toggle("settings.general.analytics", isOn: Binding(
-                    get: { model.featureUsageReportingEnabled },
-                    set: { model.setFeatureUsageReportingEnabled($0) }
+                    get: { settings.featureUsageReportingEnabled },
+                    set: { settings.setFeatureUsageReportingEnabled($0) }
                 ))
                 Toggle("settings.accessibility.usage_logging", isOn: Binding(
-                    get: { model.usageLoggingEnabled },
-                    set: { model.setUsageLoggingEnabled($0) }
+                    get: { settings.usageLoggingEnabled },
+                    set: { settings.setUsageLoggingEnabled($0) }
                 ))
             } header: {
                 Text("settings.privacy.data_collection")
@@ -172,25 +184,8 @@ struct PrivacySettingsView: View {
             Button("backup.replace_action", role: .destructive) {
                 guard let url = confirmRestoreURL else { return }
                 confirmRestoreURL = nil
-                Task {
-                    let accessed = url.startAccessingSecurityScopedResource()
-                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    do {
-                        let result = try await model.restoreCompleteBackup(path: url.path)
-                        if result.isSuccess {
-                            backupStatus = NSLocalizedString("backup.restored", comment: "")
-                            await model.refreshParitySettings()
-                            await model.refreshAzureConfiguration()
-                            model.refreshVoiceAndLanguages()
-                            await model.loadBoardSets()
-                        } else {
-                            backupStatus = result.message ?? NSLocalizedString("backup.failed", comment: "")
-                        }
-                    } catch is CancellationError {
-                        return
-                    } catch {
-                        backupStatus = NSLocalizedString("backup.failed", comment: "")
-                    }
+                backup.restoreBackup(from: url) {
+                    try await model.reloadAfterBackupRestore()
                 }
             }
             Button("common.cancel", role: .cancel) { confirmRestoreURL = nil }

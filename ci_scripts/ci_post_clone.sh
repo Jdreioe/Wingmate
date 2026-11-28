@@ -4,15 +4,56 @@ set -euo pipefail
 # Xcode Cloud post-clone script for KMP (Kotlin Multiplatform)
 # Builds shared iOS framework before Xcode build
 
-# CI_WORKSPACE_PATH is the repo root provided by Xcode Cloud. Keep the older
-# CI_WORKSPACE fallback for existing workflow configurations.
-CI_WORKSPACE="${CI_WORKSPACE_PATH:-${CI_WORKSPACE:-}}"
-if [ -z "$CI_WORKSPACE" ]; then
-  echo "warning: Xcode Cloud workspace path not set — assuming repo root is parent of ci_scripts"
-  CI_WORKSPACE="$(cd "$(dirname "$0")/.." && pwd)"
+# Locate the cloned repository root. On Xcode Cloud, CI_PRIMARY_REPOSITORY_PATH
+# points to the Git repo (e.g. /Volumes/workspace/repository), whereas
+# CI_WORKSPACE_PATH is its parent directory (/Volumes/workspace).
+SCRIPT_REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT=""
+for candidate in \
+  "${CI_PRIMARY_REPOSITORY_PATH:-}" \
+  "${CI_WORKSPACE_PATH:-}" \
+  "${CI_WORKSPACE_PATH:+${CI_WORKSPACE_PATH}/repository}" \
+  "${CI_WORKSPACE:-}" \
+  "$SCRIPT_REPO_ROOT"; do
+  if [ -n "$candidate" ] && [ -f "$candidate/iosApp/Configuration/Config.xcconfig" ]; then
+    REPO_ROOT="$candidate"
+    break
+  fi
+done
+
+if [ -z "$REPO_ROOT" ]; then
+  echo "error: Could not locate Wingmate repository root containing iosApp/Configuration/Config.xcconfig"
+  exit 1
 fi
 
-cd "$CI_WORKSPACE"
+cd "$REPO_ROOT"
+
+XCCONFIG="iosApp/Configuration/Config.xcconfig"
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+set_xcconfig_value() {
+  local key="$1"
+  local value="$2"
+  XCCONFIG_KEY="$key" XCCONFIG_VALUE="$value" perl -i -pe '
+    BEGIN { $matched = 0; }
+    if (m/^(\Q$ENV{XCCONFIG_KEY}\E)([ \t]*=)[^\r\n]*(\r?\n?)\z/) {
+      my ($k, $eq, $eol) = ($1, $2, $3);
+      my $sep = ($eq =~ m{[ \t]}) ? " " : "";
+      $_ = $k . $eq . $sep . $ENV{XCCONFIG_VALUE} . $eol;
+      $matched = 1;
+    }
+    END { exit($matched ? 0 : 2); }
+  ' "$XCCONFIG" || {
+    echo "error: failed to update $key in $XCCONFIG"
+    exit 1
+  }
+}
 
 # === Tag-driven release version ===
 # Xcode Cloud supplies CI_TAG when a Git Tag Change start condition triggered
@@ -34,8 +75,8 @@ if [ "${CI_XCODE_CLOUD:-}" = "TRUE" ] && [ "${REQUIRE_RELEASE_TAG:-}" = "TRUE" ]
       ;;
   esac
 
-  if ! [[ "$RELEASE_VERSION" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
-    echo "error: Release tags must be prod/1.x.y or staging/1.x.y"
+  if ! [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "error: Release tags must be prod/X.Y.Z or staging/X.Y.Z"
     exit 1
   fi
 
@@ -44,44 +85,54 @@ if [ "${CI_XCODE_CLOUD:-}" = "TRUE" ] && [ "${REQUIRE_RELEASE_TAG:-}" = "TRUE" ]
     exit 1
   fi
 
-  XCCONFIG="iosApp/Configuration/Config.xcconfig"
-  perl -pi -e "s/^MARKETING_VERSION=.*/MARKETING_VERSION=$RELEASE_VERSION/" "$XCCONFIG"
-  perl -pi -e "s/^CURRENT_PROJECT_VERSION=.*/CURRENT_PROJECT_VERSION=$CI_BUILD_NUMBER/" "$XCCONFIG"
+  set_xcconfig_value "MARKETING_VERSION" "$RELEASE_VERSION"
+  set_xcconfig_value "CURRENT_PROJECT_VERSION" "$CI_BUILD_NUMBER"
   echo "Configured $RELEASE_CHANNEL release version $RELEASE_VERSION (build $CI_BUILD_NUMBER)"
 fi
 
 # === Aptabase app key ===
 # A public client identifier (docs/SECRET_BOUNDARIES.md). Without it the app
 # keeps feature usage reporting off.
-if [ -n "${WINGMATE_APTABASE_APP_KEY:-}" ]; then
-  if ! [[ "$WINGMATE_APTABASE_APP_KEY" =~ ^A-(EU|US)-[A-Za-z0-9]+$ ]]; then
+APTABASE_KEY="$(trim_whitespace "${WINGMATE_APTABASE_APP_KEY:-}")"
+if [ -n "$APTABASE_KEY" ]; then
+  if ! [[ "$APTABASE_KEY" =~ ^A-(EU|US)-[A-Za-z0-9]+$ ]]; then
     echo "error: WINGMATE_APTABASE_APP_KEY is not an Aptabase EU/US app key"
     exit 1
   fi
-  perl -pi -e "s/^APTABASE_APP_KEY =.*/APTABASE_APP_KEY = $WINGMATE_APTABASE_APP_KEY/" \
-    iosApp/Configuration/Config.xcconfig
+  set_xcconfig_value "APTABASE_APP_KEY" "$APTABASE_KEY"
   echo "Configured Aptabase app key"
 fi
 
 # === Cloud drive OAuth client IDs ===
 # Public client identifiers for Google Drive and OneDrive sign-in. Empty hides that option.
-if [ -n "${WINGMATE_GOOGLE_IOS_CLIENT_ID:-}" ]; then
-  if ! [[ "$WINGMATE_GOOGLE_IOS_CLIENT_ID" =~ ^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$ ]]; then
-    echo "error: WINGMATE_GOOGLE_IOS_CLIENT_ID is not a Google OAuth client ID"
+GOOGLE_CLIENT_ID="$(trim_whitespace "${WINGMATE_GOOGLE_IOS_CLIENT_ID:-}")"
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+  if ! [[ "$GOOGLE_CLIENT_ID" =~ ^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$ ]]; then
+    echo "error: WINGMATE_GOOGLE_IOS_CLIENT_ID must be a Google iOS OAuth client ID (<number>-<id>.apps.googleusercontent.com)"
     exit 1
   fi
-  perl -pi -e "s/^WINGMATE_GOOGLE_IOS_CLIENT_ID =.*/WINGMATE_GOOGLE_IOS_CLIENT_ID = $WINGMATE_GOOGLE_IOS_CLIENT_ID/" \
-    iosApp/Configuration/Config.xcconfig
-  echo "Configured Google Drive client ID"
+  GOOGLE_URL_SCHEME="com.googleusercontent.apps.${GOOGLE_CLIENT_ID%.apps.googleusercontent.com}"
+  set_xcconfig_value "WINGMATE_GOOGLE_IOS_CLIENT_ID" "$GOOGLE_CLIENT_ID"
+  set_xcconfig_value "WINGMATE_GOOGLE_IOS_URL_SCHEME" "$GOOGLE_URL_SCHEME"
+  echo "Configured Google Drive client ID and OAuth URL scheme"
+else
+  echo "note: WINGMATE_GOOGLE_IOS_CLIENT_ID is unset; Google Drive sync stays hidden"
 fi
-if [ -n "${WINGMATE_MICROSOFT_CLIENT_ID:-}" ]; then
-  if ! [[ "$WINGMATE_MICROSOFT_CLIENT_ID" =~ ^[0-9a-fA-F-]{36}$ ]]; then
-    echo "error: WINGMATE_MICROSOFT_CLIENT_ID is not a Microsoft Entra application ID"
+
+MICROSOFT_CLIENT_ID="$(trim_whitespace "${WINGMATE_MICROSOFT_CLIENT_ID:-}")"
+if [ -n "$MICROSOFT_CLIENT_ID" ]; then
+  if ! [[ "$MICROSOFT_CLIENT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+    echo "error: WINGMATE_MICROSOFT_CLIENT_ID must be a Microsoft Entra application (client) ID UUID"
     exit 1
   fi
-  perl -pi -e "s/^WINGMATE_MICROSOFT_CLIENT_ID =.*/WINGMATE_MICROSOFT_CLIENT_ID = $WINGMATE_MICROSOFT_CLIENT_ID/" \
-    iosApp/Configuration/Config.xcconfig
+  set_xcconfig_value "WINGMATE_MICROSOFT_CLIENT_ID" "$MICROSOFT_CLIENT_ID"
   echo "Configured OneDrive client ID"
+else
+  echo "note: WINGMATE_MICROSOFT_CLIENT_ID is unset; OneDrive sync stays hidden"
+fi
+
+if [ "${WINGMATE_CI_CONFIGURE_ONLY:-0}" = "1" ]; then
+  exit 0
 fi
 
 # === JDK Setup ===
@@ -94,13 +145,18 @@ install_jdk() {
     echo "Using Homebrew..."
     HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
       brew install --quiet openjdk@21
-    brew link --overwrite --force openjdk@21
+    brew link --overwrite --force openjdk@21 || true
     # Register with java_home via user-level symlink (no sudo)
     mkdir -p ~/Library/Java/JavaVirtualMachines
     for f in /usr/local/opt/openjdk@21/libexec/openjdk.jdk \
              /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk; do
       if [ -d "$f" ]; then
         ln -sfn "$f" ~/Library/Java/JavaVirtualMachines/openjdk-21.jdk
+        if [ -x "$f/Contents/Home/bin/java" ]; then
+          JAVA_HOME="$f/Contents/Home"
+          export JAVA_HOME
+          return 0
+        fi
         break
       fi
     done

@@ -12,7 +12,7 @@ enum EditingAccessPinMode: String, Identifiable {
 }
 
 struct EditingAccessPinSheet: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var editingAccess: EditingAccessModel
     var mode: EditingAccessPinMode
     var onSuccess: () -> Void
     var onCancel: () -> Void
@@ -145,7 +145,7 @@ struct EditingAccessPinSheet: View {
     @MainActor
     private func submit() async {
         guard !working else { return }
-        if model.editingAccessRetryAt > Date().timeIntervalSince1970 && (mode == .unlock || mode == .disable || (mode == .change && step == 0)) {
+        if editingAccess.isThrottled() && (mode == .unlock || mode == .disable || (mode == .change && step == 0)) {
             errorKey = "editing_access.wait"
             return
         }
@@ -153,13 +153,13 @@ struct EditingAccessPinSheet: View {
         defer { working = false }
         switch mode {
         case .unlock:
-            if await model.unlockEditingAccess(entry) {
+            if await editingAccess.unlock(code: entry) {
                 onSuccess()
             } else {
                 fail()
             }
         case .disable:
-            if await model.disableEditingAccess(entry) {
+            if await editingAccess.disable(code: entry) {
                 onSuccess()
             } else {
                 fail()
@@ -168,7 +168,7 @@ struct EditingAccessPinSheet: View {
             await advanceNewCode(configure: true)
         case .change:
             if step == 0 {
-                if await model.unlockEditingAccess(entry) {
+                if await editingAccess.unlock(code: entry) {
                     entry = ""
                     step = 1
                     errorKey = nil
@@ -197,7 +197,7 @@ struct EditingAccessPinSheet: View {
             errorKey = "editing_access.mismatch"
             return
         }
-        if configure, await model.configureEditingAccess(entry) {
+        if configure, await editingAccess.configure(code: entry) {
             onSuccess()
         } else {
             fail()
@@ -206,8 +206,12 @@ struct EditingAccessPinSheet: View {
 
     private func fail() {
         entry = ""
-        errorKey = model.editingAccessRetryAt > Date().timeIntervalSince1970
-            ? "editing_access.wait"
-            : "editing_access.incorrect"
+        if let failureKey = editingAccess.lastFailureKey {
+            errorKey = LocalizedStringKey(failureKey)
+        } else {
+            errorKey = editingAccess.isThrottled()
+                ? "editing_access.wait"
+                : "editing_access.incorrect"
+        }
     }
 }

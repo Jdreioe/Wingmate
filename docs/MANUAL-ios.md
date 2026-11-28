@@ -1,6 +1,6 @@
 # Wingmate til iPhone og iPad – manual til nye brugere
 
-Manualen passer til Wingmate **1.9.1** på iPhone og iPad (november 2026). Bruger du Android, så læs [manualen til Android](MANUAL-android.md).
+Manualen passer til Wingmate **1.10.0** på iPhone og iPad (november 2026). Bruger du Android, så læs [manualen til Android](MANUAL-android.md).
 
 ## Sådan bruger du manualen
 
@@ -24,6 +24,7 @@ Manualen er til dig, der bruger Wingmate, og til familie, hjælpere, lærere og 
   - [Symboler, billeder, farver og størrelse](#symboler-billeder-farver-og-størrelse)
   - [Sider og navigation](#sider-og-navigation)
   - [Skærm- og sideindstillinger](#skærm--og-sideindstillinger)
+  - [Del skærme](#del-skærme)
 - [Låsning af redigering](#låsning-af-redigering)
 - [Stemmer](#stemmer)
 - [Eksport og udskrift](#eksport-og-udskrift)
@@ -53,14 +54,16 @@ Beskeden, du er i gang med, bliver liggende. Den følger med, når du skifter me
 
 Du behøver ikke skifte app, når dine behov ændrer sig. Wingmate kan vokse med dig – uanset om du altid bruger skærme, skriver med tastatur eller bruger begge dele:
 
-- **Kommunikation med skærme** – byg **Skærme** med symboler, billeder og tekst, fra de første ord til et stort ordforråd i hverdagen. Familie, hjælpere og pædagoger vil også kunne fjernredigere skærme (kommer snart).
-- **Skolen** – lærere kan lave skærme til deres elever og dele dem med alle, der bruger Wingmate, via Google Drive, OneDrive eller iCloud (kommer snart). Du kan også eksportere skærme som filer og dele dem med andre (se [Eksport og udskrift](#eksport-og-udskrift)).
+- **Kommunikation med skærme** – byg **Skærme** med symboler, billeder og tekst, fra de første ord til et stort ordforråd i hverdagen. Familie, hjælpere og pædagoger kan rette skærmene fra deres egen enhed (se [Del skærme](#del-skærme)).
+- **Skolen** – lærere kan lave skærme til deres elever og dele dem med alle, der bruger Wingmate, via Google Drev, OneDrive eller iCloud (se [Del skærme](#del-skærme)). Du kan også eksportere skærme som filer og dele dem med andre (se [Eksport og udskrift](#eksport-og-udskrift)).
 - **Skrivning med tastatur** – hvis du vil stave med et tastatur, kan du bruge **Skrivning** (**Tastatur og fraser**), enten alene eller sammen med dine skærme. Dine skærme er altid bare et par tryk væk (se [De to arbejdsområder](#de-to-arbejdsområder)).
 - **Oplæg og taler** – skriv teksten i et andet program, og sæt den ind i **Importér tale**. Så laver Wingmate en skærm med talen delt op i bider (se [Opret en skærm](#opret-en-skærm)).
 
 ### Dine data
 
-Wingmate gemmer dine beskeder, fraser og skærme på enheden. Der er ingen konto, og appen kopierer ikke selv dine ting til en anden enhed.
+Wingmate gemmer dine beskeder, fraser og skærme på enheden. Der er ingen konto. Beskeder og fraser bliver på enheden, medmindre du selv laver en sikkerhedskopi.
+
+Skærme kan du vælge at synkronisere, så en hjælper kan rette dem. Der ligger stadig en kopi på enheden, så skærmene virker uden internet. Se [Del skærme](#del-skærme).
 
 Wingmate sender kun noget ud af enheden i disse tilfælde. Bruger du enhedens egen stemme, kan nogle af stemmerne alligevel bruge internettet.
 
@@ -92,7 +95,9 @@ Har du allerede Wingmate på en anden enhed, kan du hente dine ting ind allerede
    <img src="images/ios/iphone-welcome-stemmemotor.png" alt="Vælg din stemmemodel i den første opsætning (iPhone)" width="300">
 
 4. På siden **Vælg din stemme**:
-   - Har du valgt **System Tekst-til-Tale**, så tryk bare **Næste**. Du behøver ikke trykke **Åbn iOS Indstillinger**. Du kan vælge en anden stemme senere i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**.
+   - Har du valgt **System Tekst-til-Tale**, viser siden den stemme, Wingmate bruger til dit sprog. Står der **Systemstandard**, bruger Wingmate enhedens standardstemme til sproget. Tryk på højttaleren for at høre den. VoiceOver kalder den **Afspil prøve**.
+     Vil du have en anden stemme, så tryk **Vælg stemme** eller **Skift stemme**. Listen viser stemmerne på enheden, delt op efter sprog, med dit sprog øverst. Tryk på en stemme for at vælge den. Tryk på afspil-knappen ved siden af for at høre den. Har du lavet en personlig stemme på enheden, så tryk først **Tillad personlig stemme** øverst, hvis knappen vises. Tryk **Luk**, og tryk **Næste**.
+     Du kan også bare trykke **Næste** og vælge stemmen senere under **Indstillinger → Tale og sprog → Valgt stemme**. Mangler en stemme på listen, så se [Fejlfinding](#fejlfinding).
    - Har du valgt en stemme på nettet, så tryk **Vælg stemme**, vælg en stemme, og tryk **Vælg**. Tryk derefter **Næste**. Spørger appen om sprog, så tryk på et sprog. Så går appen selv videre.
 5. På siden **Test din stemme** trykker du **Afspil** for at høre en prøve. Tryk **Næste**.
 6. Vælg, om du vil slå **Del anonym analysedata** til. Det er slukket fra start. Tryk **Næste**.
@@ -118,6 +123,12 @@ Du kan også vælge, hvor appen skal starte. Gå til **Indstillinger → Generel
 
 ![Skrivning på iPad, hvor knapperne står i en kolonne til højre (iPad)](images/ios/ipad-skrivning-oversigt.png)
 
+På iPhone Duo står knapperne under fraserne på yderdisplayet og til højre på inderskærmen, når telefonen er foldet ud og ligger på langs.
+
+<img src="images/ios/iphone-duo-skrivning-yderdisplay.png" alt="Skrivning på iPhone Duo med knapperne under fraserne på yderdisplayet" width="300">
+
+![Skrivning på den udfoldede iPhone Duo med knapperne til højre](images/ios/iphone-duo-skrivning-inderskaerm.png)
+
 ## Skrivning
 
 I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et ord eller en besked, du har gemt, fx «Tak».
@@ -127,7 +138,7 @@ I Skrivning kan du skrive en ny besked eller trykke på en frase. En frase er et
 - Skriv i feltet **Tekst der skal oplæses**.
 - Tryk på den runde afspil-knap (▶) på iPhone eller den blå knap **Afspil** til højre på iPad, så bliver beskeden læst op. Mens den læser, kan du trykke **Pause**, **Fortsæt** og **Stop**.
 - På iPhone: tryk på tastatur-knappen til venstre for tekstfeltet for at få tastaturet frem. Mens tastaturet er fremme, er knappen et plus. Tryk på plusset for at komme tilbage til fraserne og knapperne øverst. VoiceOver kalder knappen **Vis tastatur** eller **Vis skriveskærm**.
-- På iPad: tryk **Vis tastatur** i kolonnen til højre. Tryk **Skjul tastatur** samme sted for at skjule tastaturet igen.
+- På iPad: tryk **Vis tastatur** i kolonnen til højre. Tryk **Skjul tastatur** samme sted for at skjule tastaturet igen. Ligger iPad på langs, bliver Skrivning stående, som den er, når tastaturet kommer frem. Knapperne bytter ikke plads.
 - Skriveskærmen viser dine fraser som knapper i stedet for tastaturet.
 
 ### Siderne på skriveskærmen
@@ -165,7 +176,17 @@ Under **Symbol** vælger du et billede fra **OpenSymbols** eller **Mine fotos**.
 
 ### Læg en besked til side
 
-Du kan lægge den besked, du er i gang med, til side og starte på en ny. Tryk **Hold** ved bogmærket. På iPhone står knappen i rækken under fraserne, og på iPad i kolonnen til højre. Knappen står på engelsk i denne version. Den gemte tekst vises som **Parkeret:**. Tryk **Byt** for at bytte om på den nye besked og den, der ligger til side.
+Du kan lægge den besked, du er i gang med, til side og starte på en ny. Tryk **Parkér**. På iPhone står knappen i rækken under fraserne, og på iPad i kolonnen til højre. Den gemte tekst vises som **Parkeret:**. Tryk **Byt** for at bytte om på den nye besked og den, der ligger til side.
+
+### Knapper, der ændrer stemmen
+
+I Skrivning er der knapper, der ændrer, hvordan beskeden bliver sagt. På iPhone står de i rækken under fraserne. På iPad står de i kolonnen til højre. De står på dansk. Du ser kun de knapper, din stemme kan bruge:
+
+- **Parkér** og **Sprog** er der altid, sammen med pauser (**0.5 s**, **1.0 s** og **2.0 s**).
+- Har du valgt **ElevenLabs**, kommer der også **Hvisk**, **Grin**, **Suk**, **Glad**, **Trist**, **Begejstret**, **Vred** og **Sarkastisk**. Tryk på en af dem, før du læser op. Så siger stemmen det med den tone.
+- Har du valgt **Azure**, kommer der også **Svag**, **Moderat**, **Stærk**, **Stav**, **Tal**, **Dato**, **Klokkeslæt**, **Telefon** og **Valuta**. De fortæller Azure, hvordan et stykke af teksten skal siges, for eksempel som et tal eller en dato.
+
+Enhedens egen stemme og Google viser ikke de særlige knapper. De kan ikke bruge dem, så de bliver ikke læst op som almindelige ord.
 
 ## Skærme
 
@@ -179,7 +200,7 @@ Sådan laver du en ny skærm:
 2. Skriv et **Skærmnavn**.
 3. Vælg under **Tavletype**: **Tom tavle**, **QWERTY-tastatur** eller **Alfabetisk tastatur**.
 4. Til en tom tavle vælger du, hvor mange **Rækker** og **Kolonner** der skal være (1–12).
-5. Tryk **Gem**.
+5. Tryk **Gem**. Startsiden på en ny skærm hedder **Hjem**.
 
 Valgte du **Tom tavle**, er der ingen knapper endnu. Tryk **Rediger** ved din nye skærm i oversigten, og følg [Rediger sider og knapper](#rediger-sider-og-knapper).
 
@@ -195,11 +216,11 @@ Skal du holde et oplæg eller en tale, kan du skrive teksten i fx Word og lave e
 5. Tryk på **−** eller **+** ved **Afsnit pr. side** for at vælge, hvor mange afsnit der skal være på hver side (1–8). Se resultatet under **Forhåndsvisning**.
 6. Tryk **Opret skærm**. Du kan rette skærmen bagefter.
 
-Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele afsnittet op med det samme. Teksten lægges ikke i beskedlinjen.
+Når du senere trykker på en knap fra **Importér tale**, læser Wingmate hele afsnittet op med det samme. Teksten lægges ikke i beskedlinjen. På knappen står hele afsnittet, så du kan læse med. Teksten bliver ikke klippet af med prikker, og den står kun én gang.
 
 På iPhone og iPad kan du ikke hente tavlefiler (`.obf` eller `.obz`) ind i denne version.
 
-Tryk på en skærm i oversigten for at åbne den, eller tryk **Rediger**. Under **Flere handlinger** (cirklen med tre prikker på skærmens kort) finder du **Duplikér**, **Lås skærm** / **Lås skærm op**, **Eksportér**, **Eksportér skærm som PDF** og **Slet**.
+Tryk på en skærm i oversigten for at åbne den, eller tryk **Rediger**. Under **Flere handlinger** (cirklen med tre prikker på skærmens kort) finder du **Duplikér**, **Lås skærm** / **Lås skærm op**, **Eksportér**, **Eksportér skærm som PDF**, **Fjernlagring** og **Slet**.
 
 > [!WARNING]
 > En slettet skærm kan ikke hentes tilbage.
@@ -246,7 +267,7 @@ Mens du redigerer, kan du ændre knapperne:
 Siderne og skærmen:
 
 - Tryk **Tilføj side** øverst for at lave en ny side.
-- Tryk på sidens navn øverst (fx **Home** med en lille pil). Her finder du **Omdøb side**, **Tilpas sidens størrelse**, **Sidebaggrund**, **Sidens baggrundsbillede** og **Sideindstillinger**. På andre sider end startsiden finder du også **Brug som startside** og **Slet side**.
+- Tryk på sidens navn øverst (fx **Hjem** med en lille pil). Her finder du **Omdøb side**, **Tilpas sidens størrelse**, **Sidebaggrund**, **Sidens baggrundsbillede** og **Sideindstillinger**. På andre sider end startsiden finder du også **Brug som startside** og **Slet side**.
 - Tryk på titlen **Redigerer …** øverst. Her finder du **Omdøb skærm** og **Skærmindstillinger**.
 - **Tilpas sidens størrelse** ændrer antal rækker og kolonner. Gør du siden mindre, fjernes de knapper, der ikke kan være der. Appen advarer dig først.
 
@@ -310,6 +331,41 @@ Du kan også bestemme, hvad der sker, når du har trykket på en almindelig knap
 Sidens baggrund vælger du i menuen under sidens navn: **Sidebaggrund** og **Sidens baggrundsbillede**. Billedet kan fylde hele siden (**Udfyld**) eller vises helt (**Tilpas**).
 
 En skærm kan følge appen med **Brug appstandard**, og en side kan følge skærmen med **Brug skærmindstilling**. **Nulstil skærmindstillinger** og **Nulstil sidetilpasninger** fjerner dine egne valg. Tryk **Gem** øverst, når du er færdig.
+
+### Del skærme
+
+En hjælper, lærer eller en i familien kan rette dine skærme fra sin egen iPhone, iPad eller Android. Wingmate gemmer stadig en kopi på din enhed, så skærmene virker, også når du er offline. Ændringer sendes videre, når der er internet.
+
+Sådan forbinder du et drev:
+
+1. Gå til **Indstillinger → Synkronisering**.
+2. Tryk **Google Drev** eller **OneDrive**, og log ind.
+3. Wingmate laver en mappe, der hedder Wingmate, og holder skærmene der synkroniseret.
+
+Du kan også trykke **Vælg synkroniseringsmappe**, hvis skærmene skal ligge i en mappe, du allerede synkroniserer, for eksempel i iCloud Drive.
+
+<img src="images/ios/iphone-indstillinger-synkronisering.png" alt="Synkronisering på iPhone med Vælg synkroniseringsmappe og Synkroniser nu" width="300">
+
+Vil du dele én skærm med en anden Apple-konto, gør du det fra skærmen:
+
+1. Gå til oversigten **Skærme**.
+2. Tryk **Flere handlinger** ved skærmen, og vælg **Fjernlagring**.
+3. Vælg **iCloud-deling (iPhone / iPad)**, og tryk **Del med iCloud**.
+4. Inviter personen. Data ligger på din iCloud-lagerplads. Den anden skal være logget ind på iCloud.
+
+<img src="images/ios/iphone-fjernlagring-icloud.png" alt="Fjernlagring på iPhone med iCloud-deling valgt og knappen Del med iCloud" width="300">
+
+Den, der bliver inviteret, trykker på linket. Så åbner skærmen i Wingmate. Er du kun inviteret til at se skærmen, kan du bruge den, men ikke ændre den.
+
+Ændringer synkroniseres af sig selv, når der er forbindelse. Du kan også trykke **Synkroniser nu** under **Indstillinger → Synkronisering**.
+
+Er der ændret begge steder på én gang, står der **Synkroniseringskonflikt**. Så kan du vælge **Erstat denne skærm med fjernkopi**, **Overskriv fjernkopi med denne skærm** eller **Gem fjernkopi som ny skærm**.
+
+Vil du stoppe delingen, så åbn **Fjernlagring** igen. Ejer du skærmen, trykker du **Stop deling**. Er den delt med dig, trykker du **Forlad deling**. Alle beholder deres egen kopi.
+
+Google Drev og OneDrive virker på samme måde som iCloud, når I ikke begge har en Apple-konto. Under **Fjernlagring** vælger du **Google Drev** eller **OneDrive**, logger ind og trykker **Gem i Google Drev** eller **Gem i OneDrive**. Del derefter filen i Google Drev eller OneDrive med den, der skal kunne rette den. En skolekonto i OneDrive kan kræve et ja fra skolens IT-afdeling. I oversigten **Skærme** trykker du på skyen med pilen ned (**Åbn fjernskærm**), vælger filen og trykker **Åbn**.
+
+Sletter du en skærm, der ligger i Google Drev eller OneDrive, spørger Wingmate, om filen også skal væk: **Slet her og i Google Drev** (eller OneDrive) eller **Slet kun på denne enhed**.
 
 ## Låsning af redigering
 
@@ -426,6 +482,7 @@ Du kan søge med **Søg i indstillinger**. **Udtaleordbog** er sit eget punkt p�
 | **Tale og sprog** | **Betjening** (**Tast til valg**, **Tast til hviletilstand**), **Talemotor**, stemme og sprog |
 | **Visning og layout** | **Partnerskærm**, knaptekster og symboler, gitter, **Høj kontrast**, **Automatiske Fitzgerald-ordtypefarver**, størrelse, beskedlinje |
 | **Tilgængelighed** | **Berøring og timing**, **Feedback og logning** (med **Tale ved valg**), **Markørfremhævning**, **Scanning** |
+| **Synkronisering** | Google Drev, OneDrive eller en mappe til skærme. Skærmene virker stadig offline. Deling med iCloud starter du fra skærmens menu |
 | **Privatliv** | **Vis talehistorik**, **Næste beskeder (eksperimentelt)**, **Sætningscache for skærme**, **Dataindsamling** (**Rapportering af funktionsbrug**, **Standardiseret logning (OBL)**), sikkerhedskopi |
 | **Generelt** | **Åbn ved opstart**, **Redigeringsadgang**, **Genstart opsætningsguide** |
 
@@ -476,6 +533,8 @@ Wingmate kan bruges med finger, mus, pegefelt, tastatur, kontakt og den markør,
 
 ## Fejlfinding
 
+**Appen lukkede sig selv, lige når du åbnede den første gang.** Det er rettet i denne version. Åbn appen igen. Sker det stadig, så skriv til os. Se [Giv feedback](#giv-feedback).
+
 **Stemmen på nettet virker ikke.** Tjek, at du har internet, og at nøglen stadig virker. Wingmate bruger enhedens stemme i stedet og beholder beskeden. Er nøglen blevet ændret, så sæt den nye ind under **Indstillinger → Tale og sprog**.
 
 **Stemmerne på enheden mangler eller lyder forkert.** Vælg stemmen i Wingmate under **Indstillinger → Tale og sprog → Valgt stemme**. Mangler stemmen på listen, så hent den i iPhone- eller iPad-appen **Indstillinger** (ikke i Wingmate) under **Tilgængelighed → Oplæst indhold → Stemmer**. På nogle versioner hedder **Oplæst indhold** i stedet **Læs og tal**. Gå tilbage til Wingmate, og vælg den.
@@ -504,6 +563,6 @@ Når du beskriver et problem, så skriv gerne om du bruger iPhone eller iPad, hv
 
 Wingmate er gratis, og koden er åben: [github.com/Jdreioe/Wingmate](https://github.com/Jdreioe/Wingmate). Licens: GPL 3.0.
 
-Manualen beskriver Wingmate, som den så ud i commit [`ab4a8e2`](https://github.com/Jdreioe/Wingmate/commit/ab4a8e242126a2dc2a978e52f5e077038a6770e2) på `main` (25. november 2026). Udgivelsen er version 1.9.1 på TestFlight.
+Manualen beskriver Wingmate, som den så ud i commit [`5fb3aa2`](https://github.com/Jdreioe/Wingmate/commit/5fb3aa22b63b83fd9f21bc4deb1eb864fec7c056) (25. november 2026). Udgivelsen er version 1.10.0 på TestFlight.
 
 Der er ikke en udgave til computer i denne version. Den ældre computerudgave ligger under [`desktop-archive`](https://github.com/Jdreioe/Wingmate/tree/desktop-archive).

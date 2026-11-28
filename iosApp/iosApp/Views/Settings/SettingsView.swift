@@ -163,8 +163,8 @@ struct SettingsView: View {
             }
         }
         .task {
-            await model.refreshParitySettings()
-            await model.loadBoardSets()
+            await model.refreshSettings()
+            await model.screens.loadBoardSets()
         }
     }
 
@@ -172,25 +172,34 @@ struct SettingsView: View {
     private func destinationView(_ destination: SettingsDestination) -> some View {
         switch destination {
         case .speech:
-            SpeechSettingsView(model: model)
+            SpeechSettingsView(
+                settings: model.settings,
+                speech: model.speech,
+                onSecondaryLanguageChanged: {
+                    model.communication.refreshSessionLanguageHighlights()
+                }
+            )
         case .display:
             DisplaySettingsView(
-                model: model,
+                settings: model.settings,
                 uiTextFieldHeight: $uiTextFieldHeight,
                 uiInputFontSize: $uiInputFontSize,
                 uiChipFontSize: $uiChipFontSize,
-                uiPlayIconSize: $uiPlayIconSize
+                uiPlayIconSize: $uiPlayIconSize,
+                onWordTypeColorsChanged: {
+                    await model.screens.refreshBoardCells()
+                }
             )
         case .accessibility:
-            AccessibilitySettingsView(model: model)
+            AccessibilitySettingsView(settings: model.settings)
         case .sync:
             SyncSettingsView(model: model)
         case .privacy:
-            PrivacySettingsView(model: model)
+            PrivacySettingsView(model: model, settings: model.settings, backup: model.backup)
         case .general:
-            GeneralSettingsView(model: model, onRestartSetup: onRestartSetup)
+            GeneralSettingsView(model: model, settings: model.settings, onRestartSetup: onRestartSetup)
         case .pronunciation:
-            PronunciationDictionaryView(model: model)
+            PronunciationDictionaryView(model: model.pronunciationDictionary)
         }
     }
 }
