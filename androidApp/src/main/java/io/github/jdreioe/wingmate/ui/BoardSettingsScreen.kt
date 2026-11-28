@@ -27,7 +27,9 @@ import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.VerticalAlignTop
@@ -55,14 +57,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_CELL_GAP_DP
+import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_OUTER_MARGIN_DP
 import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
+import kotlin.math.roundToInt
 import androidx.compose.ui.res.stringResource
 
 import com.hojmoseit.wingmate.R
@@ -77,7 +83,9 @@ private enum class BoardSettingPreference {
     MessageBarEditable,
     Activation,
     Return,
-    CacheSpeech
+    CacheSpeech,
+    CellGap,
+    OuterMargin,
 }
 
 private data class BoardSettingChoice(
@@ -393,6 +401,34 @@ private fun BoardSettingsHome(
             )
         }
 
+        SettingsGroup(title = stringResource(R.string.board_settings_group_keyguard)) {
+            BoardSettingNavRow(
+                title = stringResource(R.string.board_settings_cell_gap),
+                subtitle = settingSubtitle(
+                    target,
+                    BoardSettingPreference.CellGap,
+                    draft.cellGapDp,
+                    spacingLabel(resolved.cellGapDp),
+                    spacingLabel(inherited.cellGapDp),
+                ),
+                icon = Icons.Filled.GridView,
+                onClick = { onOpenPreference(BoardSettingPreference.CellGap) }
+            )
+            SettingsGroupDivider()
+            BoardSettingNavRow(
+                title = stringResource(R.string.board_settings_outer_margin),
+                subtitle = settingSubtitle(
+                    target,
+                    BoardSettingPreference.OuterMargin,
+                    draft.outerMarginDp,
+                    spacingLabel(resolved.outerMarginDp),
+                    spacingLabel(inherited.outerMarginDp),
+                ),
+                icon = Icons.Filled.OpenInFull,
+                onClick = { onOpenPreference(BoardSettingPreference.OuterMargin) }
+            )
+        }
+
         SettingsGroup(title = stringResource(R.string.board_settings_group_communication)) {
             BoardSettingNavRow(
                 title = stringResource(R.string.board_settings_cache_speech),
@@ -516,6 +552,108 @@ private fun BoardSettingChoicesPage(
                 modifier = Modifier.padding(bottom = 12.dp),
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+        if (preference == BoardSettingPreference.CellGap || preference == BoardSettingPreference.OuterMargin) {
+            val isCellGap = preference == BoardSettingPreference.CellGap
+            val description = stringResource(
+                if (isCellGap) R.string.board_settings_cell_gap_desc else R.string.board_settings_outer_margin_desc
+            )
+            val explicitValue = if (isCellGap) draft.cellGapDp else draft.outerMarginDp
+            val inheritedValue = if (isCellGap) inherited.cellGapDp else inherited.outerMarginDp
+            val maxValue = if (isCellGap) MAX_KEYGUARD_CELL_GAP_DP else MAX_KEYGUARD_OUTER_MARGIN_DP
+            val updateValue: (Int?) -> Unit = { next ->
+                val clamped = next?.coerceIn(0, maxValue)
+                onDraftChange(
+                    if (isCellGap) draft.copy(cellGapDp = clamped) else draft.copy(outerMarginDp = clamped)
+                )
+            }
+            Text(
+                description,
+                modifier = Modifier.padding(bottom = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            SettingsGroup(title = preferenceTitle(preference)) {
+                val inheritedPrefix = defaultLabel(target)
+                val inheritChoice = BoardSettingChoice(
+                    label = "$inheritedPrefix · ${spacingLabel(inheritedValue)}",
+                    selected = explicitValue == null,
+                    select = { updateValue(null) },
+                )
+                val customLabel = if (explicitValue != null) {
+                    "${stringResource(R.string.board_settings_spacing_custom)} · ${spacingLabel(explicitValue)}"
+                } else {
+                    stringResource(R.string.board_settings_spacing_custom)
+                }
+                val customChoice = BoardSettingChoice(
+                    label = customLabel,
+                    selected = explicitValue != null,
+                    select = { updateValue(explicitValue ?: inheritedValue ?: 8) },
+                )
+                listOf(inheritChoice, customChoice).forEachIndexed { index, choice ->
+                    if (index > 0) SettingsGroupDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                enabled = choice.enabled,
+                                role = Role.RadioButton,
+                                onClick = choice.select
+                            )
+                            .semantics { selected = choice.selected }
+                            .padding(vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            choice.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        if (choice.selected) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+                if (explicitValue != null) {
+                    SettingsGroupDivider()
+                    SettingsSlider(
+                        title = preferenceTitle(preference),
+                        value = explicitValue.toFloat(),
+                        onValueChange = { updateValue(it.roundToInt()) },
+                        onValueChangeFinished = {},
+                        valueRange = 0f..maxValue.toFloat(),
+                        steps = (maxValue - 1).coerceAtLeast(0),
+                        valueLabel = spacingLabel(explicitValue),
+                    )
+                    val decreaseLabel = stringResource(R.string.board_settings_spacing_decrease)
+                    val increaseLabel = stringResource(R.string.board_settings_spacing_increase)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { updateValue(explicitValue - 1) },
+                            enabled = explicitValue > 0,
+                            modifier = Modifier.weight(1f).semantics { contentDescription = decreaseLabel },
+                        ) {
+                            Text(stringResource(R.string.board_settings_spacing_step_down))
+                        }
+                        OutlinedButton(
+                            onClick = { updateValue(explicitValue + 1) },
+                            enabled = explicitValue < maxValue,
+                            modifier = Modifier.weight(1f).semantics { contentDescription = increaseLabel },
+                        ) {
+                            Text(stringResource(R.string.board_settings_spacing_step_up))
+                        }
+                    }
+                }
+            }
+            return
         }
         SettingsGroup(title = preferenceTitle(preference)) {
             choices.forEachIndexed { index, choice ->
@@ -681,6 +819,7 @@ private fun choicesFor(
                 )
             }
         }
+        BoardSettingPreference.CellGap, BoardSettingPreference.OuterMargin -> emptyList()
     }
 }
 
@@ -696,8 +835,15 @@ private fun preferenceTitle(preference: BoardSettingPreference): String = string
         BoardSettingPreference.Activation -> R.string.board_settings_activation
         BoardSettingPreference.Return -> R.string.board_settings_after_selection
         BoardSettingPreference.CacheSpeech -> R.string.board_settings_cache_speech
+        BoardSettingPreference.CellGap -> R.string.board_settings_cell_gap
+        BoardSettingPreference.OuterMargin -> R.string.board_settings_outer_margin
     }
 )
+
+@Composable
+private fun spacingLabel(valueDp: Int?): String =
+    if (valueDp == null) stringResource(R.string.board_settings_spacing_default)
+    else stringResource(R.string.board_settings_spacing_dp, valueDp)
 
 @Composable
 private fun enabledDisabled(value: Boolean): String =

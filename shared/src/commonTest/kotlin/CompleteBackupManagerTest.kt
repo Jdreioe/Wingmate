@@ -9,15 +9,19 @@ import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
 import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
 import io.github.jdreioe.wingmate.domain.PronunciationEntry
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.SpeechServiceConfig
 import io.github.jdreioe.wingmate.domain.ElevenLabsSpeechConfig
 import io.github.jdreioe.wingmate.domain.GoogleSpeechConfig
+import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.pageElements
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.withPageElements
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryBoardSetRepository
 import io.github.jdreioe.wingmate.infrastructure.InMemoryConfigRepository
@@ -38,6 +42,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class CompleteBackupManagerTest {
     @Test
@@ -170,6 +175,52 @@ class CompleteBackupManagerTest {
         assertEquals(ScreenKind.Typing, restoredSet.kind)
         assertEquals(customized.pageElements(), target.boards.getBoard(restoredSet.rootBoardId)?.pageElements())
         assertEquals(customized.buttons.map { it.id }, target.boards.getBoard(restoredSet.rootBoardId)?.buttons?.map { it.id })
+    }
+
+    @Test
+    fun backupRoundTripPreservesTouchExitDwellRearmAndKeyguardSpacing() = runBlocking {
+        val source = Repositories()
+        source.settings.update(
+            Settings(
+                selectOnTouchExit = true,
+                dwellRearmDelayMillis = 250L,
+            )
+        )
+        val board = ObfBoard(format = "open-board-0.1", id = "page-1", name = "Home")
+            .withPageSettingsOverrides(BoardSettingsOverrides(cellGapDp = 10, outerMarginDp = 20))
+        source.boards.saveBoard(board)
+        source.sets.saveBoardSet(
+            ObfBoardSet(
+                id = "screen-1",
+                name = "Keyguard Screen",
+                rootBoardId = "page-1",
+                boardIds = listOf("page-1"),
+                createdAt = 1L,
+                updatedAt = 2L,
+                screenSettings = BoardSettingsOverrides(cellGapDp = 16, outerMarginDp = 32),
+            )
+        )
+
+        val exported = source.manager(filePicker = null, media = TestMediaAccess()).exportBackup()
+
+        val target = Repositories()
+        val result = target.manager(
+            MapArchivePicker(readStoredZip(exported)),
+            TestMediaAccess(),
+        ).restoreBackup("keyguard.wingmate-backup")
+
+        assertIs<BackupRestoreResult.Success>(result)
+        val restoredSettings = target.settings.get()
+        assertTrue(restoredSettings.selectOnTouchExit)
+        assertEquals(250L, restoredSettings.dwellRearmDelayMillis)
+
+        val restoredScreen = target.sets.getBoardSet("screen-1")
+        assertEquals(16, restoredScreen?.screenSettings?.cellGapDp)
+        assertEquals(32, restoredScreen?.screenSettings?.outerMarginDp)
+
+        val restoredPage = target.boards.getBoard("page-1")?.pageSettingsOverrides()
+        assertEquals(10, restoredPage?.cellGapDp)
+        assertEquals(20, restoredPage?.outerMarginDp)
     }
 
     @Test

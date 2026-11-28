@@ -33,6 +33,7 @@ struct AppSettingsSnapshot: Equatable {
     // Timing, feedback, and pointer/switch access
     var holdToSelectMillis: Double = 0
     var dwellToSelectMillis: Double = 0
+    var dwellRearmDelayMillis: Double = Double(ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
     var selectionDebounceMillis: Double = 0
     var selectionHighlightMillis: Int64 = 0
     var selectionSoundEnabled: Bool = false
@@ -43,6 +44,7 @@ struct AppSettingsSnapshot: Equatable {
     var pointerEmphasisStyle: String = "System"
     var pointerEmphasisScale: Double = 1.5
     var selectOnTouchDown: Bool = false
+    var selectOnTouchExit: Bool = false
     var swipeBetweenPages: Bool = false
 
     // Privacy & history
@@ -58,6 +60,7 @@ protocol AppSettingsService {
     func loadSnapshot(fallbackUseSystemTts: Bool) async throws -> AppSettingsSnapshot
     func updateLikelyNextPageEnabled(_ enabled: Bool) async throws
     func updateSelectOnTouchDown(_ enabled: Bool) async throws
+    func updateSelectOnTouchExit(_ enabled: Bool) async throws
     func updateSwipeBetweenPages(_ enabled: Bool) async throws
     func updateScanningEnabled(_ enabled: Bool) async throws
     func updateScanPlaybackAreaEnabled(_ enabled: Bool) async throws
@@ -76,6 +79,7 @@ protocol AppSettingsService {
     func updateWordTypeColorScheme(_ scheme: String) async throws
     func updateHoldToSelectMillis(_ millis: Int64) async throws
     func updateDwellToSelectMillis(_ millis: Int64) async throws
+    func updateDwellRearmDelayMillis(_ millis: Int64) async throws
     func updateSelectKeyBinding(_ binding: String) async throws
     func updateRestModeKeyBinding(_ binding: String) async throws
     func updatePointerEmphasis(style: String, scale: Float) async throws
@@ -129,6 +133,7 @@ struct SharedAppSettingsService: AppSettingsService {
             boardShowSpeakButton: settings.boardShowSpeakButton,
             holdToSelectMillis: Double(settings.holdToSelectMillis),
             dwellToSelectMillis: Double(settings.dwellToSelectMillis),
+            dwellRearmDelayMillis: Double(settings.dwellRearmDelayMillis),
             selectionDebounceMillis: Double(settings.selectionDebounceMillis),
             selectionHighlightMillis: settings.selectionHighlightMillis,
             selectionSoundEnabled: settings.selectionSoundEnabled,
@@ -139,6 +144,7 @@ struct SharedAppSettingsService: AppSettingsService {
             pointerEmphasisStyle: settings.pointerEmphasisStyle.name,
             pointerEmphasisScale: Double(settings.pointerEmphasisScale),
             selectOnTouchDown: settings.selectOnTouchDown,
+            selectOnTouchExit: settings.selectOnTouchExit,
             swipeBetweenPages: settings.swipeBetweenPages,
             usageLoggingEnabled: settings.usageLoggingEnabled,
             featureUsageReportingEnabled: settings.featureUsageReportingEnabled,
@@ -149,6 +155,7 @@ struct SharedAppSettingsService: AppSettingsService {
 
     func updateLikelyNextPageEnabled(_ enabled: Bool) async throws { try await resolveFacade().updateLikelyNextPageEnabled(enabled: enabled) }
     func updateSelectOnTouchDown(_ enabled: Bool) async throws { try await resolveFacade().updateSelectOnTouchDown(enabled: enabled) }
+    func updateSelectOnTouchExit(_ enabled: Bool) async throws { try await resolveFacade().updateSelectOnTouchExit(enabled: enabled) }
     func updateSwipeBetweenPages(_ enabled: Bool) async throws { try await resolveFacade().updateSwipeBetweenPages(enabled: enabled) }
     func updateScanningEnabled(_ enabled: Bool) async throws { try await resolveFacade().updateScanningEnabled(enabled: enabled) }
     func updateScanPlaybackAreaEnabled(_ enabled: Bool) async throws { try await resolveFacade().updateScanPlaybackAreaEnabled(enabled: enabled) }
@@ -167,6 +174,7 @@ struct SharedAppSettingsService: AppSettingsService {
     func updateWordTypeColorScheme(_ scheme: String) async throws { try await resolveFacade().updateWordTypeColorScheme(scheme: scheme) }
     func updateHoldToSelectMillis(_ millis: Int64) async throws { try await resolveFacade().updateHoldToSelectMillis(millis: millis) }
     func updateDwellToSelectMillis(_ millis: Int64) async throws { try await resolveFacade().updateDwellToSelectMillis(millis: millis) }
+    func updateDwellRearmDelayMillis(_ millis: Int64) async throws { try await resolveFacade().updateDwellRearmDelayMillis(millis: millis) }
     func updateSelectKeyBinding(_ binding: String) async throws { try await resolveFacade().updateSelectKeyBinding(binding: binding) }
     func updateRestModeKeyBinding(_ binding: String) async throws { try await resolveFacade().updateRestModeKeyBinding(binding: binding) }
     func updatePointerEmphasis(style: String, scale: Float) async throws { try await resolveFacade().updatePointerEmphasis(style: style, scale: scale) }
@@ -216,7 +224,8 @@ final class AppSettingsModel: ObservableObject {
     // Timing, feedback, and pointer/switch access
     @Published private(set) var holdToSelectMillis: Double = 0
     @Published private(set) var dwellToSelectMillis: Double = 0
-    @Published private(set) var selectionDebounceMillis: Double = 0
+    @Published private(set) var dwellRearmDelayMillis: Double = Double(ModelKt.DEFAULT_DWELL_REARM_DELAY_MILLIS)
+    @Published var selectionDebounceMillis: Double = 0
     @Published private(set) var selectionHighlightMillis: Int64 = 0 {
         didSet {
             if selectionHighlightMillis != oldValue {
@@ -233,6 +242,7 @@ final class AppSettingsModel: ObservableObject {
     @Published private(set) var pointerEmphasisStyle: String = "System"
     @Published private(set) var pointerEmphasisScale: Double = 1.5
     @Published private(set) var selectOnTouchDown: Bool = false
+    @Published private(set) var selectOnTouchExit: Bool = false
     @Published private(set) var swipeBetweenPages: Bool = false
 
     // Shared access-input policy mirrors
@@ -250,12 +260,12 @@ final class AppSettingsModel: ObservableObject {
     @Published private(set) var lastFailureKind: NativeFailureKind? = nil
 
     private let service: any AppSettingsService
-    private let accessInput = AccessInputController()
+    let accessInput = AccessInputController()
     private let selectionHighlight = SelectionHighlight()
+    private let selectionDebouncer = SelectionDebouncer()
     private let nowMillisProvider: () -> Int64
     private let uptimeMillisProvider: () -> Int64
-    private var accessActions: [String: () -> Void] = [:]
-    private var lastActivationAtMillis: [String: Int64] = [:]
+    private var accessActions: [String: (handlesHaptics: Bool, action: () -> Void)] = [:]
     private var refreshTask: Task<AppSettingsSnapshot?, Never>?
     private var pendingMutations: [String: Task<Bool, Never>] = [:]
     private var highlightTask: Task<Void, Never>?
@@ -268,6 +278,7 @@ final class AppSettingsModel: ObservableObject {
         self.service = service
         self.nowMillisProvider = nowMillis
         self.uptimeMillisProvider = uptimeMillis
+        self.accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
     }
 
     deinit {
@@ -342,6 +353,8 @@ final class AppSettingsModel: ObservableObject {
         wordTypeColorScheme = snapshot.wordTypeColorScheme
         holdToSelectMillis = snapshot.holdToSelectMillis
         dwellToSelectMillis = snapshot.dwellToSelectMillis
+        dwellRearmDelayMillis = snapshot.dwellRearmDelayMillis
+        accessInput.rearmDelayMillis = Int64(snapshot.dwellRearmDelayMillis)
         selectionDebounceMillis = snapshot.selectionDebounceMillis
         selectionSoundEnabled = snapshot.selectionSoundEnabled
         auditoryFishingEnabled = snapshot.auditoryFishingEnabled
@@ -358,6 +371,7 @@ final class AppSettingsModel: ObservableObject {
         historyVisible = snapshot.historyVisible
         likelyNextPageEnabled = snapshot.likelyNextPageEnabled
         selectOnTouchDown = snapshot.selectOnTouchDown
+        selectOnTouchExit = snapshot.selectOnTouchExit
         swipeBetweenPages = snapshot.swipeBetweenPages
         startupUsesScreens = snapshot.startupUsesScreens
         startupBoardSetId = snapshot.startupBoardSetId
@@ -380,10 +394,29 @@ final class AppSettingsModel: ObservableObject {
 
     @discardableResult
     func setSelectOnTouchDown(_ enabled: Bool) -> Task<Bool, Never> {
-        let previous = selectOnTouchDown
+        let previousDown = selectOnTouchDown
+        let previousExit = selectOnTouchExit
         selectOnTouchDown = enabled
-        return persistSetting(key: "selectOnTouchDown", rollback: { self.selectOnTouchDown = previous }) {
+        if enabled { selectOnTouchExit = false }
+        return persistSetting(key: "selectOnTouchDown", rollback: {
+            self.selectOnTouchDown = previousDown
+            self.selectOnTouchExit = previousExit
+        }) {
             try await $0.updateSelectOnTouchDown(enabled)
+        }
+    }
+
+    @discardableResult
+    func setSelectOnTouchExit(_ enabled: Bool) -> Task<Bool, Never> {
+        let previousExit = selectOnTouchExit
+        let previousDown = selectOnTouchDown
+        selectOnTouchExit = enabled
+        if enabled { selectOnTouchDown = false }
+        return persistSetting(key: "selectOnTouchExit", rollback: {
+            self.selectOnTouchExit = previousExit
+            self.selectOnTouchDown = previousDown
+        }) {
+            try await $0.updateSelectOnTouchExit(enabled)
         }
     }
 
@@ -557,6 +590,20 @@ final class AppSettingsModel: ObservableObject {
         dwellToSelectMillis = clamped
         return persistSetting(key: "dwellToSelectMillis", rollback: { self.dwellToSelectMillis = previous }) {
             try await $0.updateDwellToSelectMillis(Int64(clamped))
+        }
+    }
+
+    @discardableResult
+    func setDwellRearmDelayMillis(_ value: Double) -> Task<Bool, Never> {
+        let previous = dwellRearmDelayMillis
+        let clamped = min(max(value, 0), 500)
+        dwellRearmDelayMillis = clamped
+        accessInput.rearmDelayMillis = Int64(clamped)
+        return persistSetting(key: "dwellRearmDelayMillis", rollback: {
+            self.dwellRearmDelayMillis = previous
+            self.accessInput.rearmDelayMillis = Int64(previous)
+        }) {
+            try await $0.updateDwellRearmDelayMillis(Int64(clamped))
         }
     }
 
@@ -747,25 +794,21 @@ final class AppSettingsModel: ObservableObject {
         highlightedButtonId = nil
     }
 
-    // #118: per-target activation debounce. A zero duration disables the guard entirely.
+    // #118 / #405: shared per-target activation debounce paired with UIKit confirm/reject haptics.
     func acceptActivation(targetId: String) -> Bool {
-        let now = nowMillisProvider()
-        let window = Int64(selectionDebounceMillis)
-        if window <= 0 {
-            lastActivationAtMillis[targetId] = nil
-            return true
-        }
-        if let last = lastActivationAtMillis[targetId], now - last < window {
-            return false
-        }
-        lastActivationAtMillis[targetId] = now
-        return true
+        let accepted = selectionDebouncer.tryActivate(
+            targetId: targetId,
+            nowMillis: nowMillisProvider(),
+            debounceMillis: Int64(selectionDebounceMillis)
+        )
+        AccessHaptics.perform(accepted ? .confirm : .reject)
+        return accepted
     }
 
     // MARK: - Access input policy
 
-    func registerAccessTarget(_ targetId: String, action: @escaping () -> Void) {
-        accessActions[targetId] = action
+    func registerAccessTarget(_ targetId: String, handlesHaptics: Bool = false, action: @escaping () -> Void) {
+        accessActions[targetId] = (handlesHaptics: handlesHaptics, action: action)
     }
 
     func unregisterAccessTarget(_ targetId: String) {
@@ -776,6 +819,7 @@ final class AppSettingsModel: ObservableObject {
     }
 
     func accessEnter(_ targetId: String) {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
         accessInput.targetEntered(targetId: targetId, nowMillis: nowMillisProvider())
         applyAccessInput()
     }
@@ -786,6 +830,7 @@ final class AppSettingsModel: ObservableObject {
     }
 
     func accessFocus(_ targetId: String) {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
         accessInput.targetFocused(targetId: targetId, nowMillis: nowMillisProvider())
         applyAccessInput()
     }
@@ -812,6 +857,7 @@ final class AppSettingsModel: ObservableObject {
     }
 
     func tickAccessInput() {
+        accessInput.rearmDelayMillis = Int64(dwellRearmDelayMillis)
         applyAccessInput(accessInput.tick(nowMillis: nowMillisProvider(), dwellMillis: Int64(dwellToSelectMillis)))
     }
 
@@ -821,14 +867,20 @@ final class AppSettingsModel: ObservableObject {
 
     // MARK: - Helpers
 
-    private func applyAccessInput(_ effect: (any AccessInputEffect)? = nil) {
+    func applyAccessInput(_ effect: (any AccessInputEffect)? = nil) {
         let state = accessInput.state
         if inputIsPaused != state.isPaused { inputIsPaused = state.isPaused }
         if accessTargetId != state.currentTargetId { accessTargetId = state.currentTargetId }
         let newProgress = Double(state.dwellProgress)
         if abs(accessDwellProgress - newProgress) > 0.001 { accessDwellProgress = newProgress }
-        if let activation = effect as? AccessInputEffectActivate {
-            accessActions[activation.targetId]?()
+        if let activation = effect as? AccessInputEffectActivate,
+           let target = accessActions[activation.targetId] {
+            if !target.handlesHaptics {
+                AccessHaptics.perform(.confirm)
+            }
+            target.action()
+        } else if effect is AccessInputEffectPauseChanged {
+            AccessHaptics.perform(.tick)
         }
     }
 

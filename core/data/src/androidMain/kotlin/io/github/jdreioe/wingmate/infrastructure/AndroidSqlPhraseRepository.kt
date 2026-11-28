@@ -109,6 +109,20 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
         Unit
     }
 
+    override suspend fun deleteAll(ids: List<String>) = withContext(repositoryDispatcher) {
+        if (ids.isEmpty()) return@withContext
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            ids.forEach { id ->
+                db.delete("phrases", "id = ?", arrayOf(id))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     override suspend fun move(fromIndex: Int, toIndex: Int) = withContext(repositoryDispatcher) {
         // Simple ordering swap implementation: read all ids and reorder
         val db = helper.writableDatabase
@@ -125,6 +139,50 @@ class AndroidSqlPhraseRepository(private val context: Context) : PhraseRepositor
             ids.forEachIndexed { idx, pid ->
                 val vals = ContentValues().apply { put("ordering", idx) }
                 db.update("phrases", vals, "id = ?", arrayOf(pid))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    override suspend fun restoreAtIndices(entries: List<Pair<Phrase, Int>>) = withContext(repositoryDispatcher) {
+        if (entries.isEmpty()) return@withContext
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            val orderedIds = db.query("phrases", arrayOf("id"), null, null, null, null, "ordering ASC").use { cursor ->
+                val found = mutableListOf<String>()
+                while (cursor.moveToNext()) found += cursor.getString(cursor.getColumnIndexOrThrow("id"))
+                found
+            }
+            val existingIds = orderedIds.toMutableSet()
+            val toInsert = entries
+                .filter { (phrase, _) -> phrase.id.isNotBlank() && existingIds.add(phrase.id) }
+                .sortedBy { it.second }
+            if (toInsert.isNotEmpty()) {
+                toInsert.forEach { (phrase, targetIndex) ->
+                    val createdAt = if (phrase.createdAt == 0L) System.currentTimeMillis() else phrase.createdAt
+                    val values = ContentValues().apply {
+                        put("id", phrase.id)
+                        put("text", phrase.text)
+                        put("name", phrase.name)
+                        put("background_color", phrase.backgroundColor)
+                        put("image_url", phrase.imageUrl)
+                        put("parent_id", phrase.parentId)
+                        put("linked_board_id", phrase.linkedBoardId)
+                        put("created_at", createdAt)
+                        put("recording_path", phrase.recordingPath)
+                        put("is_hidden", phrase.isHidden)
+                        put("ordering", orderedIds.size)
+                    }
+                    db.insertOrThrow("phrases", null, values)
+                    orderedIds.add(targetIndex.coerceIn(0, orderedIds.size), phrase.id)
+                }
+                orderedIds.forEachIndexed { idx, pid ->
+                    val vals = ContentValues().apply { put("ordering", idx) }
+                    db.update("phrases", vals, "id = ?", arrayOf(pid))
+                }
             }
             db.setTransactionSuccessful()
         } finally {

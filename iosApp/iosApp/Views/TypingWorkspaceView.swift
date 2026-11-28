@@ -142,6 +142,38 @@ struct TypingWorkspaceView: View {
             )
         }
         .fullScreenCover(isPresented: $isMessageFullscreen) { fullscreenMessage }
+        .overlay(alignment: .bottom) {
+            if let undo = model.communication.pendingPhraseUndo {
+                HStack(spacing: 12) {
+                    Text(LocalizedStringKey(undo.includesSubItems ? "phrase.deleted_with_subitems" : "phrase.deleted"))
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("action.undo") {
+                        model.communication.undoPendingPhraseDeletion()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(undo.isRestoring)
+                    Button {
+                        model.communication.dismissPendingPhraseUndo()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(undo.isRestoring)
+                    .accessibilityLabel(Text("common.close"))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color(.separator), lineWidth: 1))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.communication.pendingPhraseUndo)
     }
 
     // MARK: - Compact Layout (Outer Display / Standard iPhone / Narrow Split)

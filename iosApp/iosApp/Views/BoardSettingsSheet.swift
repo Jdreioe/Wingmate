@@ -1,4 +1,5 @@
 import SwiftUI
+import Shared
 
 /// Screen or Page settings, matching Android's inheritance: each choice can follow
 /// the level above it, or set Shown/Hidden, activation, and where to go next.
@@ -16,6 +17,10 @@ struct BoardSettingsSheet: View {
     @State private var activationBehavior = "inherit"
     @State private var returnBehavior = "inherit"
     @State private var cacheSpeech = "inherit"
+    @State private var useCustomCellGap = false
+    @State private var cellGapDp = 8
+    @State private var useCustomOuterMargin = false
+    @State private var outerMarginDp = 8
     @State private var isSaving = false
 
     var body: some View {
@@ -67,6 +72,25 @@ struct BoardSettingsSheet: View {
                 }
 
                 Section {
+                    Toggle("board_settings.cell_gap.custom", isOn: $useCustomCellGap)
+                    if useCustomCellGap {
+                        Stepper(value: $cellGapDp, in: 0...Int(BoardSettingsKt.MAX_KEYGUARD_CELL_GAP_DP)) {
+                            LabeledContent("board_settings.cell_gap", value: String(format: NSLocalizedString("board_settings.spacing_pt", comment: ""), cellGapDp))
+                        }
+                    }
+                    Toggle("board_settings.outer_margin.custom", isOn: $useCustomOuterMargin)
+                    if useCustomOuterMargin {
+                        Stepper(value: $outerMarginDp, in: 0...Int(BoardSettingsKt.MAX_KEYGUARD_OUTER_MARGIN_DP)) {
+                            LabeledContent("board_settings.outer_margin", value: String(format: NSLocalizedString("board_settings.spacing_pt", comment: ""), outerMarginDp))
+                        }
+                    }
+                } header: {
+                    Text("board_settings.keyguard_spacing")
+                } footer: {
+                    Text("board_settings.keyguard_spacing_footer")
+                }
+
+                Section {
                     Button(LocalizedStringKey(forPage ? "board_settings.reset_page" : "board_settings.reset_screen")) {
                         showLabels = "inherit"
                         showSymbols = "inherit"
@@ -77,6 +101,10 @@ struct BoardSettingsSheet: View {
                         activationBehavior = "inherit"
                         returnBehavior = "inherit"
                         cacheSpeech = "inherit"
+                        useCustomCellGap = false
+                        cellGapDp = 8
+                        useCustomOuterMargin = false
+                        outerMarginDp = 8
                     }
                 }
             }
@@ -124,6 +152,20 @@ struct BoardSettingsSheet: View {
         activationBehavior = draft.activationBehavior
         returnBehavior = draft.returnBehavior
         cacheSpeech = draft.cacheSpeech
+        if let gap = draft.cellGapDp?.intValue {
+            useCustomCellGap = true
+            cellGapDp = gap
+        } else {
+            useCustomCellGap = false
+            cellGapDp = screens.resolvedBoardCellGapDp ?? 8
+        }
+        if let margin = draft.outerMarginDp?.intValue {
+            useCustomOuterMargin = true
+            outerMarginDp = margin
+        } else {
+            useCustomOuterMargin = false
+            outerMarginDp = screens.resolvedBoardOuterMarginDp ?? 8
+        }
     }
 
     private func save() {
@@ -139,7 +181,9 @@ struct BoardSettingsSheet: View {
                 messageBarEditable: messageBarEditable,
                 activationBehavior: activationBehavior,
                 returnBehavior: returnBehavior,
-                cacheSpeech: cacheSpeech
+                cacheSpeech: cacheSpeech,
+                cellGapDp: useCustomCellGap ? cellGapDp : nil,
+                outerMarginDp: useCustomOuterMargin ? outerMarginDp : nil
             )
             isSaving = false
             if saved { onClose() }

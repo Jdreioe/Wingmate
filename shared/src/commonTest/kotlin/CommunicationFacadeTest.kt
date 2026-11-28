@@ -151,6 +151,190 @@ class CommunicationFacadeTest {
         assertEquals("/tmp/hi.m4a", added.recordingPath)
     }
 
+    @Test
+    fun restorePhrasesRebuildsDeletedCategoryAndChildrenWithOriginalIds() = withFakeMain {
+        val phraseRepo = InMemoryPhraseRepository()
+        val category = Phrase(id = "cat-1", text = "Food", linkedBoardId = "cat-1", isGridItem = false, createdAt = 1L)
+        val child = Phrase(id = "p-1", text = "Water", parentId = "cat-1", createdAt = 2L, recordingPath = "/tmp/water.m4a")
+        phraseRepo.add(category)
+        phraseRepo.add(child)
+        val store = facade(phraseRepository = phraseRepo).phraseListStore()
+
+        store.accept(PhraseListStore.Intent.DeleteCategory(categoryId = "cat-1"))
+        withTimeout(5_000) {
+            while (phraseRepo.getAll().isNotEmpty()) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.RestorePhrases(listOf(category, child)))
+        withTimeout(5_000) {
+            while (phraseRepo.getAll().size != 2) delay(10)
+        }
+        assertEquals(listOf(category, child), phraseRepo.getAll())
+    }
+
+    @Test
+    fun undoLastDeletionIsSerializedAndRestoresOriginalRepositoryOrder() = withFakeMain {
+        val phraseRepo = InMemoryPhraseRepository()
+        val first = Phrase(id = "p-0", text = "First", createdAt = 1L)
+        val category = Phrase(id = "cat-1", text = "Food", linkedBoardId = "cat-1", isGridItem = false, createdAt = 2L)
+        val childA = Phrase(id = "p-1", text = "Water", parentId = "cat-1", createdAt = 3L, recordingPath = "/tmp/water.m4a")
+        val middle = Phrase(id = "p-2", text = "Other", createdAt = 4L)
+        val childB = Phrase(id = "p-3", text = "Apple", parentId = "cat-1", createdAt = 5L)
+        listOf(first, category, childA, middle, childB).forEach { phraseRepo.add(it) }
+        val store = facade(phraseRepository = phraseRepo).phraseListStore()
+
+        // Wait for initial load before deleting.
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        // Delete the interleaved category subtree, then immediately trigger undo.
+        store.accept(PhraseListStore.Intent.DeleteCategory(categoryId = "cat-1"))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo == null) delay(10)
+        }
+        val undoId = store.state.lastDeletedUndo!!.id
+        assertEquals(true, store.state.lastDeletedUndo?.includesSubItems)
+        assertEquals(listOf("p-0", "p-2"), phraseRepo.getAll().map { it.id })
+
+        // Mismatched undo/dismiss IDs must not affect a newer deletion banner.
+        store.accept(PhraseListStore.Intent.DismissDeletionUndo(undoId + 999))
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId + 999))
+        delay(50)
+        assertEquals(undoId, store.state.lastDeletedUndo?.id)
+        assertEquals(listOf("p-0", "p-2"), phraseRepo.getAll().map { it.id })
+
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo != null || phraseRepo.getAll().size != 5) delay(10)
+        }
+        assertEquals(
+            listOf("p-0", "cat-1", "p-1", "p-2", "p-3"),
+            phraseRepo.getAll().map { it.id },
+        )
+    }
+
+    @Test
+    fun failedDeletionDoesNotEmitUndoState() = withFakeMain {
+        val base = InMemoryPhraseRepository()
+        val category = Phrase(id = "cat-1", text = "Food", linkedBoardId = "cat-1", isGridItem = false, createdAt = 1L)
+        val phrase = Phrase(id = "p-1", text = "Stay", parentId = "cat-1", createdAt = 2L, recordingPath = "/tmp/stay.m4a")
+        base.add(category)
+        base.add(phrase)
+        val failingRepo = object : PhraseRepository by base {
+            override suspend fun deleteAll(ids: List<String>) {
+                throw IllegalStateException("disk full")
+            }
+        }
+        val store = facade(phraseRepository = failingRepo).phraseListStore()
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.DeleteCategory(categoryId = "cat-1"))
+        withTimeout(5_000) {
+            while (store.state.error == null) delay(10)
+        }
+        assertEquals(null, store.state.lastDeletedUndo)
+        assertEquals(listOf(category, phrase), base.getAll())
+    }
+
+    @Test
+    fun undoRestoreStatusIsScopedAndUnrelatedErrorsDoNotFailPendingUndo() = withFakeMain {
+        val base = InMemoryPhraseRepository()
+        val p1 = Phrase(id = "p-1", text = "Keep", createdAt = 1L)
+        val p2 = Phrase(id = "p-2", text = "Remove", createdAt = 2L)
+        base.add(p1)
+        base.add(p2)
+        var failRestore = true
+        val repo = object : PhraseRepository by base {
+            override suspend fun update(phrase: Phrase): Phrase {
+                throw IllegalStateException("unrelated update failure")
+            }
+
+            override suspend fun restoreAtIndices(entries: List<Pair<Phrase, Int>>) {
+                if (failRestore) throw IllegalStateException("restore failed")
+                base.restoreAtIndices(entries)
+            }
+        }
+        val store = facade(phraseRepository = repo).phraseListStore()
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.DeletePhrase(phraseId = "p-2"))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo == null) delay(10)
+        }
+        val undoId = store.state.lastDeletedUndo!!.id
+        assertEquals(PhraseListStore.UndoRestoreStatus.Idle, store.state.lastDeletedUndo?.restoreStatus)
+
+        // An unrelated UpdatePhrase failure sets store.error without flipping lastDeletedUndo.restoreStatus.
+        store.accept(PhraseListStore.Intent.UpdatePhrase(id = "p-1", text = "Broken", name = null))
+        withTimeout(5_000) {
+            while (store.state.error == null) delay(10)
+        }
+        assertEquals(PhraseListStore.UndoRestoreStatus.Idle, store.state.lastDeletedUndo?.restoreStatus)
+
+        // A failing restore marks this specific undo entry as Failed while retaining it for retry.
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo?.restoreStatus != PhraseListStore.UndoRestoreStatus.Failed) delay(10)
+        }
+        assertEquals(undoId, store.state.lastDeletedUndo?.id)
+
+        // Retrying once storage recovers restores the phrase and clears lastDeletedUndo.
+        failRestore = false
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undoId))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo != null) delay(10)
+        }
+        assertEquals(listOf("p-1", "p-2"), base.getAll().map { it.id })
+    }
+
+    @Test
+    fun deletePublishesUndoEvenWhenPostDeleteReloadFails() = withFakeMain {
+        val base = InMemoryPhraseRepository()
+        val p1 = Phrase(id = "p-1", text = "Keep", createdAt = 1L)
+        val p2 = Phrase(id = "p-2", text = "Remove", createdAt = 2L)
+        base.add(p1)
+        base.add(p2)
+        var failNextReload = false
+        val repo = object : PhraseRepository by base {
+            override suspend fun deleteAll(ids: List<String>) {
+                base.deleteAll(ids)
+                failNextReload = true
+            }
+
+            override suspend fun getAll(): List<Phrase> {
+                if (failNextReload) {
+                    failNextReload = false
+                    throw IllegalStateException("post-delete reload failed")
+                }
+                return base.getAll()
+            }
+        }
+        val store = facade(phraseRepository = repo).phraseListStore()
+        withTimeout(5_000) {
+            while (store.state.isLoading) delay(10)
+        }
+
+        store.accept(PhraseListStore.Intent.DeletePhrase(phraseId = "p-2"))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo == null || store.state.error == null) delay(10)
+        }
+        val undo = store.state.lastDeletedUndo!!
+        assertEquals(listOf("p-2"), undo.phrases.map { it.id })
+        assertEquals(listOf("p-1"), store.state.phrases.map { it.id })
+
+        // Undo still restores the committed deletion once storage reads succeed again.
+        store.accept(PhraseListStore.Intent.UndoLastDeletion(undo.id))
+        withTimeout(5_000) {
+            while (store.state.lastDeletedUndo != null) delay(10)
+        }
+        assertEquals(listOf("p-1", "p-2"), base.getAll().map { it.id })
+    }
+
     /** Store intents process asynchronously; wait until the phrase reaches the expected path. */
     private suspend fun awaitRecordingPath(
         phraseRepo: PhraseRepository,

@@ -423,12 +423,12 @@ struct PhraseItemView: View {
         .onHover { hovering in
             if hovering {
                 model.settings.accessEnter(accessTargetId)
-                if model.settings.auditoryFishingEnabled && !model.settings.inputIsPaused { model.communication.speak(accessibleName) }
+                if model.settings.auditoryFishingEnabled && !model.settings.inputIsPaused { model.communication.previewSpeech(accessibleName) }
             } else {
                 model.settings.accessExit(accessTargetId)
             }
         }
-        .onAppear { model.settings.registerAccessTarget(accessTargetId) { model.communication.activateTypingPhrase(phrase) } }
+        .onAppear { model.settings.registerAccessTarget(accessTargetId, handlesHaptics: true) { model.communication.activateTypingPhrase(phrase) } }
         .onDisappear { model.settings.unregisterAccessTarget(accessTargetId) }
         .accessTargetFocus(model: model, targetId: accessTargetId)
         .overlay {

@@ -1,9 +1,18 @@
 package io.github.jdreioe.wingmate.ui
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -21,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.pressKey
@@ -33,7 +43,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfGrid
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.ResolvedBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -338,6 +351,289 @@ class ObfBoardContentTest {
 
         composeRule.runOnIdle { state = state.copy(board = ObfBoard(format = "open-board-0.1", id = "blank")) }
         composeRule.onNodeWithText(emptyMessage).assertIsDisplayed()
+    }
+
+    @Test
+    fun touchExitSurvivesMidDragRecompositionAndActivatesButtonOnLift() {
+        val clicked = mutableListOf<String>()
+        val previews = mutableListOf<String>()
+        var state by mutableStateOf(
+            ObfBoardUiState(
+                board = board,
+                messageText = "Start",
+                settings = Settings(selectOnTouchExit = true, auditoryFishingEnabled = true),
+            )
+        )
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = state,
+                    onButtonClick = { clicked += it.id },
+                    feedback = BoardFeedback(
+                        onAuditoryCue = { _, label ->
+                            previews += label
+                            // Simulate CommunicationSession playback state recomposing the board mid-drag.
+                            state = state.copy(messageText = "Speaking:$label")
+                        },
+                    ),
+                )
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesCenter = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot.center - gridBounds.topLeft
+        val noCenter = composeRule.onNodeWithText("No").fetchSemanticsNode().boundsInRoot.center - gridBounds.topLeft
+
+        grid.performTouchInput { down(yesCenter) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { moveTo(noCenter) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(listOf("Yes", "No"), previews)
+            assertEquals(listOf("no"), clicked)
+        }
+    }
+
+    @Test
+    fun touchExitLiftInKeyguardGapOrOutsideCancelsSafely() {
+        val clicked = mutableListOf<String>()
+        var cancelCount = 0
+        val twoButtonBoard = ObfBoard(
+            format = "open-board-0.1",
+            id = "gap-test",
+            buttons = listOf(yes, no),
+            grid = ObfGrid(rows = 1, columns = 2, order = listOf(listOf("yes", "no"))),
+        )
+        val spacedSettings: ResolvedBoardSettings = resolveBoardSettings(
+            appShowLabels = true,
+            appShowSymbols = false,
+            appLabelAtTop = false,
+        ).copy(cellGapDp = 32, outerMarginDp = 16)
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = ObfBoardUiState(
+                        board = twoButtonBoard,
+                        boardSettings = spacedSettings,
+                        settings = Settings(selectOnTouchExit = true, auditoryFishingEnabled = true),
+                    ),
+                    onButtonClick = { clicked += it.id },
+                    feedback = BoardFeedback(onCancelAuditoryCue = { cancelCount++ }),
+                )
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesBounds = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot
+        val noBounds = composeRule.onNodeWithText("No").fetchSemanticsNode().boundsInRoot
+        val yesLocal = yesBounds.center - gridBounds.topLeft
+        val gapLocal = Offset(
+            x = (yesBounds.right + noBounds.left) / 2f - gridBounds.left,
+            y = yesBounds.center.y - gridBounds.top,
+        )
+
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { moveTo(gapLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        var cancelCountAfterGap = 0
+        composeRule.runOnIdle {
+            assertEquals(emptyList<String>(), clicked)
+            assertTrue(cancelCount > 0)
+            cancelCountAfterGap = cancelCount
+        }
+
+        val outsideGridLocal = Offset(
+            x = -24f,
+            y = yesBounds.center.y - gridBounds.top,
+        )
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { moveTo(outsideGridLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(emptyList<String>(), clicked)
+            assertTrue(cancelCount > cancelCountAfterGap)
+        }
+    }
+
+    @Test
+    fun touchExitSystemCancelDoesNotActivateButton() {
+        val clicked = mutableListOf<String>()
+        var cancelCount = 0
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = ObfBoardUiState(
+                        board = board,
+                        settings = Settings(selectOnTouchExit = true),
+                    ),
+                    onButtonClick = { clicked += it.id },
+                    feedback = BoardFeedback(onCancelAuditoryCue = { cancelCount++ }),
+                )
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesLocal = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot.center - gridBounds.topLeft
+
+        grid.performTouchInput {
+            down(yesLocal)
+            cancel()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(emptyList<String>(), clicked)
+            assertTrue(cancelCount > 0)
+        }
+    }
+
+    @Test
+    fun touchExitCancelsWhenPageIdentityChangesMidGesture() {
+        val clicked = mutableListOf<String>()
+        var cancelCount = 0
+        var activeBoard by mutableStateOf(board.copy(id = "page-a"))
+        composeRule.setContent {
+            AppTheme {
+                ObfBoardContent(
+                    state = ObfBoardUiState(
+                        board = activeBoard,
+                        settings = Settings(selectOnTouchExit = true),
+                    ),
+                    onButtonClick = { clicked += "${activeBoard.id}:${it.id}" },
+                    feedback = BoardFeedback(onCancelAuditoryCue = { cancelCount++ }),
+                )
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesLocal = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot.center - gridBounds.topLeft
+
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        // Swap to a different Page with the exact same grid shape and items while finger is held down.
+        composeRule.runOnIdle { activeBoard = board.copy(id = "page-b") }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(emptyList<String>(), clicked)
+            assertTrue(cancelCount > 0)
+        }
+    }
+
+    @Test
+    fun touchExitActivatesVisibleButtonInRtlLayout() {
+        val clicked = mutableListOf<String>()
+        val previews = mutableListOf<String>()
+        val twoButtonBoard = ObfBoard(
+            format = "open-board-0.1",
+            id = "rtl-test",
+            buttons = listOf(yes, no),
+            grid = ObfGrid(rows = 1, columns = 2, order = listOf(listOf("yes", "no"))),
+        )
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AppTheme {
+                    ObfBoardContent(
+                        state = ObfBoardUiState(
+                            board = twoButtonBoard,
+                            settings = Settings(selectOnTouchExit = true, auditoryFishingEnabled = true),
+                        ),
+                        onButtonClick = { clicked += it.id },
+                        feedback = BoardFeedback(onAuditoryCue = { _, label -> previews += label }),
+                    )
+                }
+            }
+        }
+
+        val grid = composeRule.onNodeWithTag("board-grid")
+        val gridBounds = grid.fetchSemanticsNode().boundsInRoot
+        val yesBounds = composeRule.onNodeWithText("Yes").fetchSemanticsNode().boundsInRoot
+        val noBounds = composeRule.onNodeWithText("No").fetchSemanticsNode().boundsInRoot
+        // In RTL, column 0 ("Yes") renders on the right of column 1 ("No").
+        assertTrue(yesBounds.center.x > noBounds.center.x)
+
+        val yesLocal = yesBounds.center - gridBounds.topLeft
+        val noLocal = noBounds.center - gridBounds.topLeft
+
+        grid.performTouchInput { down(yesLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+        grid.performTouchInput { down(noLocal) }
+        composeRule.waitForIdle()
+        grid.performTouchInput { up() }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(listOf("Yes", "No"), previews)
+            assertEquals(listOf("yes", "no"), clicked)
+        }
+    }
+
+    @Test
+    fun touchExitDoesNotSwallowHorizontalSwipeOnHiddenOnlyPage() {
+        var totalDragX = 0f
+        val hiddenOnlyBoard = ObfBoard(
+            format = "open-board-0.1",
+            id = "hidden-only",
+            buttons = listOf(yes.copy(hidden = true)),
+            grid = ObfGrid(rows = 1, columns = 1, order = listOf(listOf("yes"))),
+        )
+        composeRule.setContent {
+            AppTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures { _, dragAmount ->
+                                totalDragX += dragAmount
+                            }
+                        }
+                ) {
+                    ObfBoardContent(
+                        state = ObfBoardUiState(
+                            board = hiddenOnlyBoard,
+                            settings = Settings(selectOnTouchExit = true),
+                        ),
+                        onButtonClick = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("board-grid").assertDoesNotExist()
+        val emptyPage = composeRule.onNodeWithTag("board-empty")
+        val bounds = emptyPage.fetchSemanticsNode().boundsInRoot
+        val start = Offset(bounds.width * 0.8f, bounds.height * 0.5f)
+        val end = Offset(bounds.width * 0.2f, bounds.height * 0.5f)
+
+        emptyPage.performTouchInput {
+            down(start)
+            moveTo(end)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertTrue(totalDragX < 0f)
+        }
     }
 
     private fun SemanticsNodeInteraction.runCustomAction(label: String) {

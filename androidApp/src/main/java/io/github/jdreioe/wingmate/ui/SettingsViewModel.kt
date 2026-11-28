@@ -134,6 +134,7 @@ internal sealed interface SettingsAction {
     data class HoldToSelectChanged(val millis: Long) : SettingsAction
     data object HoldToSelectChangeFinished : SettingsAction
     data class SelectOnTouchDownChanged(val checked: Boolean) : SettingsAction
+    data class SelectOnTouchExitChanged(val checked: Boolean) : SettingsAction
     data class SwipeBetweenPagesChanged(val checked: Boolean) : SettingsAction
     data class DwellToSelectChanged(val millis: Long) : SettingsAction
     data object DwellToSelectChangeFinished : SettingsAction
@@ -470,7 +471,16 @@ internal class SettingsViewModel(
                 copy(holdToSelectMillis = holdToSelectMillis)
             }
             is SettingsAction.SelectOnTouchDownChanged -> persist {
-                it.copy(selectOnTouchDown = action.checked)
+                it.copy(
+                    selectOnTouchDown = action.checked,
+                    selectOnTouchExit = if (action.checked) false else it.selectOnTouchExit,
+                )
+            }
+            is SettingsAction.SelectOnTouchExitChanged -> persist {
+                it.copy(
+                    selectOnTouchExit = action.checked,
+                    selectOnTouchDown = if (action.checked) false else it.selectOnTouchDown,
+                )
             }
             is SettingsAction.SwipeBetweenPagesChanged -> persist {
                 it.copy(swipeBetweenPages = action.checked)

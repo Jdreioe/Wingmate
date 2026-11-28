@@ -171,11 +171,30 @@ class CommunicationSessionFacade(
         session.accept(CommunicationAction.SpeakActive(voice, cacheAudio))
     }
 
-    /** Speaks [text] on its own (previews, single Buttons) without the Message or History. */
+    /** Speaks [text] on its own (single Buttons) without the Message or History. */
     fun speakText(text: String, voice: Voice?) {
         if (text.isBlank()) return
         session.accept(CommunicationAction.SpeakPart(MessagePart(text), voice))
     }
+
+    /**
+     * Speaks an auditory-fishing preview cue, replacing any previous preview without
+     * interrupting committed speech or recording History.
+     */
+    fun previewText(text: String, voice: Voice?, rateOverride: Double? = 0.8, languageTag: String? = null) {
+        if (text.isBlank()) return
+        session.accept(
+            CommunicationAction.SpeakPart(
+                part = MessagePart(text, languageTag = languageTag),
+                voice = voice,
+                rateOverride = rateOverride,
+                isPreview = true,
+            )
+        )
+    }
+
+    /** Cancels any active or queued auditory-fishing preview without stopping committed speech. */
+    fun cancelPreview() = session.accept(CommunicationAction.CancelPreview)
 
     /**
      * Says one part of the active Message again, e.g. a word the listener missed,

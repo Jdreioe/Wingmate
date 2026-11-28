@@ -1,5 +1,6 @@
 import Foundation
 import Shared
+import UIKit
 
 /// Swift-side cancellation protocol conformed to by `Shared.NativeSubscription` so feature
 /// models can test subscription replacement and disposal without constructing Kotlin objects.
@@ -39,6 +40,8 @@ protocol CommunicationService {
     ) -> Shared.NativePhraseActivation
     func speakMessage(voice: Shared.Voice?, cacheAudio: Bool)
     func speakText(_ text: String, voice: Shared.Voice?)
+    func previewText(_ text: String, voice: Shared.Voice?, rateOverride: KotlinDouble?, languageTag: String?)
+    func cancelPreview()
     func speakMessagePart(index: Int32, voice: Shared.Voice?)
     func speakPhrase(_ phrase: Shared.Phrase, voice: Shared.Voice?)
     func speakRecording(path: String, voice: Shared.Voice?)
@@ -154,6 +157,10 @@ struct SharedCommunicationService: CommunicationService {
     }
 
     func speakText(_ text: String, voice: Shared.Voice?) { resolveSession().speakText(text: text, voice: voice) }
+    func previewText(_ text: String, voice: Shared.Voice?, rateOverride: KotlinDouble?, languageTag: String?) {
+        resolveSession().previewText(text: text, voice: voice, rateOverride: rateOverride, languageTag: languageTag)
+    }
+    func cancelPreview() { resolveSession().cancelPreview() }
     func speakMessagePart(index: Int32, voice: Shared.Voice?) { resolveSession().speakMessagePart(index: index, voice: voice) }
     func speakPhrase(_ phrase: Shared.Phrase, voice: Shared.Voice?) { resolveSession().speakPhrase(phrase: phrase, voice: voice) }
     func speakRecording(path: String, voice: Shared.Voice?) { resolveSession().speakRecording(path: path, voice: voice) }
@@ -216,8 +223,12 @@ final class CommunicationModel: ObservableObject {
         categories: [],
         selectedCategoryId: nil,
         isLoading: true,
-        error: nil
+        error: nil,
+        lastDeletedUndo: nil
     )
+
+    // Pending destructive Phrase/Category undo banner (#405)
+    @Published private(set) var pendingPhraseUndo: PendingPhraseUndo? = nil
 
     // Shared Message (#306)
     @Published private(set) var input: String = ""
@@ -268,6 +279,8 @@ final class CommunicationModel: ObservableObject {
     private var typingTrayTask: Task<Void, Never>?
     private var buttonLooksTasks: [String: Task<Void, Never>] = [:]
     private var lookedUpPageIds: Set<String> = []
+    private var pendingPhraseUndoTask: Task<Void, Never>?
+    private var dismissedPhraseUndoIds: Set<Int64> = []
 
     init(
         service: any CommunicationService = SharedCommunicationService(),
@@ -300,6 +313,7 @@ final class CommunicationModel: ObservableObject {
         sessionSubscription?.cancel()
         historyTask?.cancel()
         typingTrayTask?.cancel()
+        pendingPhraseUndoTask?.cancel()
         buttonLooksTasks.values.forEach { $0.cancel() }
         #if DEBUG
         predictionJob?.cancel()
@@ -312,6 +326,8 @@ final class CommunicationModel: ObservableObject {
         historyTask = nil
         typingTrayTask?.cancel()
         typingTrayTask = nil
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
         buttonLooksTasks.values.forEach { $0.cancel() }
         buttonLooksTasks.removeAll()
         #if DEBUG
@@ -330,10 +346,14 @@ final class CommunicationModel: ObservableObject {
         phraseSubscription?.cancel()
         phraseSubscription = service.observePhrases { [weak self] state in
             self?.state = state
+            self?.syncPhraseUndo(from: state)
         }
     }
 
     func reloadAfterBackupRestore() async throws {
+        // The restored library replaces the one the pending deletion came from, so its
+        // Undo must not insert an old Phrase or Category into it.
+        dismissPendingPhraseUndo()
         service.refreshPhrases()
         try await service.reloadSessionAfterRestore()
         await loadTypingTray()
@@ -484,16 +504,16 @@ final class CommunicationModel: ObservableObject {
         return !secondary.isEmpty && secondary != speech.primaryLanguage
     }
 
-    func appendScreenPart(text: String, buttonId: String, languageTag: String? = nil, mathMode: Bool = false) {
+    func appendScreenPart(text: String, buttonId: String, pageId: String? = nil, languageTag: String? = nil, mathMode: Bool = false) {
         let screenContext = activeScreenContext()
-        if let pageId = screenContext.pageId {
-            rememberScreenButtonLooks(pageId: pageId, cells: screenContext.currentCells)
+        if let activePageId = screenContext.pageId {
+            rememberScreenButtonLooks(pageId: activePageId, cells: screenContext.currentCells)
         }
         editMessage {
             service.appendScreenPart(
                 text: text,
                 screenId: screenContext.screenId,
-                pageId: screenContext.pageId ?? "",
+                pageId: pageId ?? screenContext.pageId ?? "",
                 buttonId: buttonId,
                 spellingMode: screenContext.spellingMode,
                 languageTag: languageTag,
@@ -540,6 +560,24 @@ final class CommunicationModel: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         service.activateAudioPlayback()
         service.speakText(text, voice: speech.selectedVoice)
+    }
+
+    /// Speaks an auditory-fishing preview, replacing any earlier preview without
+    /// interrupting committed speech or recording History.
+    func previewSpeech(_ text: String, languageTag: String? = nil) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        service.activateAudioPlayback()
+        service.previewText(
+            text,
+            voice: speech.selectedVoice,
+            rateOverride: KotlinDouble(value: 0.8),
+            languageTag: languageTag
+        )
+    }
+
+    /// Stops any active or queued auditory-fishing preview without interrupting committed speech.
+    func cancelPreviewSpeech() {
+        service.cancelPreview()
     }
 
     func speakMessagePart(at index: Int) {
@@ -717,9 +755,6 @@ final class CommunicationModel: ObservableObject {
     }
 
     func deletePhrase(id: String) {
-        if let path = recordingPath(for: id) {
-            removeFileAtPath(path)
-        }
         service.acceptPhraseIntent(Shared.PhraseListStoreIntent.DeletePhrase(phraseId: id))
     }
 
@@ -729,6 +764,94 @@ final class CommunicationModel: ObservableObject {
 
     func deleteCategory(id: String) {
         service.acceptPhraseIntent(Shared.PhraseListStoreIntent.DeleteCategory(categoryId: id))
+    }
+
+    /// Mirrors confirmed deletion undo state from `PhraseListStore` so the banner only
+    /// appears after persistence succeeds, stays visible while a restore is in flight so
+    /// failed restores can be retried, and never unlinks recordings still referenced by
+    /// active/held Messages or History.
+    func syncPhraseUndo(from storeState: Shared.PhraseListStoreState) {
+        guard let undo = storeState.lastDeletedUndo else {
+            pendingPhraseUndoTask?.cancel()
+            pendingPhraseUndoTask = nil
+            if let current = pendingPhraseUndo {
+                if current.isRestoring {
+                    AccessHaptics.perform(.confirm)
+                }
+                pendingPhraseUndo = nil
+            }
+            return
+        }
+        if let current = pendingPhraseUndo, current.id == undo.id {
+            switch undo.restoreStatus {
+            case .restoring:
+                if !current.isRestoring {
+                    pendingPhraseUndo = PendingPhraseUndo(
+                        id: undo.id,
+                        includesSubItems: undo.includesSubItems,
+                        isRestoring: true
+                    )
+                }
+            case .failed:
+                if current.isRestoring {
+                    AccessHaptics.perform(.reject)
+                    pendingPhraseUndo = PendingPhraseUndo(
+                        id: undo.id,
+                        includesSubItems: undo.includesSubItems,
+                        isRestoring: false
+                    )
+                }
+            default:
+                break
+            }
+            return
+        }
+        guard !dismissedPhraseUndoIds.contains(undo.id) else { return }
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
+
+        let entry = PendingPhraseUndo(
+            id: undo.id,
+            includesSubItems: undo.includesSubItems,
+            isRestoring: undo.restoreStatus == .restoring
+        )
+        pendingPhraseUndo = entry
+
+        let messageKey = entry.includesSubItems ? "phrase.deleted_with_subitems" : "phrase.deleted"
+        UIAccessibility.post(notification: .announcement, argument: NSLocalizedString(messageKey, comment: ""))
+
+        // Keep the undo banner visible for assistive-technology users until they choose Undo or Close.
+        if !UIAccessibility.isVoiceOverRunning && !UIAccessibility.isSwitchControlRunning {
+            pendingPhraseUndoTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
+                guard !Task.isCancelled, let self,
+                      let current = self.pendingPhraseUndo,
+                      current.id == entry.id,
+                      !current.isRestoring else { return }
+                self.dismissPendingPhraseUndo()
+            }
+        }
+    }
+
+    func undoPendingPhraseDeletion() {
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
+        guard let pending = pendingPhraseUndo, !pending.isRestoring else { return }
+        pendingPhraseUndo = PendingPhraseUndo(
+            id: pending.id,
+            includesSubItems: pending.includesSubItems,
+            isRestoring: true
+        )
+        service.acceptPhraseIntent(Shared.PhraseListStoreIntent.UndoLastDeletion(undoId: pending.id))
+    }
+
+    func dismissPendingPhraseUndo() {
+        pendingPhraseUndoTask?.cancel()
+        pendingPhraseUndoTask = nil
+        guard let pending = pendingPhraseUndo, !pending.isRestoring else { return }
+        dismissedPhraseUndoIds.insert(pending.id)
+        pendingPhraseUndo = nil
+        service.acceptPhraseIntent(Shared.PhraseListStoreIntent.DismissDeletionUndo(undoId: pending.id))
     }
 
     func updatePhrase(id: String, text: String?, name: String?, imageUrl: String? = nil) {
@@ -847,4 +970,10 @@ final class CommunicationModel: ObservableObject {
         let safeLength = min(max(0, range.length), max(0, maxLength - safeLocation))
         return NSRange(location: safeLocation, length: safeLength)
     }
+}
+
+struct PendingPhraseUndo: Equatable {
+    let id: Int64
+    let includesSubItems: Bool
+    var isRestoring: Bool = false
 }

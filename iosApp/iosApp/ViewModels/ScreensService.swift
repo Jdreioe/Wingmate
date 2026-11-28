@@ -6,6 +6,7 @@ import Shared
 protocol ScreensService {
     func listBoardSets() async throws -> [Shared.ObfBoardSet]
     func getBoard(id: String) async throws -> Shared.ObfBoard?
+    func loadBoardSnapshot(boardId: String) async throws -> Shared.IosBoardSnapshot?
     func listBoardCells(boardId: String) async throws -> [Shared.IosBoardCell]
     func listBoardFieldItems(boardId: String) async throws -> [Shared.IosBoardFieldItem]
     func resolveBoardSettings(boardId: String) async throws -> Shared.IosResolvedBoardSettings
@@ -86,7 +87,9 @@ protocol ScreensService {
         messageBarEditable: String,
         activationBehavior: String,
         returnBehavior: String,
-        cacheSpeech: String
+        cacheSpeech: String,
+        cellGapDp: Int32?,
+        outerMarginDp: Int32?
     ) async throws
     func setRootBoard(boardSetId: String, boardId: String) async throws -> Shared.ObfBoardSet
     func deleteBoard(boardSetId: String, boardId: String) async throws -> Shared.ObfBoardSet
@@ -138,6 +141,10 @@ struct SharedScreensService: ScreensService {
 
     func getBoard(id: String) async throws -> Shared.ObfBoard? {
         try await resolveBoards().getBoard(id: id)
+    }
+
+    func loadBoardSnapshot(boardId: String) async throws -> Shared.IosBoardSnapshot? {
+        try await resolveBoards().loadBoardSnapshot(boardId: boardId)
     }
 
     func listBoardCells(boardId: String) async throws -> [Shared.IosBoardCell] {
@@ -354,7 +361,9 @@ struct SharedScreensService: ScreensService {
         messageBarEditable: String,
         activationBehavior: String,
         returnBehavior: String,
-        cacheSpeech: String
+        cacheSpeech: String,
+        cellGapDp: Int32?,
+        outerMarginDp: Int32?
     ) async throws {
         try await resolveBoards().updateBoardSettings(
             boardSetId: boardSetId,
@@ -368,7 +377,9 @@ struct SharedScreensService: ScreensService {
             messageBarEditable: messageBarEditable,
             activationBehavior: activationBehavior,
             returnBehavior: returnBehavior,
-            cacheSpeech: cacheSpeech
+            cacheSpeech: cacheSpeech,
+            cellGapDp: cellGapDp.map { KotlinInt(value: $0) },
+            outerMarginDp: outerMarginDp.map { KotlinInt(value: $0) }
         )
     }
 

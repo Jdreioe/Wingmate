@@ -204,7 +204,8 @@ internal fun TypingScreenTray(
                     val targetPhrase = target.projectedPhraseId()?.let(currentPhrasesById::get)
                     if (movedPhrase != null && targetPhrase != null) currentMovePhrase(movedPhrase, targetPhrase)
                 },
-                // Hold-to-select uses long presses to activate; keep those.
+                // Hold-to-select and touch-down own touch gestures; Touch Exit is disabled on the
+                // Typing Phrase tray (allowTouchExit = false) so finger-only Edit/Delete/Reorder stay available.
                 gesturesEnabled = settings.holdToSelectMillis <= 0 && !settings.selectOnTouchDown,
                 menu = { button, dismiss ->
                     val phrase = button.projectedPhraseId()?.let(currentPhrasesById::get)
@@ -262,6 +263,8 @@ internal fun TypingScreenTray(
                     // below the Communicator's preferred minimum button size.
                     scrollingMinimumCellHeight = phraseRowHeight ?: (72.dp * settings.inputFieldScale.coerceIn(0.75f, 2f)),
                     scrollingMaximumCellHeight = phraseRowHeight,
+                    // Keep the Typing Phrase tray scrollable with finger-only long-press Edit/Delete/Reorder menus.
+                    allowTouchExit = false,
                     settings = settings,
                     focusedCell = focusedCell,
                     highlightedButtonId = selectionHighlight.buttonId,

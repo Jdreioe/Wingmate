@@ -53,6 +53,108 @@ enum class MessageBarAction {
 }
 
 const val MAX_MESSAGE_BAR_ACTIONS = 4
+const val MAX_KEYGUARD_CELL_GAP_DP = 48
+const val MAX_KEYGUARD_OUTER_MARGIN_DP = 64
+const val MIN_KEYGUARD_CELL_SIZE_DP = 24.0
+
+/**
+ * Viewport-constrained keyguard spacing in dp/pt.
+ *
+ * Stored Screen/Page overrides remain untouched (for tablets and OBZ exports), while
+ * narrow viewports clamp effective margin and gaps so Buttons never collapse to zero size.
+ */
+data class EffectiveKeyguardSpacing(
+    val horizontalGapDp: Double,
+    val verticalGapDp: Double,
+    val outerMarginDp: Double,
+    val effectiveHeightFraction: Double = 1.0,
+)
+
+fun effectiveKeyguardSpacing(
+    viewportWidthDp: Double,
+    viewportHeightDp: Double,
+    columns: Int,
+    rows: Int,
+    desiredHorizontalGapDp: Double,
+    desiredVerticalGapDp: Double,
+    desiredOuterMarginDp: Double,
+    minimumCellSizeDp: Double = MIN_KEYGUARD_CELL_SIZE_DP,
+    heightFraction: Double = 1.0,
+    constrainHeight: Boolean = true,
+): EffectiveKeyguardSpacing {
+    val safeCols = columns.coerceAtLeast(1)
+    val safeRows = rows.coerceAtLeast(1)
+    val clampedMargin = desiredOuterMarginDp.coerceAtLeast(0.0)
+    val clampedHGap = desiredHorizontalGapDp.coerceAtLeast(0.0)
+    val clampedVGap = desiredVerticalGapDp.coerceAtLeast(0.0)
+    val requestedFraction = heightFraction.coerceIn(0.15, 1.0)
+    if (viewportWidthDp <= 0.0 || (constrainHeight && viewportHeightDp <= 0.0)) {
+        return EffectiveKeyguardSpacing(
+            horizontalGapDp = clampedHGap,
+            verticalGapDp = clampedVGap,
+            outerMarginDp = clampedMargin,
+            effectiveHeightFraction = requestedFraction,
+        )
+    }
+
+    val minCell = minimumCellSizeDp.coerceAtLeast(1.0)
+    // When a saved gridHeightFraction would crush rows below minCell even with zero spacing,
+    // lift the rendered fraction just enough to keep cells usable while preserving the saved
+    // fraction on larger viewports.
+    val effectiveFraction = if (constrainHeight) {
+        val minRequiredHeight = minCell * safeRows
+        val minFraction = (minRequiredHeight / viewportHeightDp).coerceIn(0.15, 1.0)
+        maxOf(requestedFraction, minFraction)
+    } else {
+        requestedFraction
+    }
+    val maxMarginX = ((viewportWidthDp - minCell * safeCols) / 2.0).coerceAtLeast(0.0)
+    val effectiveMargin = if (constrainHeight) {
+        val maxMarginY = ((viewportHeightDp - (minCell * safeRows) / effectiveFraction) / 2.0).coerceAtLeast(0.0)
+        minOf(clampedMargin, maxMarginX, maxMarginY)
+    } else {
+        minOf(clampedMargin, maxMarginX)
+    }
+
+    val availableWidth = (viewportWidthDp - effectiveMargin * 2.0).coerceAtLeast(0.0)
+    val effectiveHGap = if (safeCols > 1) {
+        val maxGapX = ((availableWidth - minCell * safeCols) / (safeCols - 1)).coerceAtLeast(0.0)
+        minOf(clampedHGap, maxGapX)
+    } else {
+        clampedHGap
+    }
+    val effectiveVGap = if (constrainHeight && safeRows > 1) {
+        val effectiveContentHeight = (viewportHeightDp - effectiveMargin * 2.0).coerceAtLeast(0.0) * effectiveFraction
+        val maxGapY = ((effectiveContentHeight - minCell * safeRows) / (safeRows - 1)).coerceAtLeast(0.0)
+        minOf(clampedVGap, maxGapY)
+    } else {
+        clampedVGap
+    }
+    return EffectiveKeyguardSpacing(
+        horizontalGapDp = effectiveHGap,
+        verticalGapDp = effectiveVGap,
+        outerMarginDp = effectiveMargin,
+        effectiveHeightFraction = effectiveFraction,
+    )
+}
+
+/**
+ * Returns whether [rows] can fit inside [availableHeightDp] without scrolling while keeping
+ * each row at least [minimumRowHeightDp] tall. Used so large Phrase libraries stay scrollable
+ * rather than crushing Buttons under Touch Exit.
+ */
+fun rowsFitWithoutScrolling(
+    availableHeightDp: Double,
+    rows: Int,
+    verticalGapDp: Double,
+    minimumRowHeightDp: Double,
+): Boolean {
+    val safeRows = rows.coerceAtLeast(1)
+    if (availableHeightDp <= 0.0) return false
+    val requiredHeight = minimumRowHeightDp.coerceAtLeast(1.0) * safeRows +
+        verticalGapDp.coerceAtLeast(0.0) * (safeRows - 1)
+    return requiredHeight <= availableHeightDp + 0.001
+}
 
 /**
  * Nullable settings used at both inheritance levels:
@@ -77,6 +179,10 @@ data class BoardSettingsOverrides(
      * once set; until then the speak setting decides between Speak and none.
      */
     val messageBarActions: List<MessageBarAction>? = null,
+    /** Physical keyguard gap between Buttons in dp/pt. Null inherits from Screen or default layout. */
+    val cellGapDp: Int? = null,
+    /** Physical keyguard outer margin around the Page grid in dp/pt. Null inherits from Screen or default layout. */
+    val outerMarginDp: Int? = null,
 ) {
     val isEmpty: Boolean
         get() = showLabels == null &&
@@ -89,7 +195,9 @@ data class BoardSettingsOverrides(
             returnBehavior == null &&
             speechPolicy == null &&
             cacheSpeech == null &&
-            messageBarActions == null
+            messageBarActions == null &&
+            cellGapDp == null &&
+            outerMarginDp == null
 }
 
 data class ResolvedBoardSettings(
@@ -104,6 +212,8 @@ data class ResolvedBoardSettings(
     val speechPolicy: SpeechPolicy? = null,
     val cacheSpeech: Boolean = false,
     val messageBarActions: List<MessageBarAction>,
+    val cellGapDp: Int? = null,
+    val outerMarginDp: Int? = null,
 )
 
 fun resolveBoardSettings(
@@ -148,6 +258,8 @@ fun resolveBoardSettings(
         speechPolicy = page.speechPolicy ?: screen.speechPolicy,
         cacheSpeech = page.cacheSpeech ?: screen.cacheSpeech ?: false,
         messageBarActions = messageBarActions,
+        cellGapDp = (page.cellGapDp ?: screen.cellGapDp)?.coerceIn(0, MAX_KEYGUARD_CELL_GAP_DP),
+        outerMarginDp = (page.outerMarginDp ?: screen.outerMarginDp)?.coerceIn(0, MAX_KEYGUARD_OUTER_MARGIN_DP),
     )
 }
 

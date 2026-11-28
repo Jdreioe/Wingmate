@@ -39,11 +39,37 @@ class SettingsFacadeTest {
 
         facade.updateHoldToSelectMillis(10_000)
         facade.updateDwellToSelectMillis(60_000)
+        facade.updateDwellRearmDelayMillis(10_000)
         facade.updateSelectionDebounceMillis(60_000)
 
         assertEquals(2_000, facade.getSettings().holdToSelectMillis)
         assertEquals(5_000, facade.getSettings().dwellToSelectMillis)
+        assertEquals(500, facade.getSettings().dwellRearmDelayMillis)
         assertEquals(1_000, facade.getSettings().selectionDebounceMillis)
+
+        facade.updateDwellRearmDelayMillis(-50)
+        assertEquals(0, facade.getSettings().dwellRearmDelayMillis)
+    }
+
+    @Test
+    fun touchDownAndTouchExitAreMutuallyExclusiveWhenEnabled() = runBlocking {
+        val facade = facade()
+
+        facade.updateSelectOnTouchDown(true)
+        assertTrue(facade.getSettings().selectOnTouchDown)
+        assertFalse(facade.getSettings().selectOnTouchExit)
+
+        facade.updateSelectOnTouchExit(true)
+        assertTrue(facade.getSettings().selectOnTouchExit)
+        assertFalse(facade.getSettings().selectOnTouchDown)
+
+        facade.updateSelectOnTouchDown(true)
+        assertTrue(facade.getSettings().selectOnTouchDown)
+        assertFalse(facade.getSettings().selectOnTouchExit)
+
+        facade.updateSelectOnTouchDown(false)
+        assertFalse(facade.getSettings().selectOnTouchDown)
+        assertFalse(facade.getSettings().selectOnTouchExit)
     }
 
     @Test

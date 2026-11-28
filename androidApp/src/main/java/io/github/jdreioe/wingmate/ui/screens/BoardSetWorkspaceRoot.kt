@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.pageSwipeIsActive
 import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.application.EditingAccessController
 import io.github.jdreioe.wingmate.application.VoiceUseCase
@@ -652,7 +653,19 @@ internal fun BoardSetWorkspaceRoot(
                 }
 
                 PageSwipeBox(
-                    enabled = settings.swipeBetweenPages && mode == BoardWorkspaceMode.Run,
+                    enabled = pageSwipeIsActive(
+                        isEditMode = mode == BoardWorkspaceMode.Edit,
+                        swipeBetweenPages = settings.swipeBetweenPages,
+                        holdToSelectMillis = settings.holdToSelectMillis,
+                        selectOnTouchDown = settings.selectOnTouchDown,
+                        // Only suppress swipe when Touch Exit actually owns the active Page's grid;
+                        // preserve Android's hold-to-select + horizontal Page swipe behavior.
+                        selectOnTouchExit = settings.selectOnTouchExit &&
+                            activeBoard.grid != null &&
+                            !activeBoard.isAbsoluteLayout &&
+                            activeBoard.hasVisibleButton(showHiddenButtons),
+                        disableOnHoldToSelect = false,
+                    ),
                     onSwipe = { step -> workspaceViewModel.onAction(BoardWorkspaceAction.SwipePage(step)) },
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) {

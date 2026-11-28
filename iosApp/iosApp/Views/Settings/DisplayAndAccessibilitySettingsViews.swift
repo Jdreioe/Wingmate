@@ -89,6 +89,14 @@ struct AccessibilitySettingsView: View {
                     suffix: " ms"
                 )
                 SettingsSliderRow(
+                    title: "settings.accessibility.dwell_rearm",
+                    value: Binding(get: { settings.dwellRearmDelayMillis }, set: { settings.setDwellRearmDelayMillis($0) }),
+                    range: 0...500,
+                    step: 50,
+                    suffix: " ms"
+                )
+                Text("settings.accessibility.dwell_rearm.footer").font(.footnote).foregroundStyle(.secondary)
+                SettingsSliderRow(
                     title: "settings.accessibility.debounce",
                     value: Binding(get: { settings.selectionDebounceMillis }, set: { settings.setSelectionDebounceMillis($0) }),
                     range: 0...1_000,
@@ -100,6 +108,8 @@ struct AccessibilitySettingsView: View {
             Section("settings.accessibility.feedback") {
                 Toggle("settings.accessibility.touch_down", isOn: Binding(get: { settings.selectOnTouchDown }, set: { settings.setSelectOnTouchDown($0) }))
                 Text("settings.accessibility.touch_down.footer").font(.footnote).foregroundStyle(.secondary)
+                Toggle("settings.accessibility.touch_exit", isOn: Binding(get: { settings.selectOnTouchExit }, set: { settings.setSelectOnTouchExit($0) }))
+                Text("settings.accessibility.touch_exit.footer").font(.footnote).foregroundStyle(.secondary)
                 Toggle("settings.accessibility.swipe_pages", isOn: Binding(get: { settings.swipeBetweenPages }, set: { settings.setSwipeBetweenPages($0) }))
                 Text("settings.accessibility.swipe_pages.footer").font(.footnote).foregroundStyle(.secondary)
                 Toggle("settings.accessibility.selection_sound", isOn: Binding(

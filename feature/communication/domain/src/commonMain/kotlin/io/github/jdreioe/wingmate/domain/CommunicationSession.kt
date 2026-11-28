@@ -79,7 +79,11 @@ sealed interface CommunicationAction {
         val voice: Voice?,
         val cacheAudio: Boolean = false,
         val rateOverride: Double? = null,
+        val isPreview: Boolean = false,
     ) : CommunicationAction
+
+    /** Stops any active or queued auditory-fishing preview without interrupting committed speech. */
+    data object CancelPreview : CommunicationAction
 
     data object Pause : CommunicationAction
     data object Resume : CommunicationAction

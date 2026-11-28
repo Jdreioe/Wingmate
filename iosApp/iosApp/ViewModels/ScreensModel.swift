@@ -9,9 +9,23 @@ final class ScreensModel: ObservableObject {
     @Published var boardSets: [BoardSetInfo] = []
     @Published var selectedBoardSetId: String? = nil
     @Published var selectedBoardId: String? = nil
-    @Published var selectedBoard: Shared.ObfBoard? = nil
-    @Published private(set) var boardCells: [BoardCellInfo] = []
-    @Published private(set) var boardFieldItems: [BoardFieldItem] = []
+    @Published var selectedBoard: Shared.ObfBoard? = nil {
+        didSet { if oldValue != selectedBoard { boardLayoutRevision &+= 1 } }
+    }
+    @Published var loadedBoardCellsPageId: String? = nil
+    @Published var boardCellsLoadFailedPageId: String? = nil
+    /// Bumped whenever anything that positions Screen Buttons changes (board, cells, fields,
+    /// keyguard spacing). A Touch Exit gesture captures it at render and rejects moves and lifts
+    /// once the model has moved past the layout the Communicator was looking at.
+    var boardLayoutRevision: Int = 0
+    /// Bumped by every Page load so an older same-Page completion cannot overwrite a newer one.
+    private var boardLoadGeneration: Int = 0
+    @Published var boardCells: [BoardCellInfo] = [] {
+        didSet { if oldValue != boardCells { boardLayoutRevision &+= 1 } }
+    }
+    @Published var boardFieldItems: [BoardFieldItem] = [] {
+        didSet { if oldValue != boardFieldItems { boardLayoutRevision &+= 1 } }
+    }
     @Published private(set) var selectedBoardKeyboardLayout: String? = nil
     @Published private(set) var selectedBoardUsesSpellingMode: Bool = false
     @Published private(set) var boardPredictionsByButtonId: [String: String] = [:]
@@ -28,6 +42,12 @@ final class ScreensModel: ObservableObject {
     @Published private(set) var resolvedBoardSpeechPolicy: String? = nil
     @Published private(set) var resolvedBoardActivationBehavior: String? = nil
     @Published private(set) var resolvedBoardReturnBehavior: String? = nil
+    @Published var resolvedBoardCellGapDp: Int? = nil {
+        didSet { if oldValue != resolvedBoardCellGapDp { boardLayoutRevision &+= 1 } }
+    }
+    @Published var resolvedBoardOuterMarginDp: Int? = nil {
+        didSet { if oldValue != resolvedBoardOuterMarginDp { boardLayoutRevision &+= 1 } }
+    }
     @Published private(set) var boardStack: [String] = []
 
     let service: any ScreensService
@@ -364,8 +384,7 @@ final class ScreensModel: ObservableObject {
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = board.id
-            selectedBoard = board
-            await refreshBoardCells()
+            await loadSelectedBoard()
             boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.create_failed")
@@ -388,9 +407,7 @@ final class ScreensModel: ObservableObject {
             await loadBoardSets()
             selectedBoardSetId = set.id
             selectedBoardId = board.id
-            selectedBoard = board
-            refreshSelectedBoardMetadata()
-            await refreshBoardCells()
+            await loadSelectedBoard()
             boardStatusMessage = NSLocalizedString("boardset.status.board_added", comment: "")
         } catch {
             await reportBoardFailure(error, messageKey: "boardset.error.create_failed")
@@ -415,6 +432,10 @@ final class ScreensModel: ObservableObject {
             return
         }
         if resetStack { boardStack = [] }
+        if loadedBoardCellsPageId != id {
+            loadedBoardCellsPageId = nil
+        }
+        boardCellsLoadFailedPageId = nil
         selectedBoardId = id
         await loadSelectedBoard()
     }
@@ -453,112 +474,191 @@ final class ScreensModel: ObservableObject {
         await loadSelectedBoard()
     }
 
-    func swipePage(by offset: Int) async {
-        guard settings.swipeBetweenPages, !settings.selectOnTouchDown, settings.holdToSelectMillis <= 0,
+    func swipePage(by offset: Int, touchExitOwnsGrid: Bool = false) async {
+        guard TouchExitControllerKt.pageSwipeIsActive(
+                isEditMode: false,
+                swipeBetweenPages: settings.swipeBetweenPages,
+                holdToSelectMillis: Int64(settings.holdToSelectMillis),
+                selectOnTouchDown: settings.selectOnTouchDown,
+                selectOnTouchExit: touchExitOwnsGrid,
+                disableOnHoldToSelect: true
+              ),
               let ids = selectedBoardSet?.boardIds, let id = selectedBoardId,
               let index = ids.firstIndex(of: id), ids.indices.contains(index + offset) else { return }
         await selectBoard(id: ids[index + offset])
+    }
+
+    /// True only when the rendered board and its loaded cells both belong to the currently selected Page.
+    func boardCellsReady(for pageId: String) -> Bool {
+        selectedBoardId == pageId &&
+            selectedBoard?.id == pageId &&
+            loadedBoardCellsPageId == pageId
+    }
+
+    /// Scopes Screen Button debounce to `(pageId, buttonId)` so Pages that reuse the same
+    /// OBF Button ID do not wrongly debounce legitimate selections after navigation.
+    func screenButtonDebounceKey(pageId: String? = nil, buttonId: String) -> String {
+        "board:\(pageId ?? selectedBoardId ?? ""):\(buttonId)"
+    }
+
+    /// Scopes Screen Button hover, dwell, and switch access targets to `(pageId, buttonId)`.
+    func screenButtonAccessTargetId(pageId: String, buttonId: String) -> String {
+        "board:\(pageId):\(buttonId)"
+    }
+
+    /// Registers a dwell/switch access target that resolves the live Screen Button at activation
+    /// time and verifies both Page readiness and Button identity before invoking [action].
+    func registerScreenButtonAccessTarget(
+        pageId: String,
+        row: Int,
+        col: Int,
+        buttonId: String,
+        action: @escaping (BoardCellInfo) -> Void
+    ) {
+        let targetId = screenButtonAccessTargetId(pageId: pageId, buttonId: buttonId)
+        settings.registerAccessTarget(targetId, handlesHaptics: true) { [weak self] in
+            guard let self,
+                  self.boardCellsReady(for: pageId),
+                  let current = self.cellAt(row: row, col: col),
+                  current.buttonId == buttonId else { return }
+            action(current)
+        }
     }
 
     // MARK: - Page Loading & Predictions
 
     func loadSelectedBoard() async {
         guard let id = selectedBoardId else {
-            clearSelectedBoardState()
+            boardLoadGeneration &+= 1
+            clearSelectedBoardState(failedPageId: nil)
             return
         }
+        // Preserve readiness across same-Page reloads (settings save, lock toggle, background sync)
+        // so the grid stays mounted and keeps dwell/switch focus; invalidate only on Page switch.
+        if loadedBoardCellsPageId != id {
+            loadedBoardCellsPageId = nil
+        }
+        boardCellsLoadFailedPageId = nil
+        boardLoadGeneration &+= 1
+        let generation = boardLoadGeneration
         do {
-            selectedBoard = try await service.getBoard(id: id)
-            boardBackgroundImageUrl = selectedBoard.flatMap { service.backgroundImageUrl(board: $0) }
-            boardBackgroundImageFit = selectedBoard.map { service.backgroundImageFit(board: $0) } ?? "Fill"
-            refreshSelectedBoardMetadata()
-            do {
-                let resolved = try await service.resolveBoardSettings(boardId: id)
-                resolvedBoardShowLabels = resolved.showLabels
-                resolvedBoardShowSymbols = resolved.showSymbols
-                resolvedBoardLabelAtTop = resolved.labelAtTop
-                resolvedBoardShowMessageBar = resolved.showMessageBar
-                resolvedBoardShowSpeakButton = resolved.showSpeakButton
-                resolvedBoardMessageBarActions = resolved.messageBarActions
-                resolvedBoardActivationBehavior = resolved.activationBehavior
-                resolvedBoardSpeechPolicy = resolved.speechPolicy
-                resolvedBoardReturnBehavior = resolved.returnBehavior
-            } catch {
-                if error.isNativeCancellation || Task.isCancelled { return }
-                clearResolvedBoardSettings()
-                boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
+            // One snapshot from a single board read, so settings, Buttons, and field spans
+            // always come from the same Page revision.
+            let snapshot = try await service.loadBoardSnapshot(boardId: id)
+            // A newer load (or a Page switch) started while this one was suspended.
+            guard selectedBoardId == id, boardLoadGeneration == generation else { return }
+            guard let snapshot else {
+                clearSelectedBoardState(failedPageId: id)
+                return
             }
-            let boardName = selectedBoard?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !boardName.isEmpty {
-                boardNamesById[id] = boardName
-            }
-            await refreshBoardCells()
+            applyBoardSnapshot(snapshot, pageId: id)
         } catch {
             if error.isNativeCancellation || Task.isCancelled { return }
-            clearSelectedBoardState()
-            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
+            guard selectedBoardId == id, boardLoadGeneration == generation else { return }
+            clearSelectedBoardState(failedPageId: id)
         }
     }
 
     func refreshBoardCells() async {
         guard let boardId = selectedBoardId else {
+            boardLoadGeneration &+= 1
+            loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = nil
             boardCells = []
             boardFieldItems = []
             return
         }
 
+        boardLoadGeneration &+= 1
+        let generation = boardLoadGeneration
         do {
-            let cells = try await service.listBoardCells(boardId: boardId)
-            let fields = try await service.listBoardFieldItems(boardId: boardId)
-            boardCells = cells.map { cell in
-                BoardCellInfo(
-                    row: Int(cell.row),
-                    col: Int(cell.col),
-                    buttonId: cell.buttonId,
-                    label: cell.label,
-                    vocalization: cell.vocalization,
-                    backgroundColor: cell.backgroundColor,
-                    resolvedBackgroundColor: cell.resolvedBackgroundColor,
-                    wordType: cell.wordType,
-                    borderColor: cell.borderColor,
-                    linkedBoardId: cell.linkedBoardId,
-                    imageId: cell.imageId,
-                    imageUrl: cell.imageUrl,
-                    hidden: cell.hidden,
-                    actions: cell.actions,
-                    soundId: cell.soundId,
-                    soundDataUrl: cell.soundDataUrl,
-                    soundPath: cell.soundPath,
-                    shape: cell.shape,
-                    language: cell.language,
-                    mathMode: cell.mathMode
-                )
+            let snapshot = try await service.loadBoardSnapshot(boardId: boardId)
+            guard selectedBoardId == boardId, boardLoadGeneration == generation else { return }
+            guard let snapshot else {
+                clearSelectedBoardState(failedPageId: boardId)
+                return
             }
-            boardFieldItems = fields.map { field in
-                BoardFieldItem(
-                    row: Int(field.row),
-                    column: Int(field.column),
-                    rowSpan: Int(field.rowSpan),
-                    columnSpan: Int(field.columnSpan),
-                    buttonId: field.buttonId
-                )
-            }
-            if let pageId = selectedBoardId {
-                onRememberButtonLooks(
-                    pageId,
-                    boardCells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) }
-                )
-            }
+            applyBoardSnapshot(snapshot, pageId: boardId)
         } catch {
             if error.isNativeCancellation || Task.isCancelled { return }
+            guard selectedBoardId == boardId, boardLoadGeneration == generation else { return }
+            loadedBoardCellsPageId = nil
+            boardCellsLoadFailedPageId = boardId
             boardCells = []
             boardFieldItems = []
-            boardStatusMessage = NSLocalizedString("board_sets.error.load_failed", comment: "")
         }
     }
 
-    func activateSelectedBoardCell(row: Int, col: Int) async {
-        guard let cell = cellAt(row: row, col: col) else { return }
+    /// Publishes every piece of a Page snapshot with no suspension in between, so SwiftUI
+    /// never renders new grid geometry against stale Buttons or settings.
+    private func applyBoardSnapshot(_ snapshot: Shared.IosBoardSnapshot, pageId id: String) {
+        let loadedBoard = snapshot.board
+        let resolved = snapshot.settings
+        selectedBoard = loadedBoard
+        boardBackgroundImageUrl = service.backgroundImageUrl(board: loadedBoard)
+        boardBackgroundImageFit = service.backgroundImageFit(board: loadedBoard)
+        selectedBoardKeyboardLayout = service.boardKeyboardLayout(board: loadedBoard)
+        selectedBoardUsesSpellingMode = service.boardUsesSpellingMode(board: loadedBoard)
+        resolvedBoardShowLabels = resolved.showLabels
+        resolvedBoardShowSymbols = resolved.showSymbols
+        resolvedBoardLabelAtTop = resolved.labelAtTop
+        resolvedBoardShowMessageBar = resolved.showMessageBar
+        resolvedBoardShowSpeakButton = resolved.showSpeakButton
+        resolvedBoardMessageBarActions = resolved.messageBarActions
+        resolvedBoardActivationBehavior = resolved.activationBehavior
+        resolvedBoardSpeechPolicy = resolved.speechPolicy
+        resolvedBoardReturnBehavior = resolved.returnBehavior
+        resolvedBoardCellGapDp = resolved.cellGapDp?.intValue
+        resolvedBoardOuterMarginDp = resolved.outerMarginDp?.intValue
+        let boardName = loadedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !boardName.isEmpty {
+            boardNamesById[id] = boardName
+        }
+        boardCells = snapshot.cells.map { cell in
+            BoardCellInfo(
+                row: Int(cell.row),
+                col: Int(cell.col),
+                buttonId: cell.buttonId,
+                label: cell.label,
+                vocalization: cell.vocalization,
+                backgroundColor: cell.backgroundColor,
+                resolvedBackgroundColor: cell.resolvedBackgroundColor,
+                wordType: cell.wordType,
+                borderColor: cell.borderColor,
+                linkedBoardId: cell.linkedBoardId,
+                imageId: cell.imageId,
+                imageUrl: cell.imageUrl,
+                hidden: cell.hidden,
+                actions: cell.actions,
+                soundId: cell.soundId,
+                soundDataUrl: cell.soundDataUrl,
+                soundPath: cell.soundPath,
+                shape: cell.shape,
+                language: cell.language,
+                mathMode: cell.mathMode
+            )
+        }
+        boardFieldItems = snapshot.fieldItems.map { field in
+            BoardFieldItem(
+                row: Int(field.row),
+                column: Int(field.column),
+                rowSpan: Int(field.rowSpan),
+                columnSpan: Int(field.columnSpan),
+                buttonId: field.buttonId
+            )
+        }
+        loadedBoardCellsPageId = id
+        boardCellsLoadFailedPageId = nil
+        onRememberButtonLooks(
+            id,
+            boardCells.map { ($0.buttonId, $0.label, $0.vocalization, $0.imageUrl) }
+        )
+    }
+
+    /// Executes a resolved Screen Button's deferred navigation or speech only while [pageId]
+    /// still owns the active loaded cells, preventing stale-Page activations during async handoff.
+    func activateBoardCell(_ cell: BoardCellInfo, onPageId pageId: String, checkDebounce: Bool = true) async {
+        guard boardCellsReady(for: pageId) else { return }
 
         if let linkedBoardId = normalizedOptionalText(cell.linkedBoardId),
            let set = selectedBoardSet,
@@ -567,8 +667,10 @@ final class ScreensModel: ObservableObject {
             return
         }
 
-        // #118: navigation is an explicit action; speech insertion is debounced per cell.
-        if !settings.acceptActivation(targetId: cell.buttonId) { return }
+        // #118: navigation is an explicit action; speech insertion is debounced per Page and Button.
+        if checkDebounce && !settings.acceptActivation(targetId: screenButtonDebounceKey(pageId: pageId, buttonId: cell.buttonId)) {
+            return
+        }
 
         if let textToSpeak = normalizedOptionalText(cell.vocalization) ?? normalizedOptionalText(cell.label) {
             onSpeak(textToSpeak)
@@ -738,8 +840,10 @@ final class ScreensModel: ObservableObject {
         selectedBoardUsesSpellingMode = service.boardUsesSpellingMode(board: board)
     }
 
-    func clearSelectedBoardState() {
+    func clearSelectedBoardState(failedPageId: String? = nil) {
         selectedBoard = nil
+        loadedBoardCellsPageId = nil
+        boardCellsLoadFailedPageId = failedPageId
         boardCells = []
         boardFieldItems = []
         selectedBoardKeyboardLayout = nil
@@ -760,5 +864,7 @@ final class ScreensModel: ObservableObject {
         resolvedBoardActivationBehavior = nil
         resolvedBoardSpeechPolicy = nil
         resolvedBoardReturnBehavior = nil
+        resolvedBoardCellGapDp = nil
+        resolvedBoardOuterMarginDp = nil
     }
 }

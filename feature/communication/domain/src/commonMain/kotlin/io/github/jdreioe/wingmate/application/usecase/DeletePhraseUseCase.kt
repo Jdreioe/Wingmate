@@ -9,6 +9,6 @@ class DeletePhraseUseCase(private val phraseRepository: PhraseRepository) {
             throw IllegalArgumentException("Phrase ID cannot be blank")
         }
         val subtree = phraseSubtree(phraseRepository.getAll(), phraseId)
-        subtree.asReversed().forEach { phraseRepository.delete(it.id) }
+        phraseRepository.deleteAll(subtree.asReversed().map { it.id })
     }
 }

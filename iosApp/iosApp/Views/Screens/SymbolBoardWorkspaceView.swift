@@ -90,6 +90,12 @@ struct SymbolBoardWorkspaceView: View {
     @State var resizePreview: GridFieldSpanInfo? = nil
     @State var resizePreviewValid = true
     @State var suppressNextCellTap = false
+    @State var touchExitController = TouchExitController()
+    @State var touchExitHighlightedButtonId: String? = nil
+    @GestureState var touchExitGestureActive = false
+    /// Set when Touch Exit is cancelled while a finger is still down (Page or layout change);
+    /// that finger can no longer highlight or activate anything until it lifts.
+    @State var touchExitLatch = TouchExitLiftLatch()
     @State var useCustomBackgroundColor: Bool = false
     @State var useCustomBorderColor: Bool = false
     @State var editingLinkedBoardId: String = ""

@@ -5,32 +5,68 @@ import AudioToolbox
 extension SymbolBoardWorkspaceView {
     @ViewBuilder
     func boardPreview(isEditMode: Bool) -> some View {
-        if let board = model.screens.selectedBoard {
+        if let board = model.screens.selectedBoard, model.screens.boardCellsReady(for: board.id) {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
-            let gridGap: CGFloat = 8
-            let gridInset: CGFloat = 8
+            let desiredGap = Double(model.screens.resolvedBoardCellGapDp ?? 8)
+            let desiredInset = Double(model.screens.resolvedBoardOuterMarginDp ?? 8)
+            let hasVisibleButton = model.screens.boardCells.contains {
+                model.screens.boardButtonIsVisible(
+                    hidden: $0.hidden,
+                    isEditMode: isEditMode,
+                    showHiddenButtons: showHiddenButtons
+                )
+            }
+            let touchExitActive = hasVisibleButton &&
+                TouchExitControllerKt.touchExitIsActive(
+                    isEditMode: isEditMode,
+                    holdToSelectMillis: Int64(model.settings.holdToSelectMillis),
+                    selectOnTouchDown: model.settings.selectOnTouchDown,
+                    selectOnTouchExit: model.settings.selectOnTouchExit
+                )
 
             GeometryReader { geometry in
-                let availableHeight = max(0, geometry.size.height - (gridInset * 2))
-                let availableWidth = max(0, geometry.size.width - (gridInset * 2))
                 let isCompact = board.compactGrid
-
+                let rawGridHeightFraction = board.gridHeightFraction?.floatValue
+                let hasSavedFraction = (rawGridHeightFraction?.isFinite == true) && (rawGridHeightFraction ?? 0) > 0
+                let prelimInset = min(
+                    CGFloat(max(0, desiredInset)),
+                    max(0, (geometry.size.width - CGFloat(BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP) * CGFloat(cols)) / 2),
+                    max(0, (geometry.size.height - CGFloat(BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP) * CGFloat(rows)) / 2)
+                )
+                let prelimAvailableHeight = max(0, geometry.size.height - (prelimInset * 2))
                 // Mirror Compose sizing: non-compact boards fill the full available
                 // height (fraction 1), compact/keyboard boards size to their content
                 // (fraction computed from a minimum cell height of 72pt).
                 let minCellHeight: CGFloat = 72
-                let minContentHeight = (minCellHeight * CGFloat(rows)) + (gridGap * CGFloat(rows - 1))
+                let minContentHeight = (minCellHeight * CGFloat(rows)) + (CGFloat(max(0, desiredGap)) * CGFloat(rows - 1))
                 let defaultFraction: CGFloat = isCompact
-                    ? min(max(minContentHeight / max(minContentHeight, availableHeight), 0.15), 1)
+                    ? min(max(minContentHeight / max(minContentHeight, prelimAvailableHeight), 0.15), 1)
                     : 1
-                let rawGridHeightFraction = board.gridHeightFraction?.floatValue
-                let gridHeightFraction: CGFloat = (rawGridHeightFraction?.isFinite == true) && (rawGridHeightFraction ?? 0) > 0
+                let gridHeightFraction: CGFloat = hasSavedFraction
                     ? CGFloat(rawGridHeightFraction ?? 1)
                     : defaultFraction
                 let fraction = min(max(gridHeightFraction, 0.15), 1)
 
-                let contentHeight = max(0, availableHeight * fraction)
+                let effectiveSpacing = BoardSettingsKt.effectiveKeyguardSpacing(
+                    viewportWidthDp: Double(geometry.size.width),
+                    viewportHeightDp: Double(geometry.size.height),
+                    columns: Int32(cols),
+                    rows: Int32(rows),
+                    desiredHorizontalGapDp: desiredGap,
+                    desiredVerticalGapDp: desiredGap,
+                    desiredOuterMarginDp: desiredInset,
+                    minimumCellSizeDp: BoardSettingsKt.MIN_KEYGUARD_CELL_SIZE_DP,
+                    heightFraction: Double(fraction),
+                    constrainHeight: true
+                )
+                let gridGap = CGFloat(min(effectiveSpacing.horizontalGapDp, effectiveSpacing.verticalGapDp))
+                let gridInset = CGFloat(effectiveSpacing.outerMarginDp)
+                let effectiveFraction = CGFloat(effectiveSpacing.effectiveHeightFraction)
+                let availableHeight = max(0, geometry.size.height - (gridInset * 2))
+                let availableWidth = max(0, geometry.size.width - (gridInset * 2))
+
+                let contentHeight = max(0, availableHeight * effectiveFraction)
                 let contentWidth = max(0, availableWidth)
                 let foldLayout = BoardFoldLayout.compute(
                     rows: rows,
@@ -60,6 +96,7 @@ extension SymbolBoardWorkspaceView {
                             // Use mode leaves empty cells blank. They are not buttons.
                             if occupied || isEditMode {
                                 boardCellButton(
+                                    pageId: board.id,
                                     row: field.row,
                                     col: field.column,
                                     isEditMode: isEditMode,
@@ -90,11 +127,29 @@ extension SymbolBoardWorkspaceView {
                     }
                     .coordinateSpace(name: "boardGrid")
                     .frame(width: contentWidth, height: contentHeight, alignment: .topLeading)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(
+                        touchExitGesture(
+                            pageId: board.id,
+                            layout: foldLayout,
+                            layoutRevision: model.screens.boardLayoutRevision,
+                            isEditMode: isEditMode
+                        ),
+                        including: touchExitActive ? .gesture : .subviews
+                    )
                     .padding(gridInset)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background {
                     if !model.settings.highContrastMode { PageBackgroundView(source: model.screens.boardBackgroundImageUrl, fit: model.screens.boardBackgroundImageFit) }
+                }
+                // Hit boxes follow the computed layout (rows, columns, gap, inset, height fraction,
+                // viewport, fold). Any change invalidates a held finger.
+                .onChange(of: foldLayout) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: gridInset) { _, _ in
+                    cancelTouchExit()
                 }
                 .background(
                     model.settings.highContrastMode
@@ -102,16 +157,67 @@ extension SymbolBoardWorkspaceView {
                         : colorFromHex(board.backgroundColor, fallback: Color(.secondarySystemBackground))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .scrollDisabled(model.settings.selectOnTouchDown && !isEditMode)
+                .scrollDisabled((model.settings.selectOnTouchDown || touchExitActive) && !isEditMode)
                 .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
                     guard !isEditMode, abs(value.translation.width) >= 64,
                           abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                    Task { await model.screens.swipePage(by: value.translation.width < 0 ? 1 : -1) }
+                    Task {
+                        await model.screens.swipePage(
+                            by: value.translation.width < 0 ? 1 : -1,
+                            touchExitOwnsGrid: touchExitActive
+                        )
+                    }
                 })
+                .onChange(of: touchExitGestureActive) { _, active in
+                    if !active {
+                        cancelTouchExit(latchUntilLift: false)
+                        _ = touchExitLatch.lift()
+                    }
+                }
+                .onChange(of: touchExitActive) { _, active in
+                    if !active { cancelTouchExit() }
+                }
+                .onChange(of: board.id) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.screens.selectedBoardId) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.screens.loadedBoardCellsPageId) { _, _ in
+                    if !model.screens.boardCellsReady(for: board.id) { cancelTouchExit() }
+                }
+                .onChange(of: model.screens.boardFieldItems) { _, _ in
+                    cancelTouchExit()
+                }
+                .onChange(of: model.screens.boardCells) { _, _ in
+                    cancelTouchExit()
+                }
+                // A grid that mounts or unmounts cannot own a held finger: its gesture (and the
+                // observers that would clear the latch on lift) belong to that grid instance.
+                .onAppear {
+                    touchExitLatch.reset()
+                }
+                .onDisappear {
+                    cancelTouchExit(latchUntilLift: false)
+                    touchExitLatch.reset()
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .id(board.id)
             .transition(.opacity)
+        } else if let pageId = model.screens.selectedBoardId, model.screens.boardCellsLoadFailedPageId == pageId {
+            VStack(spacing: 12) {
+                Text(NSLocalizedString("board_sets.error.load_failed", comment: ""))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button(NSLocalizedString("common.retry", comment: "")) {
+                    Task { await model.screens.loadSelectedBoard() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(24)
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -119,7 +225,7 @@ extension SymbolBoardWorkspaceView {
         }
     }
 
-    func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1, metrics: BoardGridMetrics = BoardGridMetrics()) -> some View {
+    func boardCellButton(pageId: String, row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1, metrics: BoardGridMetrics = BoardGridMetrics()) -> some View {
         let cell = model.screens.cellAt(row: row, col: col)
         let cornerRadius = boardCellCornerRadius(cell, width: width, height: height)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
@@ -132,6 +238,12 @@ extension SymbolBoardWorkspaceView {
             showHiddenButtons: showHiddenButtons
         )
 
+        let touchExitActive = TouchExitControllerKt.touchExitIsActive(
+            isEditMode: isEditMode,
+            holdToSelectMillis: Int64(model.settings.holdToSelectMillis),
+            selectOnTouchDown: model.settings.selectOnTouchDown,
+            selectOnTouchExit: model.settings.selectOnTouchExit
+        )
         return ZStack(alignment: .topTrailing) {
             Button {
                 if suppressNextCellTap {
@@ -147,9 +259,8 @@ extension SymbolBoardWorkspaceView {
                         selectField(anchor)
                     }
                 } else {
-                    guard model.settings.holdToSelectMillis <= 0 else { return }
-                    if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                    guard model.settings.holdToSelectMillis <= 0, !touchExitActive else { return }
+                    activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                 }
             } label: {
                 // One view in both states, so starting the fly-in does not rebuild
@@ -165,33 +276,78 @@ extension SymbolBoardWorkspaceView {
                 LongPressGesture(minimumDuration: max(0.01, model.settings.holdToSelectMillis / 1_000))
                     .onEnded { _ in
                         guard !isEditMode, model.settings.holdToSelectMillis > 0 else { return }
-                        if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
-                        activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                        activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                     }
             )
             .onHover { hovering in
-                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                let targetId = model.screens.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
                 if hovering {
                     model.settings.accessEnter(targetId)
-                    if model.settings.auditoryFishingEnabled, !model.settings.inputIsPaused,
-                       let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
-                        model.communication.speak(preview)
+                    if model.settings.auditoryFishingEnabled, !model.settings.inputIsPaused {
+                        if let preview = boardCellPreviewText(cell) {
+                            model.communication.previewSpeech(preview, languageTag: cell?.language)
+                        } else {
+                            model.communication.cancelPreviewSpeech()
+                        }
                     }
                 } else {
                     model.settings.accessExit(targetId)
                 }
             }
             .onAppear {
-                guard !isEditMode, cell != nil else { return }
-                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                model.settings.registerAccessTarget(targetId) {
-                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                if !isEditMode, let buttonId = cell?.buttonId {
+                    model.screens.registerScreenButtonAccessTarget(
+                        pageId: pageId,
+                        row: row,
+                        col: col,
+                        buttonId: buttonId
+                    ) { currentCell in
+                        activateBoardCell(currentCell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                    }
                 }
             }
-            .onDisappear { model.settings.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
-            .accessTargetFocus(model: model, targetId: "board:\(cell?.buttonId ?? sourceCellId)")
+            .onChange(of: cell?.buttonId) { oldButtonId, newButtonId in
+                if let oldButtonId {
+                    model.settings.unregisterAccessTarget(model.screens.screenButtonAccessTargetId(pageId: pageId, buttonId: oldButtonId))
+                }
+                if !isEditMode, let newButtonId {
+                    model.screens.registerScreenButtonAccessTarget(
+                        pageId: pageId,
+                        row: row,
+                        col: col,
+                        buttonId: newButtonId
+                    ) { currentCell in
+                        activateBoardCell(currentCell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                    }
+                }
+            }
+            .onChange(of: isEditMode) { _, editing in
+                if let buttonId = cell?.buttonId {
+                    if editing {
+                        model.settings.unregisterAccessTarget(model.screens.screenButtonAccessTargetId(pageId: pageId, buttonId: buttonId))
+                    } else {
+                        model.screens.registerScreenButtonAccessTarget(
+                            pageId: pageId,
+                            row: row,
+                            col: col,
+                            buttonId: buttonId
+                        ) { currentCell in
+                            activateBoardCell(currentCell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                model.settings.unregisterAccessTarget(
+                    model.screens.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
+                )
+            }
+            .accessTargetFocus(
+                model: model,
+                targetId: model.screens.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
+            )
             .overlay {
-                let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
+                let targetId = model.screens.screenButtonAccessTargetId(pageId: pageId, buttonId: cell?.buttonId ?? sourceCellId)
                 if !isEditMode && model.settings.accessTargetId == targetId && model.settings.pointerEmphasisStyle != "System" {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(Color.accentColor, lineWidth: 3 * model.settings.pointerEmphasisScale)
@@ -217,7 +373,7 @@ extension SymbolBoardWorkspaceView {
                 if isEditMode && model.screens.canEditSelectedBoardSet {
                     openCellEditor(row: row, col: col, existing: cell)
                 } else if cell != nil {
-                    activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
+                    activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
             .modifier(FieldEditActions(
@@ -347,6 +503,14 @@ extension SymbolBoardWorkspaceView {
             if isHighlighted {
                 SelectionHighlightOutline(shape: RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height)))
             }
+            if let buttonId = cell?.buttonId, touchExitHighlightedButtonId == buttonId {
+                let shape = RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
+                shape
+                    .fill((model.settings.highContrastMode ? Color.primary : Color.accentColor).opacity(0.16))
+                    .overlay(shape.stroke(model.settings.highContrastMode ? Color.primary : Color.accentColor, lineWidth: 4))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
         }
         )
     }
@@ -462,6 +626,91 @@ extension SymbolBoardWorkspaceView {
               resolved.row < metrics.rows,
               resolved.column < metrics.columns else { return nil }
         return resolved
+    }
+
+    func touchExitTarget(at location: CGPoint, layout: BoardFoldLayout, isEditMode: Bool) -> (field: BoardFieldItem, cell: BoardCellInfo)? {
+        for field in model.screens.boardFieldItems {
+            guard let cell = model.screens.cellAt(row: field.row, col: field.column) else { continue }
+            guard model.screens.boardButtonIsVisible(hidden: cell.hidden, isEditMode: isEditMode, showHiddenButtons: showHiddenButtons) else { continue }
+            let rect = layout.frame(row: field.row, column: field.column, rowSpan: field.rowSpan, columnSpan: field.columnSpan)
+            if rect.contains(location) {
+                return (field, cell)
+            }
+        }
+        return nil
+    }
+
+    func touchExitGesture(pageId: String, layout: BoardFoldLayout, layoutRevision: Int, isEditMode: Bool) -> some Gesture {
+        // Use .local so coordinates share the exact origin of the framed ZStack / foldLayout.
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .updating($touchExitGestureActive) { _, state, _ in
+                state = true
+            }
+            .onChanged { value in
+                // A finger held across a Page or layout change must lift before it can select again.
+                guard !touchExitLatch.ignoresFinger else { return }
+                // The model published a new layout this gesture has not rendered yet: hit-testing
+                // would mix the captured geometry with new Buttons.
+                guard model.screens.boardCellsReady(for: pageId),
+                      model.screens.boardLayoutRevision == layoutRevision else {
+                    cancelTouchExit()
+                    return
+                }
+                let previousTargetId = touchExitController.state.activeTargetId
+                let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
+                let effect: (any TouchExitEffect)?
+                if !touchExitController.state.isTracking {
+                    effect = touchExitController.begin(targetId: hit?.cell.buttonId)
+                } else {
+                    effect = touchExitController.move(targetId: hit?.cell.buttonId)
+                }
+                touchExitHighlightedButtonId = touchExitController.state.activeTargetId
+                if effect is TouchExitEffectPreview,
+                   let cell = hit?.cell,
+                   model.settings.auditoryFishingEnabled,
+                   !model.settings.inputIsPaused {
+                    if let preview = boardCellPreviewText(cell) {
+                        model.communication.previewSpeech(preview, languageTag: cell.language)
+                    } else {
+                        model.communication.cancelPreviewSpeech()
+                    }
+                } else if previousTargetId != nil && hit == nil {
+                    model.communication.cancelPreviewSpeech()
+                }
+            }
+            .onEnded { value in
+                model.communication.cancelPreviewSpeech()
+                let latched = touchExitLatch.lift()
+                guard !latched,
+                      model.screens.boardCellsReady(for: pageId),
+                      model.screens.boardLayoutRevision == layoutRevision else {
+                    cancelTouchExit(latchUntilLift: false)
+                    return
+                }
+                let hit = touchExitTarget(at: value.location, layout: layout, isEditMode: isEditMode)
+                let effect = touchExitController.release(targetId: hit?.cell.buttonId)
+                touchExitHighlightedButtonId = touchExitController.state.activeTargetId
+                if effect is TouchExitEffectActivate, let hit {
+                    activateBoardCell(
+                        hit.cell,
+                        pageId: pageId,
+                        row: hit.field.row,
+                        col: hit.field.column,
+                        sourceCellId: "\(hit.field.row):\(hit.field.column)"
+                    )
+                }
+            }
+    }
+
+    func cancelTouchExit(latchUntilLift: Bool = true) {
+        if latchUntilLift {
+            touchExitLatch.cancel(fingerDown: touchExitGestureActive)
+        }
+        _ = touchExitController.cancel()
+        model.communication.cancelPreviewSpeech()
+        if touchExitHighlightedButtonId != nil {
+            touchExitHighlightedButtonId = nil
+        }
     }
 
     func editMoveGesture(anchor: BoardCellAnchor, cell: BoardCellInfo?, isEditMode: Bool, metrics: BoardGridMetrics) -> some Gesture {
@@ -685,5 +934,28 @@ extension SymbolBoardWorkspaceView {
         if let field, let match = options.first(where: { $0.rows == field.rowSpan && $0.columns == field.columnSpan }) {
             editingSpan = match.rows == 1 && match.columns == 1 ? .single : .custom(match)
         }
+    }
+}
+
+/// Keeps a finger that was down when Touch Exit was cancelled (Page, Button, or layout change)
+/// from highlighting or activating anything until it lifts. A fresh touch then works normally.
+struct TouchExitLiftLatch: Equatable {
+    private(set) var ignoresFinger = false
+
+    /// Records a cancel; latches only when a finger is currently down.
+    mutating func cancel(fingerDown: Bool) {
+        if fingerDown { ignoresFinger = true }
+    }
+
+    /// Clears the latch when the grid that owned the held finger mounts or unmounts.
+    mutating func reset() {
+        ignoresFinger = false
+    }
+
+    /// Call on lift (or gesture end). Returns true when the lifted finger was latched and
+    /// must not activate anything, and clears the latch for the next touch.
+    mutating func lift() -> Bool {
+        defer { ignoresFinger = false }
+        return ignoresFinger
     }
 }

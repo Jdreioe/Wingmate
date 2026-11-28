@@ -168,10 +168,12 @@ internal fun ObfButtonContent(
     onLongClick: (() -> Unit)? = null,
     settings: Settings,
     feedback: BoardFeedback = remember { BoardFeedback() },
+    debouncer: SelectionDebouncer? = null,
 ) {
-    // #118: per-target activation debounce. Each button instance maps to a single target,
-    // so a per-item guard enforces the per-target rules without shared state.
-    val selectionDebouncer = remember(button.id) { SelectionDebouncer() }
+    // #118 / #405: per-target activation debounce. When the board supplies a shared
+    // SelectionDebouncer, Touch Exit, tap, dwell, switch, and accessibility actions
+    // all share one per-Button guard so switching input methods cannot bypass debounce.
+    val selectionDebouncer = debouncer ?: remember(button.id) { SelectionDebouncer() }
     // #118: Edit-mode taps are deliberate field/dialog operations and must never be
     // blocked by the run-mode selection debounce.
     val hapticView = LocalView.current

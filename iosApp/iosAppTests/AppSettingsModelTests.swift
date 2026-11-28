@@ -186,6 +186,7 @@ private final class FakeAppSettingsService: AppSettingsService {
 
     func updateLikelyNextPageEnabled(_ enabled: Bool) async throws { try await record("likelyNext:\(enabled)") }
     func updateSelectOnTouchDown(_ enabled: Bool) async throws { try await record("touchDown:\(enabled)") }
+    func updateSelectOnTouchExit(_ enabled: Bool) async throws { try await record("touchExit:\(enabled)") }
     func updateSwipeBetweenPages(_ enabled: Bool) async throws { try await record("swipe:\(enabled)") }
     func updateScanningEnabled(_ enabled: Bool) async throws { try await record("scanning:\(enabled)") }
     func updateScanPlaybackAreaEnabled(_ enabled: Bool) async throws { try await record("scanPlayback:\(enabled)") }
@@ -204,6 +205,7 @@ private final class FakeAppSettingsService: AppSettingsService {
     func updateWordTypeColorScheme(_ scheme: String) async throws { try await record("wordType:\(scheme)") }
     func updateHoldToSelectMillis(_ millis: Int64) async throws { try await record("holdToSelectMillis:\(millis)") }
     func updateDwellToSelectMillis(_ millis: Int64) async throws { try await record("dwellToSelectMillis:\(millis)") }
+    func updateDwellRearmDelayMillis(_ millis: Int64) async throws { try await record("dwellRearmDelayMillis:\(millis)") }
     func updateSelectKeyBinding(_ binding: String) async throws { try await record("selectKey:\(binding)") }
     func updateRestModeKeyBinding(_ binding: String) async throws { try await record("restKey:\(binding)") }
     func updatePointerEmphasis(style: String, scale: Float) async throws { try await record("pointer:\(style):\(scale)") }

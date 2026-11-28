@@ -33,15 +33,20 @@ extension SymbolBoardWorkspaceView {
         return "\(model.screens.selectedBoardId ?? "")|\(predictors)|\(boardSentenceText)"
     }
 
-    func activateBoardCell(_ cell: BoardCellInfo?, row: Int, col: Int, sourceCellId: String) {
-        guard let cell else { return }
+    func activateBoardCell(_ cell: BoardCellInfo?, pageId: String, row: Int, col: Int, sourceCellId: String) {
+        // Gate every activation route (Touch Exit, tap, hold, dwell, switch, accessibility)
+        // on the rendered Page still owning the active loaded cells.
+        guard let cell, model.screens.boardCellsReady(for: pageId) else { return }
         if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
-            if let current = model.screens.selectedBoardId {
-                model.screens.pushBoardNavigationStack(current)
-            }
-            Task { await model.screens.activateSelectedBoardCell(row: row, col: col) }
+            if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+            AccessHaptics.perform(.confirm)
+            model.screens.pushBoardNavigationStack(pageId)
+            Task { await model.screens.activateBoardCell(cell, onPageId: pageId, checkDebounce: false) }
             return
         }
+        // #118 / #405: enforce per-Page, per-Button debounce and confirm/reject haptics for every non-link Button.
+        guard model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(pageId: pageId, buttonId: cell.buttonId)) else { return }
+        if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
         if cell.actions.isEmpty {
             let behavior = model.screens.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
@@ -49,11 +54,11 @@ extension SymbolBoardWorkspaceView {
             // A Button's own sound replaces its spoken text, so it is said once.
             if shouldSpeak { playCellSound(cell) }
             if shouldAdd {
-                appendCellToSentenceIfNeeded(cell, sourceCellId: sourceCellId)
+                appendCellToSentenceIfNeeded(cell, pageId: pageId, sourceCellId: sourceCellId)
             }
             Task {
                 if shouldSpeak && trimmed(cell.soundPath) == nil && trimmed(cell.soundDataUrl) == nil {
-                    await model.screens.activateSelectedBoardCell(row: row, col: col)
+                    await model.screens.activateBoardCell(cell, onPageId: pageId, checkDebounce: false)
                 }
                 await model.screens.activateBoardSelectionHighlight(buttonId: cell.buttonId)
             }
@@ -66,7 +71,7 @@ extension SymbolBoardWorkspaceView {
             switch action.lowercased() {
             case ":space":
                 isContentActivation = true
-                appendCellToSentenceIfNeeded(cell, textOverride: " ", sourceCellId: sourceCellId)
+                appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: " ", sourceCellId: sourceCellId)
             case ":backspace":
                 backspaceBoardSentence()
             case ":clear":
@@ -94,17 +99,17 @@ extension SymbolBoardWorkspaceView {
                 if let suggestion = model.screens.boardPrediction(for: cell.buttonId) {
                     isContentActivation = true
                     let insertion = predictionInsertion(sentence: boardSentenceText, suggestion: suggestion)
-                    appendCellToSentenceIfNeeded(cell, textOverride: insertion, sourceCellId: sourceCellId)
+                    appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: insertion, sourceCellId: sourceCellId)
                 }
             case ":spell":
                 isContentActivation = true
                 if let text = trimmed(cell.vocalization) ?? trimmed(cell.label) {
-                    appendCellToSentenceIfNeeded(cell, textOverride: text, sourceCellId: sourceCellId)
+                    appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: text, sourceCellId: sourceCellId)
                 }
             default:
                 if action.hasPrefix("+") {
                     isContentActivation = true
-                    appendCellToSentenceIfNeeded(cell, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
+                    appendCellToSentenceIfNeeded(cell, pageId: pageId, textOverride: String(action.dropFirst()), sourceCellId: sourceCellId)
                 }
             }
         }
@@ -115,7 +120,7 @@ extension SymbolBoardWorkspaceView {
         }
     }
 
-    func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?, textOverride: String? = nil, sourceCellId: String? = nil) {
+    func appendCellToSentenceIfNeeded(_ cell: BoardCellInfo?, pageId: String, textOverride: String? = nil, sourceCellId: String? = nil) {
         guard let cell else { return }
         let text = textOverride ?? trimmed(cell.vocalization) ?? trimmed(cell.label)
         guard let text, !text.isEmpty else { return }
@@ -126,7 +131,7 @@ extension SymbolBoardWorkspaceView {
         placement.disablesAnimations = true
         var tokenId = ""
         withTransaction(placement) {
-            model.communication.appendScreenPart(text: text, buttonId: cell.buttonId, languageTag: cell.language, mathMode: cell.mathMode)
+            model.communication.appendScreenPart(text: text, buttonId: cell.buttonId, pageId: pageId, languageTag: cell.language, mathMode: cell.mathMode)
             // Read after appending: in spelling mode a letter may join the last part.
             tokenId = "part-\(model.communication.messageParts.count - 1)"
             activeSentenceAnimation = ActiveSentenceAnimation(sourceCellId: sourceCellId ?? cell.id, tokenId: tokenId)
@@ -165,6 +170,20 @@ extension SymbolBoardWorkspaceView {
             return expanded
         }
         return trimmed(cell.label) ?? trimmed(cell.vocalization) ?? ""
+    }
+
+    /// Resolves the spoken auditory-fishing preview for a Button.
+    /// Live prediction suggestions always win over stored labels/vocalizations; empty prediction slots stay silent.
+    func boardCellPreviewText(_ cell: BoardCellInfo?) -> String? {
+        guard let cell else { return nil }
+        let isPrediction = cell.actions.contains {
+            let lower = $0.lowercased()
+            return lower == ":prediction" || lower == ":predictions"
+        }
+        if isPrediction {
+            return trimmed(model.screens.boardPrediction(for: cell.buttonId))
+        }
+        return trimmed(cell.vocalization) ?? trimmed(boardCellDisplayLabel(cell))
     }
 
     func boardCellAccessibilityHint(_ cell: BoardCellInfo?) -> String {

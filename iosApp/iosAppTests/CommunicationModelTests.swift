@@ -216,6 +216,8 @@ private final class FakeCommunicationService: CommunicationService {
     }
     func speakMessage(voice: Shared.Voice?, cacheAudio: Bool) {}
     func speakText(_ text: String, voice: Shared.Voice?) {}
+    func previewText(_ text: String, voice: Shared.Voice?, rateOverride: KotlinDouble?, languageTag: String?) {}
+    func cancelPreview() {}
     func speakMessagePart(index: Int32, voice: Shared.Voice?) {}
     func speakPhrase(_ phrase: Shared.Phrase, voice: Shared.Voice?) {}
     func speakRecording(path: String, voice: Shared.Voice?) {}
@@ -267,6 +269,7 @@ private final class StubAppSettingsService: AppSettingsService {
     func loadSnapshot(fallbackUseSystemTts: Bool) async throws -> AppSettingsSnapshot { AppSettingsSnapshot() }
     func updateLikelyNextPageEnabled(_ enabled: Bool) async throws {}
     func updateSelectOnTouchDown(_ enabled: Bool) async throws {}
+    func updateSelectOnTouchExit(_ enabled: Bool) async throws {}
     func updateSwipeBetweenPages(_ enabled: Bool) async throws {}
     func updateScanningEnabled(_ enabled: Bool) async throws {}
     func updateScanPlaybackAreaEnabled(_ enabled: Bool) async throws {}
@@ -285,6 +288,7 @@ private final class StubAppSettingsService: AppSettingsService {
     func updateWordTypeColorScheme(_ scheme: String) async throws {}
     func updateHoldToSelectMillis(_ millis: Int64) async throws {}
     func updateDwellToSelectMillis(_ millis: Int64) async throws {}
+    func updateDwellRearmDelayMillis(_ millis: Int64) async throws {}
     func updateSelectKeyBinding(_ binding: String) async throws {}
     func updateRestModeKeyBinding(_ binding: String) async throws {}
     func updatePointerEmphasis(style: String, scale: Float) async throws {}

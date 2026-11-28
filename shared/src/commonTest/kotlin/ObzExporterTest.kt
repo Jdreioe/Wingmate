@@ -19,6 +19,8 @@ import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.OBF_SCREEN_SETTINGS_EXTENSION
 import io.github.jdreioe.wingmate.domain.obf.encodeBoardSettings
+import io.github.jdreioe.wingmate.domain.obf.pageSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.infrastructure.ObfParser
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
 import io.github.jdreioe.wingmate.infrastructure.BoardImportResult
@@ -265,6 +267,45 @@ class ObzExporterTest {
         val home = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
         assertNotNull(boardRepo.getBoard(assertNotNull(home.buttons.first { it.id == "b2" }.loadBoard?.id)))
         assertTrue(storage.exists(assertNotNull(home.images.single().path)))
+        Unit
+    }
+
+    @Test
+    fun obzRoundTripPreservesScreenAndPageKeyguardSpacing() = runBlocking {
+        val screenSpacing = BoardSettingsOverrides(cellGapDp = 14, outerMarginDp = 28)
+        val pageSpacing = BoardSettingsOverrides(cellGapDp = 6, outerMarginDp = 16)
+        val rootWithSpacing = rootBoard.withPageSettingsOverrides(pageSpacing)
+        val exported = exporter.exportResult(
+            boards = listOf(rootWithSpacing, foodBoard),
+            rootBoardId = "root",
+            loadMedia = mediaLoader,
+            manifestExtensions = mapOf(OBF_SCREEN_SETTINGS_EXTENSION to encodeBoardSettings(screenSpacing)),
+        )
+        val zip = assertIs<ObzExportResult.Success>(exported).bytes
+        val paths = listOf(
+            "manifest.json", "boards/root.obf", "boards/food.obf",
+            "images/img1.png", "sounds/sound1.mp3"
+        )
+        val entries = paths.associateWith { path -> assertNotNull(extractEntry(zip, path)) }
+        val boardRepo = InMemoryBoardRepository()
+        val setRepo = InMemoryBoardSetRepository()
+        val storage = InMemoryFileStorage()
+        val importer = BoardImportService(
+            ObfParser(), boardRepo, setRepo, MapArchivePicker(entries), storage
+        )
+
+        val imported = assertIs<BoardImportResult.Success>(importer.importBoardSetFromPathResult("keyguard.obz"))
+        assertEquals(14, imported.boardSet.screenSettings.cellGapDp)
+        assertEquals(28, imported.boardSet.screenSettings.outerMarginDp)
+
+        val importedRoot = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
+        assertEquals(6, importedRoot.pageSettingsOverrides().cellGapDp)
+        assertEquals(16, importedRoot.pageSettingsOverrides().outerMarginDp)
+
+        val importedFoodId = assertNotNull(importedRoot.buttons.first { it.id == "b2" }.loadBoard?.id)
+        val importedFood = assertNotNull(boardRepo.getBoard(importedFoodId))
+        assertEquals(null, importedFood.pageSettingsOverrides().cellGapDp)
+        assertEquals(null, importedFood.pageSettingsOverrides().outerMarginDp)
         Unit
     }
 

@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.application
 
 import io.github.jdreioe.wingmate.domain.BoardRepository
 import io.github.jdreioe.wingmate.domain.OperationalLogger
+import io.github.jdreioe.wingmate.domain.Settings
 import io.github.jdreioe.wingmate.domain.obf.backgroundImage
 import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
 import io.github.jdreioe.wingmate.domain.obf.PageBackgroundFit
@@ -11,6 +12,8 @@ import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
+import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_CELL_GAP_DP
+import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_OUTER_MARGIN_DP
 import io.github.jdreioe.wingmate.domain.obf.MAX_MESSAGE_BAR_ACTIONS
 import io.github.jdreioe.wingmate.domain.obf.MessageBarAction
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
@@ -72,6 +75,8 @@ data class IosResolvedBoardSettings(
     val speechPolicy: String? = null,
     /** [MessageBarAction] names, in order: `Speak`, `Hold`, `DeleteLast`, `Clear`. */
     val messageBarActions: List<String> = emptyList(),
+    val cellGapDp: Int? = null,
+    val outerMarginDp: Int? = null,
 )
 
 data class IosBoardCell(
@@ -105,6 +110,17 @@ data class IosBoardFieldItem(
     val buttonId: String? = null,
 )
 
+/**
+ * One Page read from a single captured board, so native clients never publish
+ * settings, Buttons, and field spans from different revisions of the same Page.
+ */
+data class IosBoardSnapshot(
+    val board: ObfBoard,
+    val settings: IosResolvedBoardSettings,
+    val cells: List<IosBoardCell>,
+    val fieldItems: List<IosBoardFieldItem>,
+)
+
 data class IosGridFieldSpan(
     val rows: Int,
     val columns: Int,
@@ -130,6 +146,8 @@ data class IosBoardSettingsDraft(
     val activationBehavior: String = "inherit",
     val returnBehavior: String = "inherit",
     val cacheSpeech: String = "inherit",
+    val cellGapDp: Int? = null,
+    val outerMarginDp: Int? = null,
 )
 
 /**
@@ -336,8 +354,30 @@ class BoardsFacade(
      */
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun resolveBoardSettings(boardId: String): IosResolvedBoardSettings = nativeCall {
+        resolvedSettingsFor(boardId, boardRepository.getBoard(boardId), settingsUseCase.get())
+    }
+
+    /**
+     * Read the Page once and derive its resolved settings, Buttons, and field spans from
+     * that same board. Returns null when the Page no longer exists.
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun loadBoardSnapshot(boardId: String): IosBoardSnapshot? = nativeCall {
+        val board = boardRepository.getBoard(boardId) ?: return@nativeCall null
         val settings = settingsUseCase.get()
-        val board = boardRepository.getBoard(boardId)
+        IosBoardSnapshot(
+            board = board,
+            settings = resolvedSettingsFor(boardId, board, settings),
+            cells = cellsFor(board, settings),
+            fieldItems = fieldItemsFor(board),
+        )
+    }
+
+    private suspend fun resolvedSettingsFor(
+        boardId: String,
+        board: ObfBoard?,
+        settings: Settings,
+    ): IosResolvedBoardSettings {
         val screenOverrides = boardSetUseCase.listBoardSets()
             .firstOrNull { set -> set.boardIds.contains(boardId) }
             ?.screenSettings ?: BoardSettingsOverrides()
@@ -354,7 +394,7 @@ class BoardsFacade(
             screen = screenOverrides,
             page = pageOverrides,
         )
-        IosResolvedBoardSettings(
+        return IosResolvedBoardSettings(
             showLabels = resolved.showLabels,
             showSymbols = resolved.showSymbols,
             labelAtTop = resolved.labelAtTop,
@@ -365,6 +405,8 @@ class BoardsFacade(
             returnBehavior = resolved.returnBehavior.name,
             speechPolicy = resolved.speechPolicy?.name,
             messageBarActions = resolved.messageBarActions.map { it.name },
+            cellGapDp = resolved.cellGapDp,
+            outerMarginDp = resolved.outerMarginDp,
         )
     }
 
@@ -375,12 +417,15 @@ class BoardsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun listBoardCells(boardId: String): List<IosBoardCell> = nativeCall {
         val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
-        val grid = board.grid ?: return@nativeCall emptyList()
+        cellsFor(board, settingsUseCase.get())
+    }
+
+    private fun cellsFor(board: ObfBoard, settings: Settings): List<IosBoardCell> {
+        val grid = board.grid ?: return emptyList()
         val buttons = board.buttons.associateBy { it.id }
         val images = board.images.associateBy { it.id }
-        val settings = settingsUseCase.get()
         val locale = settings.primaryLanguage
-        grid.order.flatMapIndexed { row, columns ->
+        return grid.order.flatMapIndexed { row, columns ->
             columns.mapIndexedNotNull { col, buttonId ->
                 val id = buttonId ?: return@mapIndexedNotNull null
                 val button = buttons[id] ?: return@mapIndexedNotNull null
@@ -414,8 +459,12 @@ class BoardsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun listBoardFieldItems(boardId: String): List<IosBoardFieldItem> = nativeCall {
         val board = boardRepository.getBoard(boardId) ?: return@nativeCall emptyList()
-        val grid = board.grid ?: return@nativeCall emptyList()
-        grid.fieldItems().map { field ->
+        fieldItemsFor(board)
+    }
+
+    private fun fieldItemsFor(board: ObfBoard): List<IosBoardFieldItem> {
+        val grid = board.grid ?: return emptyList()
+        return grid.fieldItems().map { field ->
             IosBoardFieldItem(
                 row = field.row,
                 column = field.column,
@@ -657,6 +706,8 @@ class BoardsFacade(
         activationBehavior: String,
         returnBehavior: String,
         cacheSpeech: String,
+        cellGapDp: Int? = null,
+        outerMarginDp: Int? = null,
     ) = nativeCall {
         val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
         if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
@@ -678,6 +729,8 @@ class BoardsFacade(
             cacheSpeech = cacheSpeech.toOptionalBoolean(),
             // Edited on the Screen itself, not in this form.
             messageBarActions = current.messageBarActions,
+            cellGapDp = cellGapDp?.coerceIn(0, MAX_KEYGUARD_CELL_GAP_DP),
+            outerMarginDp = outerMarginDp?.coerceIn(0, MAX_KEYGUARD_OUTER_MARGIN_DP),
         )
         val updated = if (forPage) {
             val board = graph.boardsById[boardId] ?: throw NativeFailure(NativeFailureKind.NotFound)
@@ -754,6 +807,8 @@ private fun BoardSettingsOverrides.toDraft(): IosBoardSettingsDraft = IosBoardSe
     activationBehavior = activationBehavior?.name ?: "inherit",
     returnBehavior = returnBehavior?.name ?: "inherit",
     cacheSpeech = cacheSpeech.choice(),
+    cellGapDp = cellGapDp,
+    outerMarginDp = outerMarginDp,
 )
 
 private fun Boolean?.choice(): String = when (this) {

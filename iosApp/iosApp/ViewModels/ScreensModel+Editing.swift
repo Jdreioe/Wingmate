@@ -82,7 +82,7 @@ extension ScreensModel {
         }
 
         do {
-            let updatedBoard = try await service.upsertBoardCellButton(
+            _ = try await service.upsertBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col),
@@ -104,7 +104,7 @@ extension ScreensModel {
                 clearRecording: clearRecording
             )
 
-            selectedBoard = updatedBoard
+            // refreshBoardCells publishes the board with its cells from one snapshot.
             await refreshBoardCells()
             await touchBoardSetIfSelected()
             touchSelectedBoardSet(statusKey: "boardset.status.cell_saved")
@@ -124,12 +124,12 @@ extension ScreensModel {
         }
 
         do {
-            let updatedBoard = try await service.clearBoardCellButton(
+            _ = try await service.clearBoardCellButton(
                 boardId: boardId,
                 row: Int32(row),
                 col: Int32(col)
             )
-            selectedBoard = updatedBoard
+            // refreshBoardCells publishes the board with its cells from one snapshot.
             await refreshBoardCells()
             await touchBoardSetIfSelected()
             touchSelectedBoardSet(statusKey: "boardset.status.cell_cleared")
@@ -216,13 +216,14 @@ extension ScreensModel {
     func resizeSelectedBoard(rows: Int, columns: Int) async {
         guard let set = selectedBoardSet, let boardId = selectedBoardId, canEditSelectedBoardSet else { return }
         do {
-            let board = try await service.resizeBoard(
+            _ = try await service.resizeBoard(
                 boardSetId: set.id,
                 boardId: boardId,
                 rows: Int32(min(max(rows, 1), 12)),
                 columns: Int32(min(max(columns, 1), 12))
             )
-            selectedBoard = board
+            // refreshBoardCells publishes the resized board with its cells from one snapshot,
+            // so old fields never render against the new dimensions.
             await refreshBoardCells()
             await loadBoardSets()
             selectedBoardSetId = set.id
@@ -280,7 +281,9 @@ extension ScreensModel {
         messageBarEditable: String,
         activationBehavior: String,
         returnBehavior: String,
-        cacheSpeech: String
+        cacheSpeech: String,
+        cellGapDp: Int? = nil,
+        outerMarginDp: Int? = nil
     ) async -> Bool {
         guard let setId = selectedBoardSetId, let boardId = selectedBoardId, canEditSelectedBoardSet else { return false }
         do {
@@ -296,7 +299,9 @@ extension ScreensModel {
                 messageBarEditable: messageBarEditable,
                 activationBehavior: activationBehavior,
                 returnBehavior: returnBehavior,
-                cacheSpeech: cacheSpeech
+                cacheSpeech: cacheSpeech,
+                cellGapDp: cellGapDp.map { Int32($0) },
+                outerMarginDp: outerMarginDp.map { Int32($0) }
             )
             await loadSelectedBoard()
             return true

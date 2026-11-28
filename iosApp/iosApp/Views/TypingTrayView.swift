@@ -260,9 +260,17 @@ struct TypingTrayView: View {
         }
         .id(page)
         .transition(.opacity)
-        .scrollDisabled(model.settings.selectOnTouchDown)
+        // Touch Exit is installed on Screens only; keep the Typing Phrase tray scrollable so offscreen Phrases stay reachable.
+        .scrollDisabled(model.settings.selectOnTouchDown && model.settings.holdToSelectMillis <= 0)
         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
-            guard model.settings.swipeBetweenPages, !model.settings.selectOnTouchDown, model.settings.holdToSelectMillis <= 0,
+            guard TouchExitControllerKt.pageSwipeIsActive(
+                    isEditMode: false,
+                    swipeBetweenPages: model.settings.swipeBetweenPages,
+                    holdToSelectMillis: Int64(model.settings.holdToSelectMillis),
+                    selectOnTouchDown: model.settings.selectOnTouchDown,
+                    selectOnTouchExit: false,
+                    disableOnHoldToSelect: true
+                  ),
                   abs(value.translation.width) >= 64, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
             var pages: [TypingPage] = [.all] + model.communication.state.categories.map { .category($0.id) }
             if historyAvailable { pages.append(.history) }

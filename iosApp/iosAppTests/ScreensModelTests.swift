@@ -71,7 +71,9 @@ final class ScreensModelTests: XCTestCase {
             activationBehavior: "SpeakAndAdd",
             returnBehavior: "Previous",
             speechPolicy: nil,
-            messageBarActions: ["Speak"]
+            messageBarActions: ["Speak"],
+            cellGapDp: nil,
+            outerMarginDp: nil
         )
 
         let model = makeModel(service: service)
@@ -274,6 +276,7 @@ private final class StubScreensAppSettingsService: AppSettingsService {
     func loadSnapshot(fallbackUseSystemTts: Bool) async throws -> AppSettingsSnapshot { AppSettingsSnapshot() }
     func updateLikelyNextPageEnabled(_ enabled: Bool) async throws {}
     func updateSelectOnTouchDown(_ enabled: Bool) async throws {}
+    func updateSelectOnTouchExit(_ enabled: Bool) async throws {}
     func updateSwipeBetweenPages(_ enabled: Bool) async throws {}
     func updateScanningEnabled(_ enabled: Bool) async throws {}
     func updateScanPlaybackAreaEnabled(_ enabled: Bool) async throws {}
@@ -292,6 +295,7 @@ private final class StubScreensAppSettingsService: AppSettingsService {
     func updateWordTypeColorScheme(_ scheme: String) async throws {}
     func updateHoldToSelectMillis(_ millis: Int64) async throws {}
     func updateDwellToSelectMillis(_ millis: Int64) async throws {}
+    func updateDwellRearmDelayMillis(_ millis: Int64) async throws {}
     func updateSelectKeyBinding(_ binding: String) async throws {}
     func updateRestModeKeyBinding(_ binding: String) async throws {}
     func updatePointerEmphasis(style: String, scale: Float) async throws {}
@@ -325,7 +329,9 @@ private final class FakeScreensService: ScreensService {
         activationBehavior: "SpeakAndAdd",
         returnBehavior: "Stay",
         speechPolicy: nil,
-        messageBarActions: ["Speak"]
+        messageBarActions: ["Speak"],
+        cellGapDp: nil,
+        outerMarginDp: nil
     )
     var listBoardSetsError: Error? = nil
     var sentenceCachingError: Error? = nil
@@ -367,7 +373,9 @@ private final class FakeScreensService: ScreensService {
                 returnBehavior: nil,
                 speechPolicy: nil,
                 cacheSpeech: nil,
-                messageBarActions: nil
+                messageBarActions: nil,
+                cellGapDp: nil,
+                outerMarginDp: nil
             ),
             kind: .user,
             remoteLink: nil,
@@ -441,6 +449,15 @@ private final class FakeScreensService: ScreensService {
     }
 
     func getBoard(id: String) async throws -> Shared.ObfBoard? { boardsById[id] }
+    func loadBoardSnapshot(boardId: String) async throws -> Shared.IosBoardSnapshot? {
+        guard let board = boardsById[boardId] else { return nil }
+        return Shared.IosBoardSnapshot(
+            board: board,
+            settings: resolvedSettings,
+            cells: cellsByBoardId[boardId] ?? [],
+            fieldItems: fieldsByBoardId[boardId] ?? []
+        )
+    }
     func listBoardCells(boardId: String) async throws -> [Shared.IosBoardCell] { cellsByBoardId[boardId] ?? [] }
     func listBoardFieldItems(boardId: String) async throws -> [Shared.IosBoardFieldItem] { fieldsByBoardId[boardId] ?? [] }
     func resolveBoardSettings(boardId: String) async throws -> Shared.IosResolvedBoardSettings { resolvedSettings }
@@ -532,7 +549,9 @@ private final class FakeScreensService: ScreensService {
             messageBarEditable: "inherit",
             activationBehavior: "inherit",
             returnBehavior: "inherit",
-            cacheSpeech: "inherit"
+            cacheSpeech: "inherit",
+            cellGapDp: nil,
+            outerMarginDp: nil
         )
     }
     func updateMessageBarActions(boardSetId: String, actions: [String]) async throws {}
@@ -548,7 +567,9 @@ private final class FakeScreensService: ScreensService {
         messageBarEditable: String,
         activationBehavior: String,
         returnBehavior: String,
-        cacheSpeech: String
+        cacheSpeech: String,
+        cellGapDp: Int32?,
+        outerMarginDp: Int32?
     ) async throws {}
     func setRootBoard(boardSetId: String, boardId: String) async throws -> Shared.ObfBoardSet {
         Self.makeBoardSet(id: boardSetId, name: "Screen", rootBoardId: boardId, boardIds: [boardId], updatedAt: 1)

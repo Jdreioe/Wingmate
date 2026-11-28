@@ -601,6 +601,8 @@ private fun CategoryContent(
                 onHoldToSelectChangeFinished = { onAction(SettingsAction.HoldToSelectChangeFinished) },
                 selectOnTouchDown = settings.selectOnTouchDown,
                 onSelectOnTouchDownChange = { onAction(SettingsAction.SelectOnTouchDownChanged(it)) },
+                selectOnTouchExit = settings.selectOnTouchExit,
+                onSelectOnTouchExitChange = { onAction(SettingsAction.SelectOnTouchExitChanged(it)) },
                 swipeBetweenPages = settings.swipeBetweenPages,
                 onSwipeBetweenPagesChange = { onAction(SettingsAction.SwipeBetweenPagesChanged(it)) },
                 dwellToSelectMillis = settings.dwellToSelectMillis,
