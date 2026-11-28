@@ -112,6 +112,9 @@ final class AppSettingsModelTests: XCTestCase {
         let service = FakeAppSettingsService()
         let model = AppSettingsModel(service: service, nowMillis: { now })
         _ = await model.setDwellToSelectMillis(500).value
+        // The tremor-filter rearm delay is covered in TouchAccessParityTests; disable it so
+        // these timings measure dwell alone.
+        _ = await model.setDwellRearmDelayMillis(0).value
 
         var activated = 0
         model.registerAccessTarget("btn-1") { activated += 1 }
