@@ -24,7 +24,8 @@ plugins {
 // stays clean without waiting on plugin upstream releases. BouncyCastle 1.85.x closes the
 // critical (GHSA-574f-3g2m-x479) and both medium (GHSA-c3fc-8qff-9hwx, GHSA-wg6q-6289-32hp)
 // advisories; the rest close jose4j (GHSA-3677-xxcr-wjqv), jdom2 (GHSA-2363-cqg2-863c),
-// and commons-lang3 (GHSA-j288-q9x7-2f5v).
+// commons-lang3 (GHSA-j288-q9x7-2f5v), Guava's deserialization memory exhaustion (AGP lint
+// and Play Publisher), and opentelemetry-api's quadratic tracestate parsing (Kotlin swift-export).
 buildscript {
     configurations.classpath {
         resolutionStrategy {
@@ -34,7 +35,9 @@ buildscript {
                 "org.bouncycastle:bcutil-jdk18on:1.86",
                 "org.bitbucket.b_c:jose4j:0.9.7",
                 "org.jdom:jdom2:2.0.6.1",
-                "org.apache.commons:commons-lang3:3.21.0"
+                "org.apache.commons:commons-lang3:3.21.0",
+                "com.google.guava:guava:33.7.2-jre",
+                "io.opentelemetry:opentelemetry-api:1.67.0"
             )
         }
     }
@@ -46,7 +49,9 @@ val patchedTransitiveVersions = listOf(
     "org.bouncycastle:bcutil-jdk18on:1.86",
     "org.bitbucket.b_c:jose4j:0.9.7",
     "org.jdom:jdom2:2.0.6.1",
-    "org.apache.commons:commons-lang3:3.21.0"
+    "org.apache.commons:commons-lang3:3.21.0",
+    "com.google.guava:guava:33.7.2-jre",
+    "io.opentelemetry:opentelemetry-api:1.67.0"
 )
 
 allprojects {
