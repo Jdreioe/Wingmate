@@ -599,6 +599,7 @@ extension SymbolBoardWorkspaceView {
                         Text("boardset.cell.word_type.verb").tag("verb")
                         Text("boardset.cell.word_type.descriptor").tag("descriptor")
                         Text("boardset.cell.word_type.noun").tag("noun")
+                        Text("boardset.cell.word_type.question").tag("question")
                         Text("boardset.cell.word_type.social").tag("social")
                         Text("boardset.cell.word_type.other").tag("other")
                     }

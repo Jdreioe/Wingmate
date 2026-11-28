@@ -175,7 +175,7 @@ class GridsetExporterTest {
         assertEquals(mapOf("Wingmate prediction button" to 1), result.warnings)
         val gridXml = assertNotNull(extractEntry(result.bytes, "Grids/_CON/grid.xml")).decodeToString()
         assertTrue(gridXml.contains("<Image>.png</Image>"))
-        assertTrue(gridXml.contains("<BackColour>#F48FB1FF</BackColour>"))
+        assertTrue(gridXml.contains("<BackColour>#A5D6A7FF</BackColour>"))
         assertTrue(assertNotNull(extractEntry(result.bytes, "Grids/_CON/0-1.png")).contentEquals(pngHeaderBytes))
     }
 

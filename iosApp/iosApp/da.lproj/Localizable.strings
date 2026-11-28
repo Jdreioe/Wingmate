@@ -409,6 +409,7 @@
 "boardset.cell.word_type.verb" = "Udsagnsord";
 "boardset.cell.word_type.descriptor" = "Beskrivende ord";
 "boardset.cell.word_type.noun" = "Navneord";
+"boardset.cell.word_type.question" = "Spørgeord";
 "boardset.cell.word_type.social" = "Socialt ord";
 "boardset.cell.word_type.other" = "Andet";
 "boardset.cell.hidden" = "Skjult i brugstilstand";

@@ -52,6 +52,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -367,11 +369,18 @@ private fun TypingPageNavigation(
             }
         }
         item("add") {
+            val addCategoryLabel = stringResource(R.string.category_add_title)
             FilterChip(
                 selected = false,
                 enabled = addCategoryEnabled,
                 onClick = onAddCategory,
-                label = { Text("+") },
+                label = {
+                    Text(
+                        text = "+",
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
+                },
+                modifier = Modifier.semantics { contentDescription = addCategoryLabel },
             )
         }
     }
