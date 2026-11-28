@@ -235,6 +235,7 @@
 "boardset.cell.word_type.verb" = "Verb";
 "boardset.cell.word_type.descriptor" = "Descriptor";
 "boardset.cell.word_type.noun" = "Noun";
+"boardset.cell.word_type.question" = "Question word";
 "boardset.cell.word_type.social" = "Social word";
 "boardset.cell.word_type.other" = "Other";
 "boardset.cell.hidden" = "Hidden in run mode";

@@ -23,7 +23,7 @@ STRING_LITERAL = re.compile(r'"((?:\\.|[^"\\])*)"')
 # Keys built at runtime from a fixed set of suffixes.
 DYNAMIC_KEYS = {
     "phrase.symbol.package.": ["all", "opensymbols", "mulberry", "arasaac"],
-    "boardset.cell.word_type.": ["pronoun", "verb", "descriptor", "noun", "social", "other"],
+    "boardset.cell.word_type.": ["pronoun", "verb", "descriptor", "noun", "question", "social", "other"],
     "phrase.symbol.error.": ["missing_proxy", "search_failed"],
 }
 

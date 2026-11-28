@@ -6,13 +6,14 @@ import kotlinx.serialization.json.contentOrNull
 
 const val OBF_WORD_TYPE_EXTENSION = "ext_wingmate_word_type"
 
-/** Broad AAC vocabulary groups used by Fitzgerald-style color coding. */
+/** Broad AAC vocabulary groups aligned with the Modified Fitzgerald Key. */
 enum class WordType(val wireValue: String, val fitzgeraldColor: String) {
     Pronoun("pronoun", "#FFF176"),
-    Verb("verb", "#F48FB1"),
+    Verb("verb", "#A5D6A7"),
     Descriptor("descriptor", "#81D4FA"),
     Noun("noun", "#FFB74D"),
-    Social("social", "#A5D6A7"),
+    Question("question", "#CE93D8"),
+    Social("social", "#F48FB1"),
     Other("other", "#E0E0E0")
 }
 
@@ -76,20 +77,22 @@ private fun words(type: WordType, value: String): Map<String, WordType> =
     value.split(' ').associateWith { type }
 
 private val englishWords = buildMap {
-    putAll(words(WordType.Pronoun, "i me my mine you your yours he him his she her hers it its we us our ours they them their theirs who what where when why"))
+    putAll(words(WordType.Pronoun, "i me my mine you your yours he him his she her hers it its we us our ours they them their theirs"))
+    putAll(words(WordType.Question, "who what where when why how which whose"))
     putAll(words(WordType.Verb, "am is are was were be being been have has had do does did can could will would shall should may might must want need like go come make get put take give see hear say tell eat drink play help stop open close turn look feel think know"))
-    putAll(words(WordType.Descriptor, "good bad big small hot cold happy sad angry tired sick more less fast slow loud quiet yes no red orange yellow green blue purple black white"))
+    putAll(words(WordType.Descriptor, "good bad big small hot cold happy sad angry tired sick done finished more less fast slow loud quiet yes no red orange yellow green blue purple black white"))
     putAll(words(WordType.Social, "hello hi goodbye bye please thanks thank sorry okay ok"))
-    putAll(words(WordType.Other, "a an the and or but if in on at to from with without for of this that these those"))
+    putAll(words(WordType.Other, "a an the and or but if in on at to from with without for of this that these those not again here there also"))
     putAll(words(WordType.Noun, "person people family mother father mom dad sister brother friend home school work food water drink toilet bathroom pain medicine doctor nurse book music game phone computer car bus dog cat"))
 }
 
 private val danishWords = buildMap {
-    putAll(words(WordType.Pronoun, "jeg mig min mit mine du dig din dit dine han ham hans hun hende hendes den det vi os vores i jer jeres hvem hvad hvor hvornår hvorfor"))
-    putAll(words(WordType.Verb, "er var være har havde gør gjorde kan kunne vil ville skal skulle må ønsker behøver lide gå komme lave få sætte tage give se høre sige fortælle spise drikke lege hjælpe stop åbne lukke føle tænke vide"))
-    putAll(words(WordType.Descriptor, "god dårlig stor lille varm kold glad ked vred træt syg mere mindre hurtig langsom høj stille ja nej rød orange gul grøn blå lilla sort hvid"))
-    putAll(words(WordType.Social, "hej farvel tak undskyld okay"))
-    putAll(words(WordType.Other, "en et den det og eller men hvis i på til fra med uden for af denne dette disse"))
+    putAll(words(WordType.Pronoun, "jeg mig min mit mine du dig din dit dine han ham hans hun hende hendes den det vi os vores i jer jeres de dem deres"))
+    putAll(words(WordType.Question, "hvem hvad hvor hvornår hvorfor hvordan hvilken hvilket hvilke"))
+    putAll(words(WordType.Verb, "er var være har havde gør gjorde gøre kan kunne vil ville skal skulle må måtte ønsker behøver lide gå komme lave få sætte tage give se høre sige fortælle spise drikke lege hjælpe stop stoppe åbne lukke føle tænke vide lytte vente finde bruge"))
+    putAll(words(WordType.Descriptor, "god dårlig stor lille varm kold glad ked vred træt syg færdig klar mere mindre hurtig langsom høj stille ja nej rød orange gul grøn blå lilla sort hvid ny gammel sjov svær nem"))
+    putAll(words(WordType.Social, "hej hallo farvel tak undskyld okay ok velbekomme"))
+    putAll(words(WordType.Other, "en et den det og eller men hvis i på til fra med uden for af om over under ind ud op ned ikke igen her der også nu så meget lidt bare denne dette disse"))
     putAll(words(WordType.Noun, "person mennesker familie mor far søster bror ven hjem skole arbejde mad vand drik toilet badeværelse smerte medicin læge sygeplejerske bog musik spil telefon computer bil bus hund kat"))
 }
 

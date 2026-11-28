@@ -492,6 +492,7 @@
     <string name="board_dialog_word_type_verb">Udsagnsord</string>
     <string name="board_dialog_word_type_descriptor">Beskrivende ord</string>
     <string name="board_dialog_word_type_noun">Navneord</string>
+    <string name="board_dialog_word_type_question">Spørgeord</string>
     <string name="board_dialog_word_type_social">Socialt ord</string>
     <string name="board_dialog_word_type_other">Andet</string>
     <string name="phrase_edit_hidden_title">Skjult</string>

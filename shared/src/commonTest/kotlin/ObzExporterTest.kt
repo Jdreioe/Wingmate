@@ -397,19 +397,36 @@ class ObzExporterTest {
     }
 
     @Test
-    fun manualWordTypeRoundTripsWithoutPersistingGeneratedColor() {
+    fun manualWordTypeRoundTripsWithoutPersistingGeneratedColor() = runBlocking {
         val board = ObfBoard(
             format = "open-board-0.1",
             id = "word-type-board",
-            buttons = listOf(ObfButton(id = "b1", label = "play").withWordType(WordType.Noun))
+            buttons = WordType.entries.mapIndexed { index, type ->
+                ObfButton(id = "b$index", label = "word-$index").withWordType(type)
+            }
         )
 
         val serialized = exporter.serializeBoard(board)
         assertTrue(serialized.contains(OBF_WORD_TYPE_EXTENSION))
+        assertTrue(serialized.contains("\"question\""))
 
         val reparsed = ObfParser().parseBoard(serialized).getOrThrow()
-        assertEquals(WordType.Noun, reparsed.buttons.single().wordType)
-        assertNull(reparsed.buttons.single().backgroundColor)
+        assertEquals(WordType.entries, reparsed.buttons.map { it.wordType })
+        assertTrue(reparsed.buttons.all { it.backgroundColor == null })
+
+        val obz = exporter.export(boards = listOf(board), rootBoardId = board.id)
+        val entries = listOf("manifest.json", "boards/${board.id}.obf")
+            .associateWith { path -> assertNotNull(extractEntry(obz, path)) }
+        val boardRepo = InMemoryBoardRepository()
+        val importer = BoardImportService(
+            ObfParser(), boardRepo, InMemoryBoardSetRepository(), MapArchivePicker(entries), InMemoryFileStorage()
+        )
+        val imported = assertIs<BoardImportResult.Success>(
+            importer.importBoardSetFromPathResult("word-types.obz")
+        )
+        val importedBoard = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
+        assertEquals(WordType.entries, importedBoard.buttons.map { it.wordType })
+        assertTrue(importedBoard.buttons.all { it.backgroundColor == null })
     }
 
     @Test

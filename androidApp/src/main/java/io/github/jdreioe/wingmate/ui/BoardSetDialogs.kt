@@ -66,6 +66,7 @@ private fun WordType.labelRes(): Int = when (this) {
     WordType.Verb -> R.string.board_dialog_word_type_verb
     WordType.Descriptor -> R.string.board_dialog_word_type_descriptor
     WordType.Noun -> R.string.board_dialog_word_type_noun
+    WordType.Question -> R.string.board_dialog_word_type_question
     WordType.Social -> R.string.board_dialog_word_type_social
     WordType.Other -> R.string.board_dialog_word_type_other
 }

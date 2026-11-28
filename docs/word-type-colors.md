@@ -1,8 +1,10 @@
 # Word-type colors
 
-Wingmate can automatically apply Fitzgerald-style colors to Screen buttons. The
-feature is off by default, so existing boards keep their appearance until it is
-enabled in Display settings.
+Wingmate can automatically apply Modified Fitzgerald Key colors to Screen buttons
+(people/pronouns yellow, verbs green, nouns orange, describing words blue,
+questions purple, social words pink, small words/other grey). The feature is off
+by default, so existing boards keep their appearance until it is enabled in
+Display settings.
 
 Color precedence is deliberately simple:
 

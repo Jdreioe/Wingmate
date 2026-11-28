@@ -636,6 +636,7 @@
 "board_settings.reset_screen" = "Bildschirmeinstellungen zurücksetzen";
 "board_settings.reset_page" = "Seitenanpassungen zurücksetzen";
 "boardset.cell.word_type.pronoun" = "Pronomen";
+"boardset.cell.word_type.question" = "Fragewort";
 "boardset.cell.word_type.social" = "Soziales Wort";
 "boardset.cell.word_type.verb" = "Verb";
 "boardset.export_obz" = "Exportieren";

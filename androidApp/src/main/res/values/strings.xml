@@ -230,6 +230,7 @@
     <string name="board_dialog_word_type_verb">Verb</string>
     <string name="board_dialog_word_type_descriptor">Descriptor</string>
     <string name="board_dialog_word_type_noun">Noun</string>
+    <string name="board_dialog_word_type_question">Question word</string>
     <string name="board_dialog_word_type_social">Social word</string>
     <string name="board_dialog_word_type_other">Other</string>
     <string name="board_dialog_pick_color">Pick</string>
