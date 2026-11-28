@@ -12,6 +12,7 @@ import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
@@ -76,7 +77,11 @@ import org.koin.dsl.module
 
 // Every iOS platform binding (persistence, HTTP, speech, sharing, files), overriding the
 // in-memory defaults from initKoin.
-private fun iosModule(deviceSpeech: IosDeviceSpeech, aptabaseEndpoint: AptabaseEndpoint?) =
+private fun iosModule(
+    deviceSpeech: IosDeviceSpeech,
+    audioRouter: SpeechAudioRouter,
+    aptabaseEndpoint: AptabaseEndpoint?,
+) =
     module(createdAtStart = false) {
         // Ktor client for iOS (Darwin engine)
         single<HttpClient> {
@@ -100,6 +105,7 @@ private fun iosModule(deviceSpeech: IosDeviceSpeech, aptabaseEndpoint: AptabaseE
         singleOf(::IosPhraseRepository) { bind<PhraseRepository>() }
         single<CommunicationSessionDataSource> { IosCommunicationSessionDataSource() }
         // Cloud voices play in Kotlin; the device voice is Swift's AVSpeechSynthesizer.
+        single<SpeechAudioRouter> { audioRouter }
         single<SpeechService> {
             IosSessionSpeechService(
                 cloud = IosSpeechService(
@@ -112,6 +118,7 @@ private fun iosModule(deviceSpeech: IosDeviceSpeech, aptabaseEndpoint: AptabaseE
                     googleApiRequestHeaders = get(),
                 ),
                 device = deviceSpeech,
+                audioRouter = audioRouter,
             )
         }
 
@@ -157,10 +164,15 @@ class IosDiBridge {
      * Starts the shared graph with iOS bindings. Later calls are ignored.
      * [aptabaseAppKey] enables opt-in feature usage reporting; blank leaves it off.
      */
-    fun start(deviceSpeech: IosDeviceSpeech, openSymbolsProxyUrl: String?, aptabaseAppKey: String?) {
+    fun start(
+        deviceSpeech: IosDeviceSpeech,
+        audioRouter: SpeechAudioRouter,
+        openSymbolsProxyUrl: String?,
+        aptabaseAppKey: String?,
+    ) {
         if (KoinPlatform.getKoinOrNull() != null) return
         OpenSymbolsClient.setProxyBaseUrl(openSymbolsProxyUrl)
-        initKoin(iosModule(deviceSpeech, AptabaseEndpoint.fromAppKey(aptabaseAppKey)))
+        initKoin(iosModule(deviceSpeech, audioRouter, AptabaseEndpoint.fromAppKey(aptabaseAppKey)))
     }
 
     fun backupFacade(): BackupSharingFacade = KoinPlatform.getKoin().get()

@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate.application
 
+import io.github.jdreioe.wingmate.domain.AudioOutputCapabilities
+import io.github.jdreioe.wingmate.domain.AudioOutputRoute
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationFailureKind
 import io.github.jdreioe.wingmate.domain.CommunicationPersistenceStatus
@@ -10,9 +13,11 @@ import io.github.jdreioe.wingmate.domain.CommunicationStorageError
 import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
 import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
+import io.github.jdreioe.wingmate.domain.NoopSpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.PredictionResult
@@ -453,22 +458,207 @@ class QueuedCommunicationSessionTest {
         assertEquals(CommunicationPlaybackStatus.Idle, session.state.value.playbackStatus)
     }
 
+    @Test
+    fun `disabled headphone preview routing leaves audio router untouched for previews and messages`() = runTest {
+        val speech = RecordingSpeechService()
+        val router = RecordingAudioRouter(
+            capabilities = AudioOutputCapabilities(hasHeadphonesOrEarpiece = true, hasSpeaker = true),
+        )
+        val history = FakeSaidTextRepository()
+        val session = session(
+            speechService = speech,
+            saidTextRepository = history,
+            routeAuditoryPreviewToHeadphones = false,
+            audioRouter = router,
+        )
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("preview"), null, isPreview = true))
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertTrue(router.prepared.isEmpty())
+        assertEquals(0, router.restoreCount)
+        assertEquals(listOf(AudioRouteDecision.SystemDefault, AudioRouteDecision.SystemDefault), speech.routes)
+        assertEquals(listOf("hello"), history.items.map { it.saidText })
+    }
+
+    @Test
+    fun `enabled headphone preview routing isolates previews from speaker messages and history`() = runTest {
+        val speech = RecordingSpeechService()
+        val router = RecordingAudioRouter(
+            capabilities = AudioOutputCapabilities(hasHeadphonesOrEarpiece = true, hasSpeaker = true),
+        )
+        val history = FakeSaidTextRepository()
+        val session = session(
+            speechService = speech,
+            saidTextRepository = history,
+            routeAuditoryPreviewToHeadphones = true,
+            audioRouter = router,
+        )
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("water"), null, isPreview = true))
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("I want water")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(
+            listOf(
+                AudioRouteDecision(AudioOutputRoute.HeadphonesOrEarpiece, duckAudio = false, requiresRouteOverride = true),
+                AudioRouteDecision(AudioOutputRoute.Speaker, duckAudio = false, requiresRouteOverride = true),
+            ),
+            router.prepared,
+        )
+        assertEquals(router.prepared, speech.routes)
+        assertEquals(2, router.restoreCount)
+        assertEquals(listOf("I want water"), history.items.map { it.saidText })
+    }
+
+    @Test
+    fun `single output fallback ducks previews without failing or dropping speech`() = runTest {
+        val speech = RecordingSpeechService()
+        val router = RecordingAudioRouter(
+            capabilities = AudioOutputCapabilities(hasHeadphonesOrEarpiece = false, hasSpeaker = true),
+        )
+        val history = FakeSaidTextRepository()
+        val session = session(
+            speechService = speech,
+            saidTextRepository = history,
+            routeAuditoryPreviewToHeadphones = true,
+            audioRouter = router,
+        )
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("cue"), null, isPreview = true))
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("hello")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(listOf("cue", "hello"), speech.spoken)
+        assertEquals(
+            listOf(
+                AudioRouteDecision(AudioOutputRoute.SystemDefault, duckAudio = true, requiresRouteOverride = false),
+                AudioRouteDecision.SystemDefault,
+            ),
+            speech.routes,
+        )
+        assertEquals(
+            listOf(AudioRouteDecision(AudioOutputRoute.SystemDefault, duckAudio = true, requiresRouteOverride = false)),
+            router.prepared,
+        )
+        assertEquals(1, router.restoreCount)
+        assertEquals(listOf("hello"), history.items.map { it.saidText })
+    }
+
+    @Test
+    fun `failing a preview always restores audio routing before spoken message`() = runTest {
+        val speech = RecordingSpeechService(failText = "broken")
+        val router = RecordingAudioRouter(
+            capabilities = AudioOutputCapabilities(hasHeadphonesOrEarpiece = true, hasSpeaker = true),
+        )
+        val session = session(
+            speechService = speech,
+            routeAuditoryPreviewToHeadphones = true,
+            audioRouter = router,
+        )
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("broken"), null, isPreview = true))
+        runCurrent()
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("clear")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(
+            listOf(
+                AudioRouteDecision(AudioOutputRoute.HeadphonesOrEarpiece, duckAudio = false, requiresRouteOverride = true),
+                AudioRouteDecision(AudioOutputRoute.Speaker, duckAudio = false, requiresRouteOverride = true),
+            ),
+            router.prepared,
+        )
+        assertEquals(2, router.restoreCount)
+        assertEquals(listOf("broken", "clear"), speech.spoken)
+    }
+
+    @Test
+    fun `cancelling an in-flight preview restores audio routing before spoken message`() = runTest {
+        val speech = RecordingSpeechService(blockFirstRequest = true)
+        val router = RecordingAudioRouter(
+            capabilities = AudioOutputCapabilities(hasHeadphonesOrEarpiece = true, hasSpeaker = true),
+        )
+        val session = session(
+            speechService = speech,
+            routeAuditoryPreviewToHeadphones = true,
+            audioRouter = router,
+        )
+        runCurrent()
+
+        session.accept(CommunicationAction.SpeakPart(MessagePart("hover"), null, isPreview = true))
+        runCurrent()
+        speech.firstStarted.await()
+
+        session.accept(CommunicationAction.CancelPreview)
+        session.accept(CommunicationAction.ReplaceMessage(Message(parts = listOf(MessagePart("spoken")))))
+        session.accept(CommunicationAction.SpeakActive(null))
+        runCurrent()
+
+        assertEquals(
+            listOf(
+                AudioRouteDecision(AudioOutputRoute.HeadphonesOrEarpiece, duckAudio = false, requiresRouteOverride = true),
+                AudioRouteDecision(AudioOutputRoute.Speaker, duckAudio = false, requiresRouteOverride = true),
+            ),
+            router.prepared,
+        )
+        assertEquals(2, router.restoreCount)
+        assertEquals(listOf("hover", "spoken"), speech.spoken)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.session(
         dataSource: FakeSessionDataSource = FakeSessionDataSource(),
         speechService: RecordingSpeechService = RecordingSpeechService(),
         saidTextRepository: FakeSaidTextRepository = FakeSaidTextRepository(),
         predictionService: TextPredictionService? = null,
         ttsEngine: TtsEngine = TtsEngine.SYSTEM,
+        routeAuditoryPreviewToHeadphones: Boolean = false,
+        audioRouter: SpeechAudioRouter = NoopSpeechAudioRouter,
     ) = QueuedCommunicationSession(
         dataSource = dataSource,
         speechService = speechService,
         saidTextRepository = saidTextRepository,
         currentSettings = {
-            Settings(primaryLanguage = "en-US", historyVisible = true, ttsEngine = ttsEngine)
+            Settings(
+                primaryLanguage = "en-US",
+                historyVisible = true,
+                ttsEngine = ttsEngine,
+                routeAuditoryPreviewToHeadphones = routeAuditoryPreviewToHeadphones,
+            )
         },
         scope = backgroundScope,
         predictionService = predictionService,
+        audioRouter = audioRouter,
     )
+}
+
+private class RecordingAudioRouter(
+    private val capabilities: AudioOutputCapabilities,
+) : SpeechAudioRouter {
+    val prepared = mutableListOf<AudioRouteDecision>()
+    var restoreCount = 0
+
+    override fun currentCapabilities(): AudioOutputCapabilities = capabilities
+
+    override fun prepareRoute(decision: AudioRouteDecision) {
+        prepared += decision
+    }
+
+    override fun restoreRoute() {
+        restoreCount++
+    }
 }
 
 private class FakeSessionDataSource(
@@ -514,6 +704,7 @@ private class RecordingSpeechService(
 ) : SpeechService {
     val spoken = mutableListOf<String>()
     val engines = mutableListOf<TtsEngine>()
+    val routes = mutableListOf<AudioRouteDecision>()
     val recordings = mutableListOf<String>()
     val firstStarted = CompletableDeferred<Unit>()
     val releaseFirst = CompletableDeferred<Unit>()
@@ -539,9 +730,20 @@ private class RecordingSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
         callerJob = currentCoroutineContext()[Job]
         engines += engine
+        routes += audioRoute
         if (engine in failingEngines) error("$engine failed")
         spoken += text
         requestCount++
@@ -559,7 +761,17 @@ private class RecordingSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
-    ) = speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio, engine)
+    ) = speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
+    ) = speakWithoutHistory(segments.joinToString("") { it.text }, voice, pitch, rate, cacheAudio, engine, audioRoute)
 
     override suspend fun speakRecordedAudio(
         audioFilePath: String,

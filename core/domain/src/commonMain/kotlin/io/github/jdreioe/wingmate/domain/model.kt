@@ -184,6 +184,10 @@ data class Settings(
     val pointerEmphasisScale: Float = 1.5f,
     val selectionSoundEnabled: Boolean = false,
     val auditoryFishingEnabled: Boolean = false,
+    // #406: when enabled and headphones/earpiece + speaker are available, route
+    // auditory fishing previews privately to headphones/earpiece while keeping
+    // primary spoken Messages on the speaker.
+    val routeAuditoryPreviewToHeadphones: Boolean = false,
     // #119: immediate speech on each selection versus keeping composition silent
     // until the constructed sentence is activated.
     val speechPolicy: SpeechPolicy = SpeechPolicy.Immediate,

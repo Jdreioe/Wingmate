@@ -483,6 +483,8 @@
 "settings.accessibility.selection_highlight" = "Markeringsfremhævning";
 "settings.accessibility.selection_sound" = "Lyd ved valg";
 "settings.accessibility.auditory_fishing" = "Auditiv søgning";
+"settings.accessibility.auditory_preview_headphones" = "Send forhåndsvisninger til hovedtelefoner";
+"settings.accessibility.auditory_preview_headphones.footer" = "Afspil forhåndsvisninger fra auditiv søgning i tilsluttede hovedtelefoner eller øresnegl, mens talte beskeder afspilles over højttaleren.";
 "settings.speech_policy.title" = "Tale ved valg";
 "settings.speech_policy.immediate" = "Straks";
 "settings.speech_policy.sentence_only" = "Kun sætning";

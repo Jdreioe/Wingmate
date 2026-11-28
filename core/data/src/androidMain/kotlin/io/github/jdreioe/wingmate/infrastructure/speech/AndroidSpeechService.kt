@@ -18,6 +18,7 @@ import android.net.Network
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
@@ -69,6 +70,7 @@ import kotlin.coroutines.resume
 class AndroidSpeechService(
     internal val context: Context,
     internal val googleApiRequestHeaders: GoogleApiRequestHeaders,
+    internal val audioRouter: AndroidAudioPreviewRouter = AndroidAudioPreviewRouter(context),
 ) : SpeechService {
     internal companion object {
         const val DEFAULT_AZURE_VOICE_NAME = "en-US-JennyNeural"
@@ -116,20 +118,25 @@ class AndroidSpeechService(
             .build()
     }
     internal var audioFocusRequest: AudioFocusRequest? = null
-    internal fun requestAudioFocus(): Boolean {
+    internal fun requestAudioFocus(attributes: AudioAttributes = ttsAudioAttributes): Boolean {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setOnAudioFocusChangeListener(focusChangeListener)
-                    .setAudioAttributes(ttsAudioAttributes)
+                    .setAudioAttributes(attributes)
                     .build()
                 audioFocusRequest = req
                 audioManager.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             } else {
+                val streamType = if (attributes.usage == AudioAttributes.USAGE_VOICE_COMMUNICATION) {
+                    AudioManager.STREAM_VOICE_CALL
+                } else {
+                    AudioManager.STREAM_MUSIC
+                }
                 @Suppress("DEPRECATION")
                 audioManager.requestAudioFocus(
                     focusChangeListener,
-                    AudioManager.STREAM_MUSIC,
+                    streamType,
                     AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
                 ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             }
@@ -347,12 +354,22 @@ class AndroidSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
         val requestId = beginRequest()
         // The session explains failures and falls back itself, so no toast here.
         executeRequest(requestId, announceFailure = false) {
             val segments = SpeechTextProcessor.processText(text)
-            speakSessionSegments(requestId, segments, voice, pitch, rate, cacheAudio, engine)
+            speakSessionSegments(requestId, segments, voice, pitch, rate, cacheAudio, engine, audioRoute)
         }
     }
 
@@ -377,10 +394,20 @@ class AndroidSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
         val requestId = beginRequest()
         executeRequest(requestId, announceFailure = false) {
-            speakSessionSegments(requestId, segments, voice, pitch, rate, cacheAudio, engine)
+            speakSessionSegments(requestId, segments, voice, pitch, rate, cacheAudio, engine, audioRoute)
         }
     }
 
@@ -432,12 +459,13 @@ class AndroidSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+        audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
     ) {
         rememberPlaybackContext(segments, voice, pitch, rate)
         if (engine == TtsEngine.SYSTEM) {
-            playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate)
+            playSegmentsWithPlatformTts(requestId, segments, voice, pitch, rate, audioRoute)
         } else {
-            playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, currentSettings())
+            playCloud(requestId, engine, segments, voice, pitch, rate, cacheAudio, currentSettings(), audioRoute)
         }
     }
 
@@ -461,7 +489,14 @@ class AndroidSpeechService(
     }
 
     override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean =
-        speakRecordedAudioImpl(audioFilePath, textForHistory, voice)
+        speakRecordedAudioImpl(audioFilePath, textForHistory, voice, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakRecordedAudio(
+        audioFilePath: String,
+        textForHistory: String?,
+        voice: Voice?,
+        audioRoute: AudioRouteDecision,
+    ): Boolean = speakRecordedAudioImpl(audioFilePath, textForHistory, voice, audioRoute)
 
     override suspend fun pause() {
         if (!isPlaying) return
@@ -486,6 +521,7 @@ class AndroidSpeechService(
         activeRequestJob?.cancel()
         activeRequestJob = null
         stopNativePlayback()
+        audioRouter.restoreRoute()
         state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.IDLE)
     }
 

@@ -309,6 +309,8 @@
 "settings.accessibility.selection_highlight" = "Selection Highlight";
 "settings.accessibility.selection_sound" = "Selection Sound";
 "settings.accessibility.auditory_fishing" = "Auditory Fishing";
+"settings.accessibility.auditory_preview_headphones" = "Route Previews to Headphones";
+"settings.accessibility.auditory_preview_headphones.footer" = "Play auditory fishing previews through connected headphones or an earpiece while spoken Messages play over the speaker.";
 "settings.speech_policy.title" = "Speech When Selecting";
 "settings.speech_policy.immediate" = "Immediate";
 "settings.speech_policy.sentence_only" = "Sentence Only";

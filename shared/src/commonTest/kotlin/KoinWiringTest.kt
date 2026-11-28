@@ -32,6 +32,7 @@ import io.github.jdreioe.wingmate.domain.AacLogger
 import io.github.jdreioe.wingmate.domain.BoardSpeechCache
 import io.github.jdreioe.wingmate.domain.CommunicationSession
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.UserDataManager
 import io.github.jdreioe.wingmate.infrastructure.BoardImportService
@@ -118,6 +119,7 @@ class KoinWiringTest {
             assertNotNull(koin.get<TypingScreenUseCase>())
             assertNotNull(koin.get<TextPredictionService>())
             assertNotNull(koin.get<CommunicationSession>())
+            assertNotNull(koin.get<SpeechAudioRouter>())
             assertNotNull(koin.get<BoardSetUseCase>())
             assertNotNull(koin.get<RemoteScreenSyncUseCase>())
             assertNotNull(koin.get<RemoteScreenActions>())

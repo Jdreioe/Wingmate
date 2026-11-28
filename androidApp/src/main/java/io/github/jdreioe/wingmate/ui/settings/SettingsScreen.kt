@@ -614,6 +614,10 @@ private fun CategoryContent(
                 onAuditoryFishingChange = { checked ->
                     onAction(SettingsAction.AuditoryFishingChanged(checked))
                 },
+                routeAuditoryPreviewToHeadphones = settings.routeAuditoryPreviewToHeadphones,
+                onRouteAuditoryPreviewToHeadphonesChange = { checked ->
+                    onAction(SettingsAction.RouteAuditoryPreviewToHeadphonesChanged(checked))
+                },
                 speechPolicy = settings.speechPolicy,
                 onSpeechPolicyChange = { policy -> onAction(SettingsAction.SpeechPolicyChanged(policy)) },
                 selectionDebounceMillis = settings.selectionDebounceMillis,

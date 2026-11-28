@@ -1,5 +1,8 @@
 package io.github.jdreioe.wingmate
 
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
+import io.github.jdreioe.wingmate.domain.NoopSpeechAudioRouter
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
 import io.github.jdreioe.wingmate.domain.SpeechSegment
@@ -21,6 +24,7 @@ interface IosDeviceSpeech {
     /**
      * Speaks [segments] in order, honoring each segment's pause and language.
      * [rate] and [pitch] are multipliers where 1.0 is the voice's normal value.
+     * [audioRoute] carries the resolved output route and ducking decision (#406).
      * Calls [onFinished] once: true when everything was spoken, false when it
      * failed or was cancelled.
      */
@@ -29,6 +33,7 @@ interface IosDeviceSpeech {
         languageTag: String,
         rate: Double,
         pitch: Double,
+        audioRoute: AudioRouteDecision,
         onFinished: (Boolean) -> Unit,
     )
 
@@ -46,6 +51,7 @@ interface IosDeviceSpeech {
 internal class IosSessionSpeechService(
     private val cloud: SpeechService,
     private val device: IosDeviceSpeech,
+    private val audioRouter: SpeechAudioRouter = NoopSpeechAudioRouter,
 ) : SpeechService by cloud {
     /**
      * Which voice spoke last and how its device request stands. The session polls
@@ -66,12 +72,22 @@ internal class IosSessionSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
         if (engine != TtsEngine.SYSTEM) {
             route.update { it.copy(deviceIsActive = false) }
-            cloud.speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine)
+            cloud.speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine, audioRoute)
         } else {
-            speakOnDevice(SpeechTextProcessor.processText(text), voice, pitch, rate)
+            speakOnDevice(SpeechTextProcessor.processText(text), voice, pitch, rate, audioRoute)
         }
     }
 
@@ -82,10 +98,20 @@ internal class IosSessionSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
         if (engine != TtsEngine.SYSTEM) {
             route.update { it.copy(deviceIsActive = false) }
-            cloud.speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine)
+            cloud.speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine, audioRoute)
         } else {
             // Expand shorthand SSML pauses inside each segment, keeping its language.
             val expanded = segments.flatMap { segment ->
@@ -93,13 +119,21 @@ internal class IosSessionSpeechService(
                     it.copy(languageTag = it.languageTag ?: segment.languageTag)
                 }
             }
-            speakOnDevice(expanded, voice, pitch, rate)
+            speakOnDevice(expanded, voice, pitch, rate, audioRoute)
         }
     }
 
-    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean =
+        speakRecordedAudio(audioFilePath, textForHistory, voice, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakRecordedAudio(
+        audioFilePath: String,
+        textForHistory: String?,
+        voice: Voice?,
+        audioRoute: AudioRouteDecision,
+    ): Boolean {
         route.update { it.copy(deviceIsActive = false) }
-        return cloud.speakRecordedAudio(audioFilePath, textForHistory, voice)
+        return cloud.speakRecordedAudio(audioFilePath, textForHistory, voice, audioRoute)
     }
 
     private suspend fun speakOnDevice(
@@ -107,6 +141,7 @@ internal class IosSessionSpeechService(
         voice: Voice?,
         pitch: Double?,
         rate: Double?,
+        audioRoute: AudioRouteDecision,
     ) = withContext(Dispatchers.Main) {
         val requestId = route.updateAndGet {
             Route(deviceIsActive = true, device = SpeechPlaybackState(it.device.requestId + 1, SpeechPlaybackStatus.PLAYING))
@@ -114,7 +149,7 @@ internal class IosSessionSpeechService(
         val language = voice?.selectedLanguage?.takeIf(String::isNotBlank)
             ?: voice?.primaryLanguage.orEmpty()
         val spokenSegments = SpeechTextProcessor.segmentsFor(TtsEngine.SYSTEM, segments)
-        device.speak(spokenSegments, language, rate ?: 1.0, pitch ?: 1.0) { spoken ->
+        device.speak(spokenSegments, language, rate ?: 1.0, pitch ?: 1.0, audioRoute) { spoken ->
             val status = if (spoken) SpeechPlaybackStatus.IDLE else SpeechPlaybackStatus.FAILED
             route.update { current ->
                 // A newer request or a Stop makes this request's end irrelevant.
@@ -153,6 +188,7 @@ internal class IosSessionSpeechService(
             device.stop()
         }
         cloud.stop()
+        runCatching { audioRouter.restoreRoute() }
     }
 
     override fun isPlaying(): Boolean = route.value.let {

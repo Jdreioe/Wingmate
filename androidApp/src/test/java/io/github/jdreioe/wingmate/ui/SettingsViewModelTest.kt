@@ -276,6 +276,23 @@ class SettingsViewModelTest {
         assertFalse(viewModel.state.value.settings.selectOnTouchExit)
     }
 
+    @Test
+    fun `auditory preview headphone routing toggles and persists`() = runTest {
+        val operations = FakeSettingsOperations()
+        val viewModel = SettingsViewModel(SavedStateHandle(), operations)
+        viewModel.onAction(SettingsAction.Initialize)
+
+        assertFalse(viewModel.state.value.settings.routeAuditoryPreviewToHeadphones)
+
+        viewModel.onAction(SettingsAction.RouteAuditoryPreviewToHeadphonesChanged(true))
+        assertTrue(viewModel.state.value.settings.routeAuditoryPreviewToHeadphones)
+        assertTrue(operations.settings.routeAuditoryPreviewToHeadphones)
+
+        viewModel.onAction(SettingsAction.RouteAuditoryPreviewToHeadphonesChanged(false))
+        assertFalse(viewModel.state.value.settings.routeAuditoryPreviewToHeadphones)
+        assertFalse(operations.settings.routeAuditoryPreviewToHeadphones)
+    }
+
     private fun boardSet(id: String) = ObfBoardSet(
         id = id,
         name = "Set $id",

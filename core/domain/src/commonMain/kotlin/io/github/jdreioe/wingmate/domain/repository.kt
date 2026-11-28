@@ -157,6 +157,16 @@ interface SpeechService {
         cacheAudio: Boolean = true,
         engine: TtsEngine,
     ) = speakWithCachePolicy(text, voice, pitch, rate, cacheAudio)
+    /** Audio-route-aware overload of [speakWithoutHistory] used by the Communication session (#406). */
+    suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
+    ) = speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine)
     /** Segmented counterpart to [speakWithoutHistory]. */
     suspend fun speakSegmentsWithoutHistory(
         segments: List<SpeechSegment>,
@@ -166,6 +176,16 @@ interface SpeechService {
         cacheAudio: Boolean = true,
         engine: TtsEngine,
     ) = speakSegmentsWithCachePolicy(segments, voice, pitch, rate, cacheAudio)
+    /** Audio-route-aware overload of [speakSegmentsWithoutHistory] (#406). */
+    suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice? = null,
+        pitch: Double? = null,
+        rate: Double? = null,
+        cacheAudio: Boolean = true,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
+    ) = speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine)
     /** Synthesize speech into the reusable cache without playing it or adding History. */
     suspend fun cacheSpeech(
         text: String,
@@ -174,6 +194,13 @@ interface SpeechService {
         rate: Double? = null
     ): Boolean = false
     suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String? = null, voice: Voice? = null): Boolean = false
+    /** Audio-route-aware overload of [speakRecordedAudio] (#406). */
+    suspend fun speakRecordedAudio(
+        audioFilePath: String,
+        textForHistory: String? = null,
+        voice: Voice? = null,
+        audioRoute: AudioRouteDecision,
+    ): Boolean = speakRecordedAudio(audioFilePath, textForHistory, voice)
     suspend fun pause()
     suspend fun stop()
     suspend fun resume()

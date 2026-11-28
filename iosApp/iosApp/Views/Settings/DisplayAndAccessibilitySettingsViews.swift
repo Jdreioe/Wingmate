@@ -132,6 +132,13 @@ struct AccessibilitySettingsView: View {
                 Toggle("settings.accessibility.auditory_fishing", isOn: Binding(
                     get: { settings.auditoryFishingEnabled }, set: { settings.setAuditoryFishingEnabled($0) }
                 ))
+                Toggle("settings.accessibility.auditory_preview_headphones", isOn: Binding(
+                    get: { settings.routeAuditoryPreviewToHeadphones },
+                    set: { settings.setRouteAuditoryPreviewToHeadphones($0) }
+                ))
+                Text("settings.accessibility.auditory_preview_headphones.footer")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("settings.pointer_emphasis.title") {

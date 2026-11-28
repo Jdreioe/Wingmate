@@ -52,11 +52,13 @@ import io.github.jdreioe.wingmate.domain.ElevenLabsVoiceCatalogPort
 import io.github.jdreioe.wingmate.domain.FileStorage
 import io.github.jdreioe.wingmate.domain.GoogleVoiceCatalogPort
 import io.github.jdreioe.wingmate.domain.NoopSoundPlayer
+import io.github.jdreioe.wingmate.domain.NoopSpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.PhraseRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SoundPlayer
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.TextPredictionService
 import io.github.jdreioe.wingmate.domain.UserDataManager
@@ -140,6 +142,7 @@ internal val coreDefaultsModule: Module = module {
     singleOf(::InMemorySecureEditingCredentialStorage) { bind<SecureEditingCredentialStorage>() }
     singleOf(::UnavailableBackupMediaAccess) { bind<BackupMediaAccess>() }
     singleOf(::NoopSpeechService) { bind<SpeechService>() }
+    single<SpeechAudioRouter> { NoopSpeechAudioRouter }
     singleOf(::NoopFeatureUsageReporter) { bind<FeatureUsageReporter>() }
     single<SoundPlayer> { NoopSoundPlayer() }
     single<GoogleApiRequestHeaders> { NoGoogleApiRequestHeaders }
@@ -212,6 +215,7 @@ internal val communicationModule: Module = module {
             currentSettings = settingsStateManager::getCurrentSettings,
             scope = get(named("communicationSessionScope")),
             predictionService = get(),
+            audioRouter = get(),
         )
     }
     singleOf(::CommunicationFacade)

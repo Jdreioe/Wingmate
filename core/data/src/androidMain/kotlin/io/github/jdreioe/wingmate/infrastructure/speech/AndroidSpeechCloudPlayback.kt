@@ -18,6 +18,7 @@ import android.net.Network
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
@@ -149,12 +150,13 @@ internal suspend fun AndroidSpeechService.playCloud(
     rate: Double?,
     cacheAudio: Boolean,
     uiSettings: io.github.jdreioe.wingmate.domain.Settings?,
+    audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
 ): CloudPlayback {
     val combinedText = segments.joinToString("") { it.text }
 
     // Reuse a cached audio file from history to save API calls (works even offline).
     if (cacheAudio) {
-        maybePlayFromHistoryCache(requestId, combinedText, voice, pitch, rate, uiSettings?.primaryLanguage)
+        maybePlayFromHistoryCache(requestId, combinedText, voice, pitch, rate, uiSettings?.primaryLanguage, audioRoute)
             ?.let { return it }
     }
 
@@ -210,7 +212,7 @@ internal suspend fun AndroidSpeechService.playCloud(
 
             if (cacheAudio && outFile.exists() && outFile.length() > 0) {
                 // Cache hit! reuse the file without calling Azure
-                startPlayback(requestId, outFile, vForSsml)
+                startPlayback(requestId, outFile, vForSsml, audioRoute = audioRoute)
                 return@withContext CloudPlayback(vForSsml, outFile.absolutePath)
             }
 
@@ -253,7 +255,7 @@ internal suspend fun AndroidSpeechService.playCloud(
                 }
             }
 
-            startPlayback(requestId, outFile, vForSsml, deleteAfterPlayback = !cacheAudio)
+            startPlayback(requestId, outFile, vForSsml, deleteAfterPlayback = !cacheAudio, audioRoute = audioRoute)
             CloudPlayback(vForSsml, outFile.absolutePath.takeIf { cacheAudio })
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -271,7 +273,12 @@ internal suspend fun AndroidSpeechService.playCloud(
     }
 }
 
-internal suspend fun AndroidSpeechService.speakRecordedAudioImpl(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+internal suspend fun AndroidSpeechService.speakRecordedAudioImpl(
+    audioFilePath: String,
+    textForHistory: String?,
+    voice: Voice?,
+    audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
+): Boolean {
     val file = File(audioFilePath)
     if (!file.exists() || file.length() <= 0L) return false
     val requestId = beginRequest()
@@ -299,7 +306,12 @@ internal suspend fun AndroidSpeechService.speakRecordedAudioImpl(audioFilePath: 
                     }
                 }
 
-                requestAudioFocus()
+                val attributes = if (audioRoute.requiresRouteOverride) {
+                    audioRouter.audioAttributesFor(audioRoute)
+                } else {
+                    ttsAudioAttributes
+                }
+                requestAudioFocus(attributes)
                 player.setOnCompletionListener {
                     finalizePlayback(true)
                 }
@@ -329,7 +341,7 @@ internal suspend fun AndroidSpeechService.speakRecordedAudioImpl(audioFilePath: 
 
                 try {
                     updateNowPlaying(textForHistory ?: file.nameWithoutExtension, voice)
-                    try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+                    applyMediaPlayerRoute(player, attributes, audioRoute)
                     player.setDataSourceFromFile(file)
                     player.prepare()
                     synchronized(playerLock) {
@@ -359,6 +371,23 @@ internal suspend fun AndroidSpeechService.speakRecordedAudioImpl(audioFilePath: 
     return played
 }
 
+internal fun AndroidSpeechService.applyMediaPlayerRoute(
+    player: MediaPlayer,
+    attributes: AudioAttributes,
+    audioRoute: AudioRouteDecision,
+) {
+    try { player.setAudioAttributes(attributes) } catch (_: Throwable) {}
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && audioRoute.requiresRouteOverride) {
+        audioRouter.preferredOutputDeviceFor(audioRoute)?.let { device ->
+            runCatching { player.preferredDevice = device }
+        }
+    }
+    if (audioRoute.duckAudio) {
+        val volume = audioRouter.volumeFor(audioRoute)
+        runCatching { player.setVolume(volume, volume) }
+    }
+}
+
 /**
  * Opens [file] through a FileDescriptor instead of a raw path. Avoids
  * stale/partial reads of freshly written files on some devices (#232).
@@ -370,10 +399,21 @@ internal fun MediaPlayer.setDataSourceFromFile(file: File) {
     }
 }
 
-internal fun AndroidSpeechService.startPlayback(requestId: Long, file: File, voice: Voice, deleteAfterPlayback: Boolean = false) {
+internal fun AndroidSpeechService.startPlayback(
+    requestId: Long,
+    file: File,
+    voice: Voice,
+    deleteAfterPlayback: Boolean = false,
+    audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
+) {
     check(requestGeneration.get() == requestId) { "Speech request was replaced" }
     val player = MediaPlayer()
-            requestAudioFocus()
+    val attributes = if (audioRoute.requiresRouteOverride) {
+        audioRouter.audioAttributesFor(audioRoute)
+    } else {
+        ttsAudioAttributes
+    }
+    requestAudioFocus(attributes)
 
     player.setOnCompletionListener { mp ->
         try {
@@ -394,7 +434,7 @@ internal fun AndroidSpeechService.startPlayback(requestId: Long, file: File, voi
         finishPlayback(requestId)
         true
     }
-    try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+    applyMediaPlayerRoute(player, attributes, audioRoute)
     player.setDataSourceFromFile(file)
     player.prepare()
     synchronized(playerLock) {
@@ -426,7 +466,8 @@ internal suspend fun AndroidSpeechService.maybePlayFromHistoryCache(
     voice: Voice?,
     pitch: Double?,
     rate: Double?,
-    uiPrimaryLanguage: String?
+    uiPrimaryLanguage: String?,
+    audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
 ): CloudPlayback? {
     return runCatching {
         val koin = GlobalContext.getOrNull()
@@ -469,7 +510,12 @@ internal suspend fun AndroidSpeechService.maybePlayFromHistoryCache(
 
         // Play the cached file with MediaPlayer (mirror Azure playback path)
         val player = MediaPlayer()
-        if (!requestAudioFocus()) {
+        val attributes = if (audioRoute.requiresRouteOverride) {
+            audioRouter.audioAttributesFor(audioRoute)
+        } else {
+            ttsAudioAttributes
+        }
+        if (!requestAudioFocus(attributes)) {
             // Even if focus fails, try to play; but Android Auto may ignore without focus
         }
         player.setOnCompletionListener { mp ->
@@ -490,7 +536,7 @@ internal suspend fun AndroidSpeechService.maybePlayFromHistoryCache(
             true
         }
         // Ensure proper routing for car/AA through media usage speech attributes.
-        try { player.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
+        applyMediaPlayerRoute(player, attributes, audioRoute)
         try {
             player.setDataSourceFromFile(file)
             player.prepare()

@@ -355,6 +355,7 @@ private final class StubScreensAppSettingsService: AppSettingsService {
     func updateSelectionDebounceMillis(_ millis: Int64) async throws {}
     func updateSelectionSoundEnabled(_ enabled: Bool) async throws {}
     func updateAuditoryFishingEnabled(_ enabled: Bool) async throws {}
+    func updateRouteAuditoryPreviewToHeadphones(_ enabled: Bool) async throws {}
     func updateSpeechPolicy(_ policy: String) async throws {}
     func updateBoardShowMessageBar(_ enabled: Bool) async throws {}
     func updateBoardShowSpeakButton(_ enabled: Bool) async throws {}

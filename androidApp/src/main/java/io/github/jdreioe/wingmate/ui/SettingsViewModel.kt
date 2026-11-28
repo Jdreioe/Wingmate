@@ -140,6 +140,7 @@ internal sealed interface SettingsAction {
     data object DwellToSelectChangeFinished : SettingsAction
     data class SelectionSoundChanged(val checked: Boolean) : SettingsAction
     data class AuditoryFishingChanged(val checked: Boolean) : SettingsAction
+    data class RouteAuditoryPreviewToHeadphonesChanged(val checked: Boolean) : SettingsAction
     data class SpeechPolicyChanged(val policy: SpeechPolicy) : SettingsAction
     data class SelectionDebounceChanged(val millis: Long) : SettingsAction
     data object SelectionDebounceChangeFinished : SettingsAction
@@ -496,6 +497,9 @@ internal class SettingsViewModel(
             }
             is SettingsAction.AuditoryFishingChanged -> persist {
                 it.copy(auditoryFishingEnabled = action.checked)
+            }
+            is SettingsAction.RouteAuditoryPreviewToHeadphonesChanged -> persist {
+                it.copy(routeAuditoryPreviewToHeadphones = action.checked)
             }
             is SettingsAction.SpeechPolicyChanged -> persist {
                 it.copy(speechPolicy = action.policy)
