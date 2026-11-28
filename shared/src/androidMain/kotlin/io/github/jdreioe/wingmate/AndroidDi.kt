@@ -12,9 +12,11 @@ import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.SettingsRepository
 import io.github.jdreioe.wingmate.domain.SoundPlayer
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.VoiceRepository
 import io.github.jdreioe.wingmate.application.FeatureUsageReporter
+import io.github.jdreioe.wingmate.infrastructure.AndroidAudioPreviewRouter
 import io.github.jdreioe.wingmate.infrastructure.AndroidFileStorage
 import io.github.jdreioe.wingmate.infrastructure.AndroidBoardRepository
 import io.github.jdreioe.wingmate.infrastructure.AndroidBoardSetRepository
@@ -80,7 +82,9 @@ fun androidModule(
 ): Module = module {
     single<Context> { context }
     single<GoogleApiRequestHeaders> { AndroidGoogleApiRequestHeaders(context) }
-    singleOf(::AndroidSpeechService) { bind<SpeechService>() }
+    single { AndroidAudioPreviewRouter(context) }
+    single<SpeechAudioRouter> { get<AndroidAudioPreviewRouter>() }
+    single<SpeechService> { AndroidSpeechService(get(), get(), get()) }
     singleOf(::AndroidPhraseRecordingService) { bind<PhraseRecordingService>() }
     singleOf(::AndroidSystemVoiceProvider) { bind<SystemVoiceProvider>() }
     singleOf(::AndroidSqlConfigRepository) { bind<ConfigRepository>() }

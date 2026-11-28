@@ -38,6 +38,7 @@ struct AppSettingsSnapshot: Equatable {
     var selectionHighlightMillis: Int64 = 0
     var selectionSoundEnabled: Bool = false
     var auditoryFishingEnabled: Bool = false
+    var routeAuditoryPreviewToHeadphones: Bool = false
     var speechPolicy: String = "Immediate"
     var selectKeyBinding: String = ""
     var restModeKeyBinding: String = ""
@@ -87,6 +88,7 @@ protocol AppSettingsService {
     func updateSelectionDebounceMillis(_ millis: Int64) async throws
     func updateSelectionSoundEnabled(_ enabled: Bool) async throws
     func updateAuditoryFishingEnabled(_ enabled: Bool) async throws
+    func updateRouteAuditoryPreviewToHeadphones(_ enabled: Bool) async throws
     func updateSpeechPolicy(_ policy: String) async throws
     func updateBoardShowMessageBar(_ enabled: Bool) async throws
     func updateBoardShowSpeakButton(_ enabled: Bool) async throws
@@ -138,6 +140,7 @@ struct SharedAppSettingsService: AppSettingsService {
             selectionHighlightMillis: settings.selectionHighlightMillis,
             selectionSoundEnabled: settings.selectionSoundEnabled,
             auditoryFishingEnabled: settings.auditoryFishingEnabled,
+            routeAuditoryPreviewToHeadphones: settings.routeAuditoryPreviewToHeadphones,
             speechPolicy: settings.speechPolicy.name,
             selectKeyBinding: settings.selectKeyBinding,
             restModeKeyBinding: settings.restModeKeyBinding,
@@ -182,6 +185,7 @@ struct SharedAppSettingsService: AppSettingsService {
     func updateSelectionDebounceMillis(_ millis: Int64) async throws { try await resolveFacade().updateSelectionDebounceMillis(millis: millis) }
     func updateSelectionSoundEnabled(_ enabled: Bool) async throws { try await resolveFacade().updateSelectionSoundEnabled(enabled: enabled) }
     func updateAuditoryFishingEnabled(_ enabled: Bool) async throws { try await resolveFacade().updateAuditoryFishingEnabled(enabled: enabled) }
+    func updateRouteAuditoryPreviewToHeadphones(_ enabled: Bool) async throws { try await resolveFacade().updateRouteAuditoryPreviewToHeadphones(enabled: enabled) }
     func updateSpeechPolicy(_ policy: String) async throws { try await resolveFacade().updateSpeechPolicy(policy: policy) }
     func updateBoardShowMessageBar(_ enabled: Bool) async throws { try await resolveFacade().updateBoardShowMessageBar(enabled: enabled) }
     func updateBoardShowSpeakButton(_ enabled: Bool) async throws { try await resolveFacade().updateBoardShowSpeakButton(enabled: enabled) }
@@ -236,6 +240,7 @@ final class AppSettingsModel: ObservableObject {
     @Published private(set) var highlightedButtonId: String? = nil
     @Published private(set) var selectionSoundEnabled: Bool = false
     @Published private(set) var auditoryFishingEnabled: Bool = false
+    @Published private(set) var routeAuditoryPreviewToHeadphones: Bool = false
     @Published private(set) var speechPolicy: String = "Immediate"
     @Published private(set) var selectKeyBinding: String = ""
     @Published private(set) var restModeKeyBinding: String = ""
@@ -358,6 +363,7 @@ final class AppSettingsModel: ObservableObject {
         selectionDebounceMillis = snapshot.selectionDebounceMillis
         selectionSoundEnabled = snapshot.selectionSoundEnabled
         auditoryFishingEnabled = snapshot.auditoryFishingEnabled
+        routeAuditoryPreviewToHeadphones = snapshot.routeAuditoryPreviewToHeadphones
         speechPolicy = snapshot.speechPolicy
         selectKeyBinding = snapshot.selectKeyBinding
         restModeKeyBinding = snapshot.restModeKeyBinding
@@ -679,6 +685,18 @@ final class AppSettingsModel: ObservableObject {
         auditoryFishingEnabled = enabled
         return persistSetting(key: "auditoryFishingEnabled", rollback: { self.auditoryFishingEnabled = previous }) {
             try await $0.updateAuditoryFishingEnabled(enabled)
+        }
+    }
+
+    @discardableResult
+    func setRouteAuditoryPreviewToHeadphones(_ enabled: Bool) -> Task<Bool, Never> {
+        let previous = routeAuditoryPreviewToHeadphones
+        routeAuditoryPreviewToHeadphones = enabled
+        return persistSetting(
+            key: "routeAuditoryPreviewToHeadphones",
+            rollback: { self.routeAuditoryPreviewToHeadphones = previous }
+        ) {
+            try await $0.updateRouteAuditoryPreviewToHeadphones(enabled)
         }
     }
 

@@ -1,5 +1,7 @@
 package io.github.jdreioe.wingmate.application
 
+import io.github.jdreioe.wingmate.domain.AudioPreviewRoutingPolicy
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
 import io.github.jdreioe.wingmate.domain.CommunicationAction
 import io.github.jdreioe.wingmate.domain.CommunicationFailure
 import io.github.jdreioe.wingmate.domain.CommunicationFailureKind
@@ -12,9 +14,12 @@ import io.github.jdreioe.wingmate.domain.CommunicationSessionState
 import io.github.jdreioe.wingmate.domain.CommunicationStorageResult
 import io.github.jdreioe.wingmate.domain.Message
 import io.github.jdreioe.wingmate.domain.MessagePart
+import io.github.jdreioe.wingmate.domain.NoopSpeechAudioRouter
 import io.github.jdreioe.wingmate.domain.SaidText
 import io.github.jdreioe.wingmate.domain.SaidTextRepository
 import io.github.jdreioe.wingmate.domain.Settings
+import io.github.jdreioe.wingmate.domain.SpeechAudioRouter
+import io.github.jdreioe.wingmate.domain.SpeechOutputRole
 import io.github.jdreioe.wingmate.domain.SpeechSegment
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
@@ -56,6 +61,7 @@ class QueuedCommunicationSession(
     private val currentSettings: () -> Settings,
     private val scope: CoroutineScope,
     private val predictionService: TextPredictionService? = null,
+    private val audioRouter: SpeechAudioRouter = NoopSpeechAudioRouter,
 ) : CommunicationSession {
     private val mutableState = MutableStateFlow(CommunicationSessionState())
     override val state: StateFlow<CommunicationSessionState> = mutableState.asStateFlow()
@@ -368,6 +374,7 @@ class QueuedCommunicationSession(
             visibleInHistory = settings.historyVisible,
             primaryLanguage = settings.primaryLanguage,
             engine = settings.ttsEngine,
+            routeAuditoryPreviewToHeadphones = settings.routeAuditoryPreviewToHeadphones,
         )
         mutableState.update { current ->
             current.copy(queuedSpeechCount = current.queuedSpeechCount + 1)
@@ -388,9 +395,23 @@ class QueuedCommunicationSession(
                 currentSpeechRequestId = request.id,
             )
         }
+        val routeDecision = AudioPreviewRoutingPolicy.resolve(
+            role = if (request.isPreview) SpeechOutputRole.AuditoryPreview else SpeechOutputRole.PrimaryMessage,
+            routePreviewToHeadphones = request.routeAuditoryPreviewToHeadphones,
+            capabilities = runCatching { audioRouter.currentCapabilities() }.getOrElse {
+                io.github.jdreioe.wingmate.domain.AudioOutputCapabilities(
+                    hasHeadphonesOrEarpiece = false,
+                    hasSpeaker = true,
+                )
+            },
+        )
+        val routePrepared = routeDecision.requiresRouteOverride || routeDecision.duckAudio
+        if (routePrepared) {
+            runCatching { audioRouter.prepareRoute(routeDecision) }
+        }
         try {
             awaitResume(request)
-            playMessage(request)
+            playMessage(request, routeDecision)
             if (!isStale(request) && request.recordHistory) {
                 val now = Clock.System.now().toEpochMilliseconds()
                 val saidText = SaidText(
@@ -418,6 +439,9 @@ class QueuedCommunicationSession(
         } catch (_: Throwable) {
             if (!isStale(request)) markPlaybackFailure()
         } finally {
+            if (routePrepared) {
+                runCatching { audioRouter.restoreRoute() }
+            }
             mutableState.update { current ->
                 if (current.currentSpeechRequestId == request.id) {
                     current.copy(
@@ -431,7 +455,7 @@ class QueuedCommunicationSession(
         }
     }
 
-    private suspend fun playMessage(request: SpeechRequest) {
+    private suspend fun playMessage(request: SpeechRequest, audioRoute: AudioRouteDecision) {
         val pending = mutableListOf<SpeechChunk>()
         // Once the cloud fails, finish the rest of this request on the device voice.
         var engine = request.engine
@@ -445,6 +469,7 @@ class QueuedCommunicationSession(
                     rate = request.rateOverride ?: voice?.rate,
                     cacheAudio = request.cacheAudio,
                     engine = engine,
+                    audioRoute = audioRoute,
                 )
             } else {
                 speechService.speakWithoutHistory(
@@ -454,6 +479,7 @@ class QueuedCommunicationSession(
                     rate = request.rateOverride ?: voice?.rate,
                     cacheAudio = request.cacheAudio,
                     engine = engine,
+                    audioRoute = audioRoute,
                 )
             }
             awaitPlayback()
@@ -502,6 +528,7 @@ class QueuedCommunicationSession(
                 audioFilePath = recordingPath,
                 textForHistory = null,
                 voice = request.voice,
+                audioRoute = audioRoute,
             )
             if (!played) {
                 pending += chunk.copy(recordingPath = null)
@@ -684,6 +711,7 @@ private data class SpeechRequest(
     val visibleInHistory: Boolean,
     val primaryLanguage: String,
     val engine: TtsEngine,
+    val routeAuditoryPreviewToHeadphones: Boolean = false,
 )
 
 private data class SpeechChunk(

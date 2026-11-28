@@ -409,6 +409,8 @@
 "settings.accessibility.selection_highlight" = "Auswahlhervorhebung";
 "settings.accessibility.selection_sound" = "Auswahlton";
 "settings.accessibility.auditory_fishing" = "Akustische Suche";
+"settings.accessibility.auditory_preview_headphones" = "Vorschauen über Kopfhörer ausgeben";
+"settings.accessibility.auditory_preview_headphones.footer" = "Spielt Vorschauen der akustischen Suche über verbundene Kopfhörer oder einen Ohrhörer ab, während gesprochene Nachrichten über den Lautsprecher ausgegeben werden.";
 "settings.speech_policy.title" = "Sprache beim Auswählen";
 "settings.speech_policy.immediate" = "Sofort";
 "settings.speech_policy.sentence_only" = "Nur Satz";

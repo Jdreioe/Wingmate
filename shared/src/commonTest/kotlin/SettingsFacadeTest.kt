@@ -166,6 +166,19 @@ class SettingsFacadeTest {
     }
 
     @Test
+    fun routeAuditoryPreviewToHeadphonesTogglesAndPersists() = runBlocking {
+        val facade = facade()
+
+        assertFalse(facade.getSettings().routeAuditoryPreviewToHeadphones)
+
+        facade.updateRouteAuditoryPreviewToHeadphones(true)
+        assertTrue(facade.getSettings().routeAuditoryPreviewToHeadphones)
+
+        facade.updateRouteAuditoryPreviewToHeadphones(false)
+        assertFalse(facade.getSettings().routeAuditoryPreviewToHeadphones)
+    }
+
+    @Test
     fun editingAccessCodeIsRejectedWhenMalformedOrStillLocked() = runBlocking {
         val facade = facade()
 

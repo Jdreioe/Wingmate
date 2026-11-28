@@ -18,6 +18,7 @@ import android.net.Network
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
 import io.github.jdreioe.wingmate.domain.SpeechService
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackState
 import io.github.jdreioe.wingmate.domain.SpeechPlaybackStatus
@@ -185,13 +186,25 @@ internal suspend fun AndroidSpeechService.speakWithPlatformTts(requestId: Long, 
  * Internal helper to record speech history for all playback paths
  */
 
-internal suspend fun AndroidSpeechService.playSegmentsWithPlatformTts(requestId: Long, messageSegments: List<SpeechSegment>, voice: Voice?, pitch: Double?, rate: Double?) {
+internal suspend fun AndroidSpeechService.playSegmentsWithPlatformTts(
+    requestId: Long,
+    messageSegments: List<SpeechSegment>,
+    voice: Voice?,
+    pitch: Double?,
+    rate: Double?,
+    audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
+) {
     val segments = SpeechTextProcessor.segmentsFor(TtsEngine.SYSTEM, messageSegments)
     withContext(Dispatchers.Main) {
         val parsedVoiceId = AndroidTtsVoiceId.parse(voice?.name)
         val t = ensureTts(parsedVoiceId.enginePackageName)
-        try { t.setAudioAttributes(ttsAudioAttributes) } catch (_: Throwable) {}
-        requestAudioFocus()
+        val attributes = if (audioRoute.requiresRouteOverride) {
+            audioRouter.audioAttributesFor(audioRoute)
+        } else {
+            ttsAudioAttributes
+        }
+        try { t.setAudioAttributes(attributes) } catch (_: Throwable) {}
+        requestAudioFocus(attributes)
 
         val combinedText = segments.joinToString(" ") { it.text }.trim()
         ttsUtteranceFailed.set(false)
@@ -222,6 +235,9 @@ internal suspend fun AndroidSpeechService.playSegmentsWithPlatformTts(requestId:
                 val params = android.os.Bundle()
                 val utteranceId = "wingmate-$requestId-$index-${System.nanoTime()}"
                 params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+                if (audioRoute.duckAudio) {
+                    params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, audioRouter.volumeFor(audioRoute))
+                }
                 
                 // Use QUEUE_ADD to chain segments seamlessly
                 val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD

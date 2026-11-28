@@ -22,6 +22,8 @@ final class AppSettingsModelTests: XCTestCase {
             holdToSelectMillis: 400,
             dwellToSelectMillis: 1_000,
             selectionHighlightMillis: 500,
+            auditoryFishingEnabled: true,
+            routeAuditoryPreviewToHeadphones: true,
             speechPolicy: "SentenceOnly",
             selectKeyBinding: "Space",
             restModeKeyBinding: "F8",
@@ -47,6 +49,8 @@ final class AppSettingsModelTests: XCTestCase {
         XCTAssertEqual(model.preferredGridColumns, 6)
         XCTAssertTrue(model.highContrastMode)
         XCTAssertEqual(model.wordTypeColorScheme, "Fitzgerald")
+        XCTAssertTrue(model.auditoryFishingEnabled)
+        XCTAssertTrue(model.routeAuditoryPreviewToHeadphones)
         XCTAssertEqual(model.speechPolicy, "SentenceOnly")
         XCTAssertFalse(model.historyVisible)
         XCTAssertNil(model.lastFailureKind)
@@ -160,6 +164,24 @@ final class AppSettingsModelTests: XCTestCase {
         XCTAssertFalse(ok)
         XCTAssertNil(model.lastFailureKind)
     }
+
+    func testRouteAuditoryPreviewToHeadphonesPersistsAndRollsBackOnFailure() async {
+        let service = FakeAppSettingsService()
+        let model = AppSettingsModel(service: service)
+
+        XCTAssertFalse(model.routeAuditoryPreviewToHeadphones)
+
+        let saved = await model.setRouteAuditoryPreviewToHeadphones(true).value
+        XCTAssertTrue(saved)
+        XCTAssertTrue(model.routeAuditoryPreviewToHeadphones)
+        XCTAssertEqual(service.recordedMutations, ["previewHeadphones:true"])
+
+        service.mutationError = FakeSettingsError.storage
+        let failed = await model.setRouteAuditoryPreviewToHeadphones(false).value
+        XCTAssertFalse(failed)
+        XCTAssertTrue(model.routeAuditoryPreviewToHeadphones)
+        XCTAssertEqual(model.lastFailureKind, .persistence)
+    }
 }
 
 private enum FakeSettingsError: Error {
@@ -213,6 +235,7 @@ private final class FakeAppSettingsService: AppSettingsService {
     func updateSelectionDebounceMillis(_ millis: Int64) async throws { try await record("debounce:\(millis)") }
     func updateSelectionSoundEnabled(_ enabled: Bool) async throws { try await record("sound:\(enabled)") }
     func updateAuditoryFishingEnabled(_ enabled: Bool) async throws { try await record("fishing:\(enabled)") }
+    func updateRouteAuditoryPreviewToHeadphones(_ enabled: Bool) async throws { try await record("previewHeadphones:\(enabled)") }
     func updateSpeechPolicy(_ policy: String) async throws { try await record("speechPolicy:\(policy)") }
     func updateBoardShowMessageBar(_ enabled: Bool) async throws { try await record("boardMessageBar:\(enabled)") }
     func updateBoardShowSpeakButton(_ enabled: Bool) async throws { try await record("boardSpeakButton:\(enabled)") }

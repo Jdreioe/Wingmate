@@ -23,9 +23,28 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSp
         pitch: Double,
         onFinished: @escaping (KotlinBoolean) -> Void
     ) {
+        speak(
+            segments: segments,
+            languageTag: languageTag,
+            rate: rate,
+            pitch: pitch,
+            audioRoute: AudioRouteDecision(route: .systemdefault, duckAudio: false, requiresRouteOverride: false),
+            onFinished: onFinished
+        )
+    }
+
+    func speak(
+        segments: [SpeechSegment],
+        languageTag: String,
+        rate: Double,
+        pitch: Double,
+        audioRoute: AudioRouteDecision,
+        onFinished: @escaping (KotlinBoolean) -> Void
+    ) {
         finishRequest(spoken: false)
         if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
 
+        let utteranceVolume: Float = audioRoute.duckAudio ? AudioSessionHelper.duckedPreviewVolume : 1.0
         let utterances: [AVSpeechUtterance] = segments.compactMap { segment in
             guard !segment.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
             let utterance = AVSpeechUtterance(string: segment.text)
@@ -35,6 +54,7 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSp
                 Double(AVSpeechUtteranceMaximumSpeechRate)
             ))
             utterance.pitchMultiplier = Float(min(max(pitch, 0.5), 2.0))
+            utterance.volume = utteranceVolume
             if segment.pauseDurationMs > 0 {
                 utterance.postUtteranceDelay = TimeInterval(segment.pauseDurationMs) / 1_000.0
             }
@@ -45,7 +65,7 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSp
             return
         }
 
-        AudioSessionHelper.activatePlayback()
+        AudioSessionHelper.activate(for: audioRoute)
         request = (utterances, onFinished)
         utterances.forEach { synth.speak($0) }
     }

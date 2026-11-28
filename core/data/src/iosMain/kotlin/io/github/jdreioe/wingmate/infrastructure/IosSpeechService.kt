@@ -1,5 +1,6 @@
 package io.github.jdreioe.wingmate.infrastructure
 
+import io.github.jdreioe.wingmate.domain.AudioRouteDecision
 import io.github.jdreioe.wingmate.domain.ConfigRepository
 import io.github.jdreioe.wingmate.domain.PronunciationDictionaryRepository
 import io.github.jdreioe.wingmate.domain.SaidText
@@ -115,8 +116,27 @@ class IosSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakWithoutHistory(text, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakWithoutHistory(
+        text: String,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
-        speakText(text, voice, pitch, rate, cacheAudio, recordInHistory = false, requestedEngine = engine)
+        speakText(
+            text = text,
+            voice = voice,
+            pitch = pitch,
+            rate = rate,
+            cacheAudio = cacheAudio,
+            recordInHistory = false,
+            requestedEngine = engine,
+            audioRoute = audioRoute,
+        )
     }
 
     private suspend fun speakText(
@@ -127,6 +147,7 @@ class IosSpeechService(
         cacheAudio: Boolean,
         recordInHistory: Boolean,
         requestedEngine: TtsEngine? = null,
+        audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
     ) {
         val normalizedText = SpeechTextProcessor.normalizeShorthandSsml(text)
         if (normalizedText.isBlank()) return
@@ -145,7 +166,7 @@ class IosSpeechService(
             val audioBytes = cached ?: synthesize(normalizedText, effectiveVoice, engine)
                 ?: error("The selected cloud speech engine is not configured")
             if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
-            playAudio(requestId, audioBytes)
+            playAudio(requestId, audioBytes, audioRoute)
             if (recordInHistory) trySaveHistory(normalizedText, effectiveVoice, pitch, rate, null)
         }
     }
@@ -165,8 +186,27 @@ class IosSpeechService(
         rate: Double?,
         cacheAudio: Boolean,
         engine: TtsEngine,
+    ) = speakSegmentsWithoutHistory(segments, voice, pitch, rate, cacheAudio, engine, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakSegmentsWithoutHistory(
+        segments: List<SpeechSegment>,
+        voice: Voice?,
+        pitch: Double?,
+        rate: Double?,
+        cacheAudio: Boolean,
+        engine: TtsEngine,
+        audioRoute: AudioRouteDecision,
     ) {
-        speakSegmentList(segments, voice, pitch, rate, cacheAudio, recordInHistory = false, requestedEngine = engine)
+        speakSegmentList(
+            segments = segments,
+            voice = voice,
+            pitch = pitch,
+            rate = rate,
+            cacheAudio = cacheAudio,
+            recordInHistory = false,
+            requestedEngine = engine,
+            audioRoute = audioRoute,
+        )
     }
 
     private suspend fun speakSegmentList(
@@ -177,6 +217,7 @@ class IosSpeechService(
         cacheAudio: Boolean,
         recordInHistory: Boolean,
         requestedEngine: TtsEngine? = null,
+        audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
     ) {
         if (segments.isEmpty()) return
         val requestId = beginRequest()
@@ -194,7 +235,7 @@ class IosSpeechService(
             val audioBytes = cached ?: synthesizeSegments(segments, effectiveVoice, engine)
                 ?: error("The selected cloud speech engine is not configured")
             if (cacheAudio && cached == null) sentenceAudioCacheMutex.withLock { sentenceAudioCache[cacheKey] = audioBytes }
-            playAudio(requestId, audioBytes)
+            playAudio(requestId, audioBytes, audioRoute)
             if (recordInHistory) trySaveHistory(combinedText, effectiveVoice, pitch, rate, null)
         }
     }
@@ -218,11 +259,19 @@ class IosSpeechService(
         return true
     }
 
-    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean {
+    override suspend fun speakRecordedAudio(audioFilePath: String, textForHistory: String?, voice: Voice?): Boolean =
+        speakRecordedAudio(audioFilePath, textForHistory, voice, AudioRouteDecision.SystemDefault)
+
+    override suspend fun speakRecordedAudio(
+        audioFilePath: String,
+        textForHistory: String?,
+        voice: Voice?,
+        audioRoute: AudioRouteDecision,
+    ): Boolean {
         if (!NSFileManager.defaultManager.fileExistsAtPath(audioFilePath)) return false
         val requestId = beginRequest()
         return runCatching {
-            playFile(requestId, audioFilePath)
+            playFile(requestId, audioFilePath, audioRoute)
             val spokenText = textForHistory?.trim().orEmpty()
             if (spokenText.isNotEmpty()) {
                 val selectedVoice = voice ?: defaultVoice()
@@ -330,11 +379,15 @@ class IosSpeechService(
         }
     }
 
-    private suspend fun playFile(requestId: Long, path: String) = withContext(Dispatchers.Main) {
+    private suspend fun playFile(
+        requestId: Long,
+        path: String,
+        audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
+    ) = withContext(Dispatchers.Main) {
         check(requestGeneration == requestId) { "Speech request was replaced" }
         val url = NSURL.fileURLWithPath(path)
         val audioPlayer = AVAudioPlayer(contentsOfURL = url, error = null)
-        startPlayer(requestId, audioPlayer)
+        startPlayer(requestId, audioPlayer, audioRoute)
     }
 
     private fun Voice.forAzureProvider(): Voice =
@@ -366,18 +419,27 @@ class IosSpeechService(
         provider == VoiceProvider.AZURE ||
             (provider == null && resolvedProvider() == VoiceProvider.AZURE && name?.contains("Neural") == true)
 
-    private suspend fun playAudio(requestId: Long, audioBytes: ByteArray) = withContext(Dispatchers.Main) {
+    private suspend fun playAudio(
+        requestId: Long,
+        audioBytes: ByteArray,
+        audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
+    ) = withContext(Dispatchers.Main) {
         require(audioBytes.isNotEmpty()) { "Speech synthesis returned no audio" }
         check(requestGeneration == requestId) { "Speech request was replaced" }
         val data = audioBytes.usePinned { pinned ->
             NSData.create(bytes = pinned.addressOf(0), length = audioBytes.size.toULong())
         }
         val audioPlayer = AVAudioPlayer(data = data, error = null)
-        startPlayer(requestId, audioPlayer)
+        startPlayer(requestId, audioPlayer, audioRoute)
     }
 
-    private fun startPlayer(requestId: Long, audioPlayer: AVAudioPlayer) {
+    private fun startPlayer(
+        requestId: Long,
+        audioPlayer: AVAudioPlayer,
+        audioRoute: AudioRouteDecision = AudioRouteDecision.SystemDefault,
+    ) {
         audioPlayer.delegate = playerDelegate
+        audioPlayer.volume = if (audioRoute.duckAudio) PREVIEW_DUCKED_VOLUME else 1.0f
         check(audioPlayer.prepareToPlay()) { "Audio playback could not be prepared" }
         currentPlayer = audioPlayer
         currentPlayerRequestId = requestId
@@ -387,6 +449,10 @@ class IosSpeechService(
             error("Audio playback could not be started")
         }
         state = SpeechPlaybackState(requestId, SpeechPlaybackStatus.PLAYING)
+    }
+
+    companion object {
+        private const val PREVIEW_DUCKED_VOLUME: Float = 0.55f
     }
 
     private fun handlePlayerFinished(player: AVAudioPlayer, successfully: Boolean) {

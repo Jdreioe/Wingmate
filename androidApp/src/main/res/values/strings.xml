@@ -537,6 +537,8 @@
     <string name="ui_settings_speech_policy_sentence_only">Sentence only</string>
     <string name="ui_settings_auditory_fishing_title">Auditory fishing</string>
     <string name="ui_settings_auditory_fishing_desc">Whisper the label when a button is hovered or touched.</string>
+    <string name="ui_settings_auditory_preview_headphones_title">Route previews to headphones</string>
+    <string name="ui_settings_auditory_preview_headphones_desc">Play auditory fishing previews through connected headphones or an earpiece while spoken Messages play over the speaker.</string>
     <string name="ui_settings_usage_logging_title">Standardized logging (OBL)</string>
     <string name="ui_settings_usage_logging_desc">Record usage data in Open Logging Format for clinical review.</string>
     <string name="board_symbol_unavailable">Symbol set unavailable</string>

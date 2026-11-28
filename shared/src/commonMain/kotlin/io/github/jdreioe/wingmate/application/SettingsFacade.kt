@@ -117,6 +117,10 @@ class SettingsFacade(
     @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateAuditoryFishingEnabled(enabled: Boolean) = updateSettings { it.copy(auditoryFishingEnabled = enabled) }
     @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun updateRouteAuditoryPreviewToHeadphones(enabled: Boolean) = updateSettings {
+        it.copy(routeAuditoryPreviewToHeadphones = enabled)
+    }
+    @Throws(NativeFailure::class, CancellationException::class)
     suspend fun updateSpeechPolicy(policy: String) = updateSettings {
         it.copy(speechPolicy = enumNamed<SpeechPolicy>(policy))
     }

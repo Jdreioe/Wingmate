@@ -61,6 +61,8 @@ internal fun AccessibilitySection(
     onSelectionSoundChange: (Boolean) -> Unit,
     auditoryFishingEnabled: Boolean,
     onAuditoryFishingChange: (Boolean) -> Unit,
+    routeAuditoryPreviewToHeadphones: Boolean,
+    onRouteAuditoryPreviewToHeadphonesChange: (Boolean) -> Unit,
     speechPolicy: SpeechPolicy,
     onSpeechPolicyChange: (SpeechPolicy) -> Unit,
     selectionDebounceMillis: Long,
@@ -197,6 +199,13 @@ internal fun AccessibilitySection(
             onCheckedChange = onAuditoryFishingChange,
             title = stringResource(R.string.ui_settings_auditory_fishing_title),
             description = stringResource(R.string.ui_settings_auditory_fishing_desc)
+        )
+        SettingsGroupDivider()
+        SettingsSwitch(
+            checked = routeAuditoryPreviewToHeadphones,
+            onCheckedChange = onRouteAuditoryPreviewToHeadphonesChange,
+            title = stringResource(R.string.ui_settings_auditory_preview_headphones_title),
+            description = stringResource(R.string.ui_settings_auditory_preview_headphones_desc)
         )
         SettingsGroupDivider()
         SettingsSlider(

@@ -524,6 +524,8 @@
     <string name="ui_settings_speech_policy_sentence_only">Kun sætning</string>
     <string name="ui_settings_auditory_fishing_title">Auditiv bekræftelse</string>
     <string name="ui_settings_auditory_fishing_desc">Hvisk mærkaten når en knap berøres eller holdes over.</string>
+    <string name="ui_settings_auditory_preview_headphones_title">Send forhåndsvisninger til hovedtelefoner</string>
+    <string name="ui_settings_auditory_preview_headphones_desc">Afspil forhåndsvisninger fra auditiv bekræftelse i tilsluttede hovedtelefoner eller øresnegl, mens talte beskeder afspilles over højttaleren.</string>
     <string name="ui_settings_usage_logging_title">Standardiseret logning (OBL)</string>
     <string name="ui_settings_usage_logging_desc">Optag brugsdata i Open Logging Format til klinisk gennemgang.</string>
     <string name="board_symbol_unavailable">Symbolbibliotek utilgængeligt</string>

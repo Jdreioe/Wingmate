@@ -27,6 +27,7 @@ class SettingsModelTest {
         assertEquals(BoardActivationBehavior.SpeakAndAdd, settings.boardActivationBehavior)
         assertEquals(BoardReturnBehavior.Stay, settings.boardReturnBehavior)
         assertEquals(WordTypeColorScheme.None, settings.wordTypeColorScheme)
+        assertEquals(false, settings.routeAuditoryPreviewToHeadphones)
     }
 
     @Test
@@ -171,6 +172,21 @@ class SettingsModelTest {
         // Third read should be identical
         val thirdRead = json.decodeFromString<Settings>(migratedJson)
         assertEquals(secondRead, thirdRead)
+    }
+
+    @Test
+    fun routeAuditoryPreviewToHeadphonesDefaultsFalseForLegacyJsonAndRoundTrips() {
+        val legacy = json.decodeFromString<Settings>("""{"auditoryFishingEnabled":true}""")
+        assertEquals(true, legacy.auditoryFishingEnabled)
+        assertEquals(false, legacy.routeAuditoryPreviewToHeadphones)
+
+        val enabled = Settings(
+            auditoryFishingEnabled = true,
+            routeAuditoryPreviewToHeadphones = true,
+        )
+        val decoded = json.decodeFromString<Settings>(json.encodeToString(enabled))
+        assertEquals(enabled, decoded)
+        assertEquals(true, decoded.routeAuditoryPreviewToHeadphones)
     }
 
     @Test

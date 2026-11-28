@@ -74,6 +74,7 @@ final class IosViewModel: ObservableObject {
     static func startDependencies() {
         IosDiBridge().start(
             deviceSpeech: SystemTtsManager.shared,
+            audioRouter: IosAudioSessionRouter.shared,
             openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
             aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
         )
