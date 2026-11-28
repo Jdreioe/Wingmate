@@ -471,6 +471,39 @@ class ObzExporterTest {
     }
 
     @Test
+    fun hiddenButtonsRoundTripThroughObzPreservingGridPositions() = runBlocking {
+        val grid = io.github.jdreioe.wingmate.domain.obf.ObfGrid(
+            rows = 2,
+            columns = 2,
+            order = listOf(listOf("b1", "b2"), listOf("b3", null))
+        )
+        val board = ObfBoard(
+            format = "open-board-0.1",
+            id = "masked-board",
+            buttons = listOf(
+                ObfButton(id = "b1", label = "Visible", hidden = false),
+                ObfButton(id = "b2", label = "Hidden", hidden = true),
+                ObfButton(id = "b3", label = "Also visible", hidden = false),
+            ),
+            grid = grid,
+        )
+
+        val obz = exporter.export(boards = listOf(board), rootBoardId = board.id)
+        val entries = listOf("manifest.json", "boards/${board.id}.obf")
+            .associateWith { path -> assertNotNull(extractEntry(obz, path)) }
+        val boardRepo = InMemoryBoardRepository()
+        val importer = BoardImportService(
+            ObfParser(), boardRepo, InMemoryBoardSetRepository(), MapArchivePicker(entries), InMemoryFileStorage()
+        )
+        val imported = assertIs<BoardImportResult.Success>(
+            importer.importBoardSetFromPathResult("masked.obz")
+        )
+        val importedBoard = assertNotNull(boardRepo.getBoard(imported.boardSet.rootBoardId))
+        assertEquals(mapOf("b1" to false, "b2" to true, "b3" to false), importedBoard.buttons.associate { it.id to it.hidden })
+        assertEquals(grid.order, importedBoard.grid?.order)
+    }
+
+    @Test
     fun unknownButtonShapeValueSurvivesImportAndFallsBackToRounded() {
         // A consumer/author that knows about a future shape must not break the
         // default renderer: the raw value is preserved but resolves to Rounded.

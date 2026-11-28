@@ -205,6 +205,7 @@ internal data class ObfBoardUiState(
     val board: ObfBoard,
     val extractedImages: Map<String, ByteArray> = emptyMap(),
     val isEditMode: Boolean = false,
+    val isMaskMode: Boolean = false,
     val selectedButtons: List<Pair<ObfButton, ImageBitmap?>> = emptyList(),
     val showSpeakControl: Boolean = true,
     val showDeleteControl: Boolean = true,
@@ -346,6 +347,7 @@ fun ObfBoardView(
     symbolBarPresentation: SymbolBarPresentation = SymbolBarPresentation.Normal,
     boardSettings: ResolvedBoardSettings? = null,
     showHiddenButtons: Boolean = false,
+    isMaskMode: Boolean = false,
     predictionLabels: Map<String, String> = emptyMap(),
     highlightedButtonId: String? = null,
     guidedButtonId: String? = null,
@@ -377,6 +379,7 @@ fun ObfBoardView(
             board = board,
             extractedImages = extractedImages,
             isEditMode = isEditMode,
+            isMaskMode = isMaskMode,
             selectedButtons = selectedButtons,
             showSpeakControl = showSpeakControl,
             showDeleteControl = showDeleteControl,
@@ -444,6 +447,7 @@ internal fun ObfBoardContent(
     val board = state.board
     val extractedImages = state.extractedImages
     val isEditMode = state.isEditMode
+    val isMaskMode = state.isMaskMode
     val selectedButtons = state.selectedButtons
     val showSpeakControl = state.showSpeakControl
     val showDeleteControl = state.showDeleteControl
@@ -553,6 +557,7 @@ internal fun ObfBoardContent(
                             imagesById,
                             extractedImages,
                             isEditMode,
+                            isMaskMode,
                             onButtonClick,
                             homeBoardId,
                             effectiveBoardSettings,
@@ -573,6 +578,7 @@ internal fun ObfBoardContent(
                     imagesById,
                     extractedImages,
                     isEditMode,
+                    isMaskMode,
                     onButtonClick,
                     homeBoardId,
                     effectiveBoardSettings,
@@ -851,6 +857,7 @@ internal fun ObfBoardContent(
                                         },
                                         onLongClick = onButtonLongClick?.let { callback -> { callback(button) } },
                                         isEditMode = isEditMode,
+                                        isMaskMode = isMaskMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,
@@ -863,7 +870,7 @@ internal fun ObfBoardContent(
                                         fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan),
                                         rowSpan = item.rowSpan
                                     )
-                                } else if (isEditMode && button == null) {
+                                } else if (isEditMode && button == null && !isMaskMode) {
                                     OutlinedCard(
                                         modifier = Modifier.fillMaxSize(),
                                         onClick = { onCellClick?.invoke(item.row, item.column, null) }
@@ -929,6 +936,7 @@ internal fun ObfBoardContent(
                                         onClick = { onButtonClick(button) },
                                         onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                                         isEditMode = isEditMode,
+                                        isMaskMode = isMaskMode,
                                         isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                                         isHomeLink = button.isHomeNavigation(homeBoardId),
                                         boardStrings = board.strings,

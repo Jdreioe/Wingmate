@@ -698,6 +698,52 @@ class BoardsFacade(
             }
     }
 
+    /** Toggles [ObfButton.hidden] on one Button in [boardId], preserving grid positions. Rejects locked Screens. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun toggleButtonHidden(boardSetId: String, boardId: String, buttonId: String): ObfBoard = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
+        if (boardId !in graph.boardSet.boardIds) throw NativeFailure(NativeFailureKind.NotFound)
+        val updated = io.github.jdreioe.wingmate.domain.obf.toggleDraftButtonHidden(graph, boardId, buttonId)
+        val board = updated.boardsById[boardId] ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (updated != graph) {
+            boardRepository.saveBoard(board)
+            boardSetUseCase.touchBoardSet(boardSetId)
+        }
+        board
+    }
+
+    /** Sets [ObfButton.hidden] on every Button in [boardId]. Rejects locked Screens. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun setPageButtonsHidden(boardSetId: String, boardId: String, hidden: Boolean): ObfBoard = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
+        if (boardId !in graph.boardSet.boardIds) throw NativeFailure(NativeFailureKind.NotFound)
+        val updated = io.github.jdreioe.wingmate.domain.obf.setDraftPageButtonsHidden(graph, boardId, hidden)
+        val board = updated.boardsById[boardId] ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (updated != graph) {
+            boardRepository.saveBoard(board)
+            boardSetUseCase.touchBoardSet(boardSetId)
+        }
+        board
+    }
+
+    /** Sets [ObfButton.hidden] on every Button across all Pages in [boardSetId]. Rejects locked Screens. */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun setScreenButtonsHidden(boardSetId: String, hidden: Boolean): Boolean = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound)
+        if (graph.boardSet.isLocked) throw NativeFailure(NativeFailureKind.Validation)
+        val updated = io.github.jdreioe.wingmate.domain.obf.setDraftScreenButtonsHidden(graph, hidden)
+        if (updated == graph) return@nativeCall false
+        updated.boards.forEach { board ->
+            if (board != graph.boardsById[board.id]) {
+                boardRepository.saveBoard(board)
+            }
+        }
+        boardSetUseCase.touchBoardSet(boardSetId)
+        true
+    }
+
     /** Marks the Screen as edited so linked remote storage receives the change automatically. */
     private suspend fun touchContainingBoardSet(boardId: String) {
         boardSetUseCase.listBoardSets()

@@ -115,6 +115,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
@@ -156,6 +157,7 @@ internal fun ObfButtonContent(
     extractedImageBytes: ByteArray? = null,
     onClick: () -> Unit,
     isEditMode: Boolean = false,
+    isMaskMode: Boolean = false,
     isTemporarilyRevealed: Boolean = false,
     isHomeLink: Boolean = false,
     boardStrings: Map<String, Map<String, String>> = emptyMap(),
@@ -431,6 +433,29 @@ internal fun ObfButtonContent(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.align(Alignment.TopEnd).size(18.dp)
                 )
+            } else if (isEditMode && (button.hidden || isMaskMode)) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (button.hidden) {
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
+                    },
+                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (button.hidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = if (button.hidden) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            },
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
             // Dwell Progress Overlay
             if (dwellProgress > 0f) {
@@ -659,6 +684,7 @@ internal fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     imagesById: Map<String, ObfImage>,
     extractedImages: Map<String, ByteArray>,
     isEditMode: Boolean,
+    isMaskMode: Boolean = false,
     onButtonClick: (ObfButton) -> Unit,
     homeBoardId: String?,
     boardSettings: ResolvedBoardSettings,
@@ -696,6 +722,7 @@ internal fun BoxWithConstraintsScope.RenderAbsoluteButtons(
                     onClick = { onButtonClick(button) },
                     onLongClick = onButtonLongClick?.let { cb -> ({ cb(button) }) },
                     isEditMode = isEditMode,
+                    isMaskMode = isMaskMode,
                     isTemporarilyRevealed = button.hidden && !isEditMode && showHiddenButtons,
                     isHomeLink = button.isHomeNavigation(homeBoardId),
                     boardSettings = boardSettings,

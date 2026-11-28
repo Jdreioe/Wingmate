@@ -154,6 +154,59 @@ class BoardsFacadeTest {
     }
 
     @Test
+    fun bulkMaskingUpdatesVisibilityAndRejectsLockedScreens() = runBlocking {
+        val facade = facade()
+        val set = facade.createBoardSet("Masking", rows = 2, columns = 2, rootBoardName = "Home")
+        val page2 = facade.createBoard(set.id, "Food", rows = 1, columns = 2)
+        val homeId = set.rootBoardId
+        val b1 = facade.upsertBoardCellButton(
+            boardId = homeId, row = 0, col = 0, label = "More", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        ).buttons.single()
+        facade.upsertBoardCellButton(
+            boardId = homeId, row = 0, col = 1, label = "Stop", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        facade.upsertBoardCellButton(
+            boardId = page2.id, row = 0, col = 0, label = "Apple", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+
+        val toggled = facade.toggleButtonHidden(set.id, homeId, b1.id)
+        assertTrue(toggled.buttons.first { it.id == b1.id }.hidden)
+        assertEquals(2, toggled.grid?.rows)
+        assertEquals(2, toggled.grid?.columns)
+
+        val pageHidden = facade.setPageButtonsHidden(set.id, homeId, hidden = true)
+        assertTrue(pageHidden.buttons.all { it.hidden })
+        assertFalse(facade.getBoard(page2.id)!!.buttons.single().hidden)
+
+        assertTrue(facade.setScreenButtonsHidden(set.id, hidden = true))
+        assertTrue(facade.getBoard(page2.id)!!.buttons.single().hidden)
+
+        assertTrue(facade.setScreenButtonsHidden(set.id, hidden = false))
+        assertTrue(facade.getBoard(homeId)!!.buttons.none { it.hidden })
+        assertTrue(facade.getBoard(page2.id)!!.buttons.none { it.hidden })
+
+        facade.toggleBoardSetLocked(set.id)
+        val toggleFailure = assertFailsWith<NativeFailure> {
+            facade.toggleButtonHidden(set.id, homeId, b1.id)
+        }
+        assertEquals(NativeFailureKind.Validation, toggleFailure.kind)
+        val pageFailure = assertFailsWith<NativeFailure> {
+            facade.setPageButtonsHidden(set.id, homeId, hidden = true)
+        }
+        assertEquals(NativeFailureKind.Validation, pageFailure.kind)
+        val screenFailure = assertFailsWith<NativeFailure> {
+            facade.setScreenButtonsHidden(set.id, hidden = true)
+        }
+        assertEquals(NativeFailureKind.Validation, screenFailure.kind)
+    }
+
+    @Test
     fun clearingACellKeepsThePageBackgroundImage() = runBlocking {
         val boards = InMemoryBoardRepository()
         val facade = facade(boards = boards)

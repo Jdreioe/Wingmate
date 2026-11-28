@@ -185,6 +185,42 @@ final class ScreensModelTests: XCTestCase {
 
         await model.clearSelectedBoardCell(row: 0, col: 0)
         XCTAssertEqual(service.clearCalls, 0)
+
+        await model.toggleButtonHidden(buttonId: "btn-1")
+        await model.setSelectedPageButtonsHidden(true)
+        await model.setSelectedScreenButtonsHidden(true)
+        XCTAssertEqual(service.toggleHiddenCalls, 0)
+        XCTAssertEqual(service.setPageHiddenCalls, 0)
+        XCTAssertEqual(service.setScreenHiddenCalls, 0)
+    }
+
+    func testBulkMaskingActionsInvokeServiceAndRespectEditingAccess() async {
+        let service = FakeScreensService()
+        let set = FakeScreensService.makeBoardSet(id: "set-1", name: "Core", rootBoardId: "home", boardIds: ["home", "food"], updatedAt: 1_000)
+        service.boardSets = [set]
+        service.boardsById["home"] = FakeScreensService.makeBoard(id: "home", name: "Home")
+        service.boardsById["food"] = FakeScreensService.makeBoard(id: "food", name: "Food")
+        service.cellsByBoardId["home"] = [FakeScreensService.makeCell(row: 0, col: 0, buttonId: "btn-1", label: "More")]
+
+        let editingAccessService = FakeScreensEditingAccessService()
+        let model = makeModel(service: service, editingAccessService: editingAccessService)
+        await model.loadBoardSets()
+
+        await model.toggleButtonHidden(buttonId: "btn-1")
+        await model.setSelectedPageButtonsHidden(true)
+        await model.setSelectedScreenButtonsHidden(false)
+        XCTAssertEqual(service.toggleHiddenCalls, 1)
+        XCTAssertEqual(service.setPageHiddenCalls, 1)
+        XCTAssertEqual(service.setScreenHiddenCalls, 1)
+
+        editingAccessService.enabled = true
+        editingAccessService.unlocked = false
+        await model.toggleButtonHidden(buttonId: "btn-1")
+        await model.setSelectedPageButtonsHidden(true)
+        await model.setSelectedScreenButtonsHidden(true)
+        XCTAssertEqual(service.toggleHiddenCalls, 1)
+        XCTAssertEqual(service.setPageHiddenCalls, 1)
+        XCTAssertEqual(service.setScreenHiddenCalls, 1)
     }
 
     func testSetBoardSetSentenceCachingRollsBackAndSurfacesErrorOnFailure() async {
@@ -518,6 +554,9 @@ private final class FakeScreensService: ScreensService {
 
     var upsertCalls = 0
     var clearCalls = 0
+    var toggleHiddenCalls = 0
+    var setPageHiddenCalls = 0
+    var setScreenHiddenCalls = 0
     var backgroundImageCalls = 0
     var predictionObserver: ((Shared.PredictionUpdate) -> Void)?
     var predictionSubscriptions: [TrackingScreensSubscription] = []
@@ -703,6 +742,18 @@ private final class FakeScreensService: ScreensService {
     func clearBoardCellButton(boardId: String, row: Int32, col: Int32) async throws -> Shared.ObfBoard {
         clearCalls += 1
         return boardsById[boardId] ?? Self.makeBoard(id: boardId, name: "Page")
+    }
+    func toggleButtonHidden(boardSetId: String, boardId: String, buttonId: String) async throws -> Shared.ObfBoard {
+        toggleHiddenCalls += 1
+        return boardsById[boardId] ?? Self.makeBoard(id: boardId, name: "Page")
+    }
+    func setPageButtonsHidden(boardSetId: String, boardId: String, hidden: Bool) async throws -> Shared.ObfBoard {
+        setPageHiddenCalls += 1
+        return boardsById[boardId] ?? Self.makeBoard(id: boardId, name: "Page")
+    }
+    func setScreenButtonsHidden(boardSetId: String, hidden: Bool) async throws -> Bool {
+        setScreenHiddenCalls += 1
+        return true
     }
     func touchBoardSet(id: String) async throws -> Shared.ObfBoardSet {
         boardSets.first(where: { $0.id == id }) ?? Self.makeBoardSet(id: id, name: "Screen", rootBoardId: "home", boardIds: ["home"], updatedAt: 1)

@@ -755,6 +755,16 @@
     <string name="board_page_back">Previous page</string>
     <string name="board_page_start">Start page</string>
     <string name="board_page_stay_here">Stay here</string>
+    <string name="board_workspace_mask_mode">Mask</string>
+    <string name="board_workspace_mask_hint">Tap a button to hide or show it</string>
+    <string name="board_workspace_mask_hide_page">Hide all on page</string>
+    <string name="board_workspace_mask_show_page">Show all on page</string>
+    <string name="board_workspace_mask_hide_screen">Hide all in screen</string>
+    <string name="board_workspace_mask_show_screen">Show all in screen</string>
+    <string name="board_workspace_mask_hide_page_confirm">Hide every button on this page in run mode? Button positions stay unchanged, and you can undo this action.</string>
+    <string name="board_workspace_mask_show_page_confirm">Show every hidden button on this page in run mode?</string>
+    <string name="board_workspace_mask_hide_screen_confirm">Hide every button across all pages in this screen in run mode? Button positions stay unchanged, and you can undo this action.</string>
+    <string name="board_workspace_mask_show_screen_confirm">Show every hidden button across all pages in this screen in run mode?</string>
     <string name="remote_screen_open">Open remote Screen</string>
     <string name="remote_screen_title_for">Remote storage for %1$s</string>
     <string name="remote_screen_provider_linked_file">Linked file (Drive / folder)</string>

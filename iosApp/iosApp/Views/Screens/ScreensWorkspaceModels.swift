@@ -144,6 +144,33 @@ enum BoardSetRoute: Equatable {
     case workspace(boardSetId: String, mode: BoardWorkspaceMode)
 }
 
+enum BulkMaskAction: String, Identifiable {
+    case hidePage
+    case showPage
+    case hideScreen
+    case showScreen
+
+    var id: String { rawValue }
+
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .hidePage: "board_workspace.mask_hide_page"
+        case .showPage: "board_workspace.mask_show_page"
+        case .hideScreen: "board_workspace.mask_hide_screen"
+        case .showScreen: "board_workspace.mask_show_screen"
+        }
+    }
+
+    var confirmMessageKey: LocalizedStringKey {
+        switch self {
+        case .hidePage: "board_workspace.mask_hide_page_confirm"
+        case .showPage: "board_workspace.mask_show_page_confirm"
+        case .hideScreen: "board_workspace.mask_hide_screen_confirm"
+        case .showScreen: "board_workspace.mask_show_screen_confirm"
+        }
+    }
+}
+
 struct FieldEditActions: ViewModifier {
     var enabled: Bool
     var moveUp: () -> Void

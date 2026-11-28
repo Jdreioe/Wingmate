@@ -138,6 +138,63 @@ extension ScreensModel {
         }
     }
 
+    func toggleButtonHidden(buttonId: String) async {
+        guard let setId = selectedBoardSetId, let boardId = selectedBoardId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+        guard await editingAccess.isAuthorized() else { return }
+        do {
+            _ = try await service.toggleButtonHidden(boardSetId: setId, boardId: boardId, buttonId: buttonId)
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.saved")
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.cell_update_failed")
+        }
+    }
+
+    func setSelectedPageButtonsHidden(_ hidden: Bool) async {
+        guard let setId = selectedBoardSetId, let boardId = selectedBoardId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+        guard await editingAccess.isAuthorized() else { return }
+        do {
+            _ = try await service.setPageButtonsHidden(boardSetId: setId, boardId: boardId, hidden: hidden)
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.saved")
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
+        }
+    }
+
+    func setSelectedScreenButtonsHidden(_ hidden: Bool) async {
+        guard let setId = selectedBoardSetId else {
+            boardStatusMessage = NSLocalizedString("boardset.error.no_board", comment: "")
+            return
+        }
+        guard canEditSelectedBoardSet else {
+            boardStatusMessage = NSLocalizedString("boardset.error.locked", comment: "")
+            return
+        }
+        guard await editingAccess.isAuthorized() else { return }
+        do {
+            _ = try await service.setScreenButtonsHidden(boardSetId: setId, hidden: hidden)
+            await refreshBoardCells()
+            touchSelectedBoardSet(statusKey: "boardset.status.saved")
+        } catch {
+            await reportBoardFailure(error, messageKey: "boardset.error.save_failed")
+        }
+    }
+
     // MARK: - Screen & Page Management
 
     func setPageBackground(imageUrl: String?, fit: String) async {

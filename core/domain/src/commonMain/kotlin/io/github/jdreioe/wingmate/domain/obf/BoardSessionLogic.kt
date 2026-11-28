@@ -503,5 +503,61 @@ fun clearDraftCell(
     return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
 }
 
+/**
+ * Toggles [ObfButton.hidden] on one Button in [boardId] without disturbing grid positions,
+ * field spans, or any other Button attributes.
+ */
+fun toggleDraftButtonHidden(
+    graph: BoardSetGraph,
+    boardId: String,
+    buttonId: String,
+): BoardSetGraph {
+    val board = graph.boardsById[boardId] ?: return graph
+    if (board.buttons.none { it.id == buttonId }) return graph
+    val updatedBoard = board.copy(
+        buttons = board.buttons.map { button ->
+            if (button.id == buttonId) button.copy(hidden = !button.hidden) else button
+        }
+    )
+    return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
+}
+
+/**
+ * Sets [ObfButton.hidden] on every Button in [boardId] to [hidden].
+ * Returns [graph] unchanged when every Button already has that state.
+ */
+fun setDraftPageButtonsHidden(
+    graph: BoardSetGraph,
+    boardId: String,
+    hidden: Boolean,
+): BoardSetGraph {
+    val board = graph.boardsById[boardId] ?: return graph
+    if (board.buttons.all { it.hidden == hidden }) return graph
+    val updatedBoard = board.copy(
+        buttons = board.buttons.map { it.copy(hidden = hidden) }
+    )
+    return graph.copy(boards = graph.boards.map { if (it.id == boardId) updatedBoard else it })
+}
+
+/**
+ * Sets [ObfButton.hidden] on every Button across all Pages of the Screen to [hidden].
+ * Returns [graph] unchanged when every Button already has that state.
+ */
+fun setDraftScreenButtonsHidden(
+    graph: BoardSetGraph,
+    hidden: Boolean,
+): BoardSetGraph {
+    if (graph.boards.all { board -> board.buttons.all { it.hidden == hidden } }) return graph
+    return graph.copy(
+        boards = graph.boards.map { board ->
+            if (board.buttons.all { it.hidden == hidden }) {
+                board
+            } else {
+                board.copy(buttons = board.buttons.map { it.copy(hidden = hidden) })
+            }
+        }
+    )
+}
+
 private fun workspaceId(prefix: String): String =
     "${prefix}_${kotlin.time.Clock.System.now().toEpochMilliseconds()}_${kotlin.random.Random.nextInt(1000, 9999)}"

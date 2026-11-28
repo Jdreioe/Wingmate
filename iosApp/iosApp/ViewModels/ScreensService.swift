@@ -64,6 +64,9 @@ protocol ScreensService {
         clearRecording: Bool
     ) async throws -> Shared.ObfBoard
     func clearBoardCellButton(boardId: String, row: Int32, col: Int32) async throws -> Shared.ObfBoard
+    func toggleButtonHidden(boardSetId: String, boardId: String, buttonId: String) async throws -> Shared.ObfBoard
+    func setPageButtonsHidden(boardSetId: String, boardId: String, hidden: Bool) async throws -> Shared.ObfBoard
+    func setScreenButtonsHidden(boardSetId: String, hidden: Bool) async throws -> Bool
     func touchBoardSet(id: String) async throws -> Shared.ObfBoardSet
     func renameBoardSet(boardSetId: String, name: String) async throws -> Shared.ObfBoardSet
     func renameBoard(boardSetId: String, boardId: String, name: String) async throws -> Shared.ObfBoard
@@ -324,6 +327,18 @@ struct SharedScreensService: ScreensService {
 
     func clearBoardCellButton(boardId: String, row: Int32, col: Int32) async throws -> Shared.ObfBoard {
         try await resolveBoards().clearBoardCellButton(boardId: boardId, row: row, col: col)
+    }
+
+    func toggleButtonHidden(boardSetId: String, boardId: String, buttonId: String) async throws -> Shared.ObfBoard {
+        try await resolveBoards().toggleButtonHidden(boardSetId: boardSetId, boardId: boardId, buttonId: buttonId)
+    }
+
+    func setPageButtonsHidden(boardSetId: String, boardId: String, hidden: Bool) async throws -> Shared.ObfBoard {
+        try await resolveBoards().setPageButtonsHidden(boardSetId: boardSetId, boardId: boardId, hidden: hidden)
+    }
+
+    func setScreenButtonsHidden(boardSetId: String, hidden: Bool) async throws -> Bool {
+        try await resolveBoards().setScreenButtonsHidden(boardSetId: boardSetId, hidden: hidden).boolValue
     }
 
     func touchBoardSet(id: String) async throws -> Shared.ObfBoardSet {
