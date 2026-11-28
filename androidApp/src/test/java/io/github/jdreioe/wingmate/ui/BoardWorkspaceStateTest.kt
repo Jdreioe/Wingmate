@@ -349,6 +349,43 @@ class BoardWorkspaceStateTest {
         assertNull(viewModel.state.value.wordFinderGuidance)
     }
 
+    @Test
+    fun `bulk masking edits are undoable in the edit session`() {
+        val original = BoardSetGraph(
+            boardSet = ObfBoardSet(
+                id = "core",
+                name = "Core words",
+                rootBoardId = "home",
+                boardIds = listOf("home", "food"),
+                createdAt = 1L,
+                updatedAt = 1L,
+            ),
+            boards = listOf(
+                ObfBoard(
+                    format = "open-board-0.1",
+                    id = "home",
+                    name = "Home",
+                    buttons = listOf(ObfButton(id = "b1", label = "More", hidden = false)),
+                ),
+                ObfBoard(
+                    format = "open-board-0.1",
+                    id = "food",
+                    name = "Food",
+                    buttons = listOf(ObfButton(id = "b2", label = "Apple", hidden = false)),
+                ),
+            ),
+        )
+        val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
+        viewModel.onAction(BoardWorkspaceAction.Initialize(original, startInEditMode = true))
+
+        val hiddenScreen = io.github.jdreioe.wingmate.domain.obf.setDraftScreenButtonsHidden(original, hidden = true)
+        viewModel.onAction(BoardWorkspaceAction.ApplyEdit(hiddenScreen))
+        assertTrue(viewModel.state.value.activeGraph!!.boards.all { b -> b.buttons.all { it.hidden } })
+
+        viewModel.onAction(BoardWorkspaceAction.UndoEdit)
+        assertTrue(viewModel.state.value.activeGraph!!.boards.all { b -> b.buttons.none { it.hidden } })
+    }
+
     private fun graph(
         name: String,
         boardIds: List<String> = listOf("home"),

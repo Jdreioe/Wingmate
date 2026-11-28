@@ -114,6 +114,8 @@ struct SymbolBoardWorkspaceView: View {
     @State var showWordFinderSheet = false
     @State var activeSentenceAnimation: ActiveSentenceAnimation? = nil
     @State var showHiddenButtons = false
+    @State var isMaskMode = false
+    @State var pendingBulkMaskAction: BulkMaskAction? = nil
     @State var showEditingAccessSheet = false
     @State var pinMode: EditingAccessPinMode = .unlock
     @State var pendingEditingBoardSetId: String? = nil
@@ -203,6 +205,8 @@ struct SymbolBoardWorkspaceView: View {
                 model.screens.resetStayOnCurrentPage()
             } else {
                 isEditingScreen = false
+                isMaskMode = false
+                pendingBulkMaskAction = nil
                 if case .library = newRoute {
                     model.screens.resetStayOnCurrentPage()
                 }
@@ -403,6 +407,35 @@ struct SymbolBoardWorkspaceView: View {
             }
         } message: {
             Text("boardset.delete_board.message")
+        }
+        .alert(
+            pendingBulkMaskAction?.titleKey ?? LocalizedStringKey("board_workspace.mask_mode"),
+            isPresented: Binding(
+                get: { pendingBulkMaskAction != nil },
+                set: { if !$0 { pendingBulkMaskAction = nil } }
+            ),
+            presenting: pendingBulkMaskAction
+        ) { action in
+            Button("common.cancel", role: .cancel) {
+                pendingBulkMaskAction = nil
+            }
+            Button(action.titleKey) {
+                pendingBulkMaskAction = nil
+                Task {
+                    switch action {
+                    case .hidePage:
+                        await model.screens.setSelectedPageButtonsHidden(true)
+                    case .showPage:
+                        await model.screens.setSelectedPageButtonsHidden(false)
+                    case .hideScreen:
+                        await model.screens.setSelectedScreenButtonsHidden(true)
+                    case .showScreen:
+                        await model.screens.setSelectedScreenButtonsHidden(false)
+                    }
+                }
+            }
+        } message: { action in
+            Text(action.confirmMessageKey)
         }
     }
 }

@@ -46,6 +46,13 @@ extension SymbolBoardWorkspaceView {
                                 Button {
                                     settingsTarget = .screen
                                 } label: { Label("board_settings.screen_title", systemImage: "gearshape") }
+                                Divider()
+                                Button {
+                                    pendingBulkMaskAction = .hideScreen
+                                } label: { Label("board_workspace.mask_hide_screen", systemImage: "eye.slash") }
+                                Button {
+                                    pendingBulkMaskAction = .showScreen
+                                } label: { Label("board_workspace.mask_show_screen", systemImage: "eye") }
                             } label: {
                                 HStack(spacing: 4) {
                                     Text(String(format: NSLocalizedString("board_workspace.editing", comment: ""), model.screens.selectedBoardSet?.name ?? ""))
@@ -76,6 +83,21 @@ extension SymbolBoardWorkspaceView {
                             .accessibilityLabel(Text("word_finder.title"))
 
                             Button(action: {
+                                isMaskMode.toggle()
+                                if isMaskMode { selectedFieldAnchor = nil }
+                            }) {
+                                Label("board_workspace.mask_mode", systemImage: isMaskMode ? "eye.slash.fill" : "eye")
+                                    .font(.subheadline.weight(isMaskMode ? .bold : .semibold))
+                                    .foregroundStyle(isMaskMode ? Color.white : Color.accentColor)
+                                    .padding(.horizontal, 10)
+                                    .frame(minHeight: 36)
+                                    .background(Capsule().fill(isMaskMode ? Color.accentColor : Color(.secondarySystemBackground)))
+                            }
+                            .buttonStyle(.plain)
+                            .fixedSize()
+                            .accessibilityAddTraits(isMaskMode ? .isSelected : [])
+
+                            Button(action: {
                                 route = .workspace(boardSetId: boardSetId, mode: .run)
                             }) {
                                 Text(NSLocalizedString("board_workspace.finish", comment: ""))
@@ -91,6 +113,38 @@ extension SymbolBoardWorkspaceView {
                         if compactEditHeader {
                             pageStrip(boardSetId: boardSetId)
                                 .padding(.horizontal, 8)
+                        }
+
+                        if isMaskMode {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    Text("board_workspace.mask_hint")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Button("board_workspace.mask_hide_page") {
+                                        pendingBulkMaskAction = .hidePage
+                                    }
+                                    .font(.subheadline.weight(.semibold))
+                                    Button("board_workspace.mask_show_page") {
+                                        pendingBulkMaskAction = .showPage
+                                    }
+                                    .font(.subheadline.weight(.semibold))
+                                    if (model.screens.selectedBoardSet?.boardIds.count ?? 0) > 1 {
+                                        Button("board_workspace.mask_hide_screen") {
+                                            pendingBulkMaskAction = .hideScreen
+                                        }
+                                        .font(.subheadline.weight(.semibold))
+                                        Button("board_workspace.mask_show_screen") {
+                                            pendingBulkMaskAction = .showScreen
+                                        }
+                                        .font(.subheadline.weight(.semibold))
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(.horizontal)
                         }
                     }
                 }
@@ -243,6 +297,13 @@ extension SymbolBoardWorkspaceView {
         Button {
             settingsTarget = .page
         } label: { Label("board_settings.page_title", systemImage: "slider.horizontal.3") }
+        Divider()
+        Button {
+            pendingBulkMaskAction = .hidePage
+        } label: { Label("board_workspace.mask_hide_page", systemImage: "eye.slash") }
+        Button {
+            pendingBulkMaskAction = .showPage
+        } label: { Label("board_workspace.mask_show_page", systemImage: "eye") }
         if !isStartPage {
             Button {
                 Task { await model.screens.makeSelectedBoardRoot() }

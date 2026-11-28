@@ -4,7 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +67,9 @@ import io.github.jdreioe.wingmate.domain.obf.resizeDraftBoard
 import io.github.jdreioe.wingmate.domain.obf.resizeDraftField
 import io.github.jdreioe.wingmate.domain.obf.resolveBoardSettings
 import io.github.jdreioe.wingmate.domain.obf.resolveCellTap
+import io.github.jdreioe.wingmate.domain.obf.setDraftPageButtonsHidden
+import io.github.jdreioe.wingmate.domain.obf.setDraftScreenButtonsHidden
+import io.github.jdreioe.wingmate.domain.obf.toggleDraftButtonHidden
 import io.github.jdreioe.wingmate.domain.obf.updateDraftCell
 import io.github.jdreioe.wingmate.domain.obf.withBackgroundImage
 import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
@@ -133,7 +139,15 @@ internal fun BoardSetWorkspaceRoot(
     var showResizeBoardDialog by remember { mutableStateOf(false) }
     var showDeleteBoardDialog by remember { mutableStateOf(false) }
     var showRenameScreenDialog by remember { mutableStateOf(false) }
+    var isMaskMode by remember(boardSetId) { mutableStateOf(false) }
+    var pendingBulkMaskAction by remember(boardSetId) { mutableStateOf<BulkMaskAction?>(null) }
     var settingsTarget by remember(boardSetId) { mutableStateOf<BoardSettingsTarget?>(null) }
+    LaunchedEffect(mode) {
+        if (mode != BoardWorkspaceMode.Edit) {
+            isMaskMode = false
+            pendingBulkMaskAction = null
+        }
+    }
     val hiddenButtonsSession = remember(boardSetId) { HiddenButtonsSession() }
     val showHiddenButtons = hiddenButtonsSession.revealed
     val showEditingAccessDialog = workspace.showEditingAccessDialog
@@ -552,6 +566,15 @@ internal fun BoardSetWorkspaceRoot(
                         rootBoardId = activeGraph.boardSet.rootBoardId,
                         canResizePage = activeBoard.grid != null,
                         canUndo = editSession?.undoStack?.isNotEmpty() == true,
+                        isMaskMode = isMaskMode,
+                        onToggleMaskMode = {
+                            isMaskMode = !isMaskMode
+                            if (isMaskMode) selectedField = null
+                        },
+                        onHideAllOnPage = { pendingBulkMaskAction = BulkMaskAction.HidePage },
+                        onShowAllOnPage = { pendingBulkMaskAction = BulkMaskAction.ShowPage },
+                        onHideAllInScreen = { pendingBulkMaskAction = BulkMaskAction.HideScreen },
+                        onShowAllInScreen = { pendingBulkMaskAction = BulkMaskAction.ShowScreen },
                         onLeave = ::leave,
                         onFindWord = { showWordFinderDialog = true },
                         onRenameScreen = { showRenameScreenDialog = true },
@@ -716,6 +739,7 @@ internal fun BoardSetWorkspaceRoot(
                     ObfBoardView(
                         board = activeBoard,
                         isEditMode = mode == BoardWorkspaceMode.Edit,
+                        isMaskMode = mode == BoardWorkspaceMode.Edit && isMaskMode,
                         showMessageBar = false,
                         messageText = messageText,
                         boardSettings = resolvedBoardSettings,
@@ -727,6 +751,15 @@ internal fun BoardSetWorkspaceRoot(
                         backgroundImage = backgroundBitmap,
                         predictionLabels = predictionsById,
                         onButtonClick = { button ->
+                            if (mode == BoardWorkspaceMode.Edit && isMaskMode) {
+                                val session = editSession ?: return@ObfBoardView
+                                workspaceViewModel.onAction(
+                                    BoardWorkspaceAction.ApplyEdit(
+                                        toggleDraftButtonHidden(session.draft, activeBoard.id, button.id)
+                                    )
+                                )
+                                return@ObfBoardView
+                            }
                             handleWorkspaceButtonClick(
                                 button = button,
                                 activeGraph = activeGraph,
@@ -750,6 +783,17 @@ internal fun BoardSetWorkspaceRoot(
                         },
                         onCellClick = if (mode == BoardWorkspaceMode.Edit) {
                             { row, column, button ->
+                                if (isMaskMode) {
+                                    val session = editSession ?: return@ObfBoardView
+                                    if (button != null) {
+                                        workspaceViewModel.onAction(
+                                            BoardWorkspaceAction.ApplyEdit(
+                                                toggleDraftButtonHidden(session.draft, activeBoard.id, button.id)
+                                            )
+                                        )
+                                    }
+                                    return@ObfBoardView
+                                }
                                 val activeGuidance = workspace.wordFinderGuidance
                                 if (button != null && activeGuidance?.highlightedButtonIdFor(activeBoard.id) == button.id) {
                                     if (!activeGuidance.isOnFinalStep) {
@@ -796,7 +840,7 @@ internal fun BoardSetWorkspaceRoot(
                                 }
                             }
                         } else null,
-                        onCellMove = if (mode == BoardWorkspaceMode.Edit) {
+                        onCellMove = if (mode == BoardWorkspaceMode.Edit && !isMaskMode) {
                             { fromRow, fromColumn, toRow, toColumn ->
                                 val session = editSession
                                 if (session != null) {
@@ -810,7 +854,7 @@ internal fun BoardSetWorkspaceRoot(
                             }
                         } else null,
                         // Launcher-style: hold a Button for Edit, Resize or Remove.
-                        cellMenu = if (mode == BoardWorkspaceMode.Edit) {
+                        cellMenu = if (mode == BoardWorkspaceMode.Edit && !isMaskMode) {
                             BoardCellMenu(
                                 onEdit = { row, column, button ->
                                     selectedField = activeBoard.grid?.fieldAnchorAt(row, column)
@@ -832,13 +876,14 @@ internal fun BoardSetWorkspaceRoot(
                                 },
                             )
                         } else null,
-                        selectedFieldAnchor = selectedField,
-                        selectedFieldSpans = remember(activeBoard.grid, selectedField) {
-                            selectedField?.let { (row, column) ->
+                        selectedFieldAnchor = if (isMaskMode) null else selectedField,
+                        selectedFieldSpans = remember(activeBoard.grid, selectedField, isMaskMode) {
+                            if (isMaskMode) emptyList()
+                            else selectedField?.let { (row, column) ->
                                 activeBoard.grid?.availableFieldSpansAt(row, column).orEmpty()
                             }.orEmpty()
                         },
-                        onResizeField = if (mode == BoardWorkspaceMode.Edit) {
+                        onResizeField = if (mode == BoardWorkspaceMode.Edit && !isMaskMode) {
                             { anchorRow, anchorColumn, rowSpan, columnSpan ->
                                 val session = editSession ?: return@ObfBoardView
                                 val resized = resizeDraftField(
@@ -854,7 +899,7 @@ internal fun BoardSetWorkspaceRoot(
                                 }
                             }
                         } else null,
-                        onRemoveField = if (mode == BoardWorkspaceMode.Edit) {
+                        onRemoveField = if (mode == BoardWorkspaceMode.Edit && !isMaskMode) {
                             { row, column ->
                                 val session = editSession ?: return@ObfBoardView
                                 selectedField = null
@@ -865,7 +910,7 @@ internal fun BoardSetWorkspaceRoot(
                                 )
                             }
                         } else null,
-                        onGridHeightFractionChange = if (mode == BoardWorkspaceMode.Edit) {
+                        onGridHeightFractionChange = if (mode == BoardWorkspaceMode.Edit && !isMaskMode) {
                             { fraction ->
                                 val session = editSession ?: return@ObfBoardView
                                 workspaceViewModel.onAction(
@@ -1098,6 +1143,53 @@ internal fun BoardSetWorkspaceRoot(
         )
     }
 
+    val bulkMaskAction = pendingBulkMaskAction
+    if (bulkMaskAction != null && mode == BoardWorkspaceMode.Edit && activeBoard != null) {
+        val titleRes = when (bulkMaskAction) {
+            BulkMaskAction.HidePage -> R.string.board_workspace_mask_hide_page
+            BulkMaskAction.ShowPage -> R.string.board_workspace_mask_show_page
+            BulkMaskAction.HideScreen -> R.string.board_workspace_mask_hide_screen
+            BulkMaskAction.ShowScreen -> R.string.board_workspace_mask_show_screen
+        }
+        val bodyRes = when (bulkMaskAction) {
+            BulkMaskAction.HidePage -> R.string.board_workspace_mask_hide_page_confirm
+            BulkMaskAction.ShowPage -> R.string.board_workspace_mask_show_page_confirm
+            BulkMaskAction.HideScreen -> R.string.board_workspace_mask_hide_screen_confirm
+            BulkMaskAction.ShowScreen -> R.string.board_workspace_mask_show_screen_confirm
+        }
+        AlertDialog(
+            onDismissRequest = { pendingBulkMaskAction = null },
+            title = { Text(stringResource(titleRes)) },
+            text = { Text(stringResource(bodyRes)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val session = editSession
+                        if (session != null) {
+                            val updated = when (bulkMaskAction) {
+                                BulkMaskAction.HidePage -> setDraftPageButtonsHidden(session.draft, activeBoard.id, hidden = true)
+                                BulkMaskAction.ShowPage -> setDraftPageButtonsHidden(session.draft, activeBoard.id, hidden = false)
+                                BulkMaskAction.HideScreen -> setDraftScreenButtonsHidden(session.draft, hidden = true)
+                                BulkMaskAction.ShowScreen -> setDraftScreenButtonsHidden(session.draft, hidden = false)
+                            }
+                            if (updated != session.draft) {
+                                workspaceViewModel.onAction(BoardWorkspaceAction.ApplyEdit(updated))
+                            }
+                        }
+                        pendingBulkMaskAction = null
+                    },
+                ) {
+                    Text(stringResource(titleRes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBulkMaskAction = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
     if (showDeleteBoardDialog && activeBoard != null) {
         DeleteBoardConfirmationDialog(
             boardName = activeBoard.name ?: stringResource(R.string.board_workspace_board_fallback),
@@ -1115,4 +1207,11 @@ internal fun BoardSetWorkspaceRoot(
             },
         )
     }
+}
+
+private enum class BulkMaskAction {
+    HidePage,
+    ShowPage,
+    HideScreen,
+    ShowScreen,
 }

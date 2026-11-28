@@ -231,7 +231,7 @@ extension SymbolBoardWorkspaceView {
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
         let anchor = BoardCellAnchor(row: row, column: col)
-        let isSelected = isEditMode && selectedFieldAnchor == anchor && cell != nil
+        let isSelected = isEditMode && !isMaskMode && selectedFieldAnchor == anchor && cell != nil
         let isGuided = cell != nil && model.screens.guidedWordFinderButtonId == cell?.buttonId
         let guidedHint: String = {
             guard isGuided, let guidance = model.screens.wordFinderGuidance else { return "" }
@@ -268,6 +268,12 @@ extension SymbolBoardWorkspaceView {
                     return
                 }
                 if isEditMode && model.screens.canEditSelectedBoardSet {
+                    if isMaskMode {
+                        if let cell {
+                            Task { await model.screens.toggleButtonHidden(buttonId: cell.buttonId) }
+                        }
+                        return
+                    }
                     if let cell, isGuided, let guidance = model.screens.wordFinderGuidance {
                         if !guidance.isOnFinalStep, let nextBoardId = guidance.currentStep?.targetBoardId ?? trimmed(cell.linkedBoardId) {
                             model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
@@ -392,27 +398,38 @@ extension SymbolBoardWorkspaceView {
             .accessibilityLabel(Text(cell == nil
                 ? NSLocalizedString("boardset.cell.add", comment: "")
                 : boardCellDisplayLabel(cell)))
+            .accessibilityValue(
+                isEditMode && cell != nil
+                    ? Text(LocalizedStringKey(cell?.hidden == true ? "board_workspace.mask_state_hidden" : "board_workspace.mask_state_visible"))
+                    : Text("")
+            )
             .accessibilityHint(Text(combinedAccessibilityHint))
             .accessibilitySortPriority(Double(max(0, 10_000 - (row * 100 + col))))
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityAction(.default) {
                 if isEditMode && model.screens.canEditSelectedBoardSet {
-                    if let cell, isGuided, let guidance = model.screens.wordFinderGuidance {
-                        if !guidance.isOnFinalStep, let nextBoardId = guidance.currentStep?.targetBoardId ?? trimmed(cell.linkedBoardId) {
-                            model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
-                            selectedFieldAnchor = nil
-                            Task { await model.screens.selectBoard(id: nextBoardId, resetStack: true) }
-                            return
+                    if isMaskMode {
+                        if let cell {
+                            Task { await model.screens.toggleButtonHidden(buttonId: cell.buttonId) }
                         }
-                        model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                    } else {
+                        if let cell, isGuided, let guidance = model.screens.wordFinderGuidance {
+                            if !guidance.isOnFinalStep, let nextBoardId = guidance.currentStep?.targetBoardId ?? trimmed(cell.linkedBoardId) {
+                                model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                                selectedFieldAnchor = nil
+                                Task { await model.screens.selectBoard(id: nextBoardId, resetStack: true) }
+                                return
+                            }
+                            model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                        }
+                        openCellEditor(row: row, col: col, existing: cell)
                     }
-                    openCellEditor(row: row, col: col, existing: cell)
                 } else if cell != nil {
                     activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
             .modifier(FieldEditActions(
-                enabled: isEditMode && cell != nil && model.screens.canEditSelectedBoardSet,
+                enabled: isEditMode && !isMaskMode && cell != nil && model.screens.canEditSelectedBoardSet,
                 moveUp: { Task { await moveField(from: anchor, directionRow: -1, directionColumn: 0) } },
                 moveDown: { Task { await moveField(from: anchor, directionRow: 1, directionColumn: 0) } },
                 moveLeft: { Task { await moveField(from: anchor, directionRow: 0, directionColumn: -1) } },
@@ -422,7 +439,7 @@ extension SymbolBoardWorkspaceView {
                 taller: { Task { await resizeField(anchor, deltaRows: 1, deltaColumns: 0) } },
                 shorter: { Task { await resizeField(anchor, deltaRows: -1, deltaColumns: 0) } }
             ))
-            .simultaneousGesture(editMoveGesture(anchor: anchor, cell: cell, isEditMode: isEditMode, metrics: metrics))
+            .simultaneousGesture(editMoveGesture(anchor: anchor, cell: cell, isEditMode: isEditMode && !isMaskMode, metrics: metrics))
 
             if isSelected, model.screens.canEditSelectedBoardSet {
                 Button(role: .destructive) {
@@ -438,6 +455,16 @@ extension SymbolBoardWorkspaceView {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("boardset.cell.clear"))
+            }
+            if isEditMode, !isSelected, let cell, (cell.hidden || isMaskMode) {
+                Image(systemName: cell.hidden ? "eye.slash.fill" : "eye")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(cell.hidden ? Color.secondary : Color.accentColor)
+                    .padding(5)
+                    .background(.regularMaterial, in: Circle())
+                    .padding(4)
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
             }
             if cell?.hidden == true && !isEditMode && showHiddenButtons {
                 Image(systemName: "eye.fill")

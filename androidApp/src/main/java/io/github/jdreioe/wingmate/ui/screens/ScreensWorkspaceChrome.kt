@@ -332,6 +332,12 @@ internal fun ScreensEditHeader(
     rootBoardId: String,
     canResizePage: Boolean,
     canUndo: Boolean,
+    isMaskMode: Boolean = false,
+    onToggleMaskMode: () -> Unit = {},
+    onHideAllOnPage: () -> Unit = {},
+    onShowAllOnPage: () -> Unit = {},
+    onHideAllInScreen: () -> Unit = {},
+    onShowAllInScreen: () -> Unit = {},
     onLeave: () -> Unit,
     onFindWord: () -> Unit = {},
     onRenameScreen: () -> Unit,
@@ -362,6 +368,8 @@ internal fun ScreensEditHeader(
                 onSelectBoard = onSelectBoard,
                 onOpenPageSettings = onOpenPageSettings,
                 onResizePage = onResizePage,
+                onHideAllOnPage = onHideAllOnPage,
+                onShowAllOnPage = onShowAllOnPage,
                 onSetRootPage = onSetRootPage,
                 onDeletePage = onDeletePage,
                 onAddPage = onAddPage,
@@ -458,11 +466,76 @@ internal fun ScreensEditHeader(
                                 onOpenScreenSettings()
                             },
                         )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.board_workspace_mask_hide_screen)) },
+                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
+                            onClick = {
+                                screenMenuExpanded = false
+                                onHideAllInScreen()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.board_workspace_mask_show_screen)) },
+                            leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null) },
+                            onClick = {
+                                screenMenuExpanded = false
+                                onShowAllInScreen()
+                            },
+                        )
                     }
                 }
 
                 if (!compactHeader) {
                     PageStrip(Modifier.weight(1f))
+                }
+
+                val maskShape = RoundedCornerShape(50)
+                Surface(
+                    shape = maskShape,
+                    color = if (isMaskMode) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    modifier = Modifier
+                        .heightIn(min = 40.dp)
+                        .clip(maskShape)
+                        .toggleable(
+                            value = isMaskMode,
+                            role = Role.Switch,
+                            onValueChange = { onToggleMaskMode() },
+                        )
+                        .testTag("screens-edit-mask-mode"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (isMaskMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (isMaskMode) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        Text(
+                            text = stringResource(R.string.board_workspace_mask_mode),
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = if (isMaskMode) FontWeight.Bold else FontWeight.SemiBold,
+                            ),
+                            color = if (isMaskMode) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 1,
+                        )
+                    }
                 }
 
                 IconButton(
@@ -504,6 +577,66 @@ internal fun ScreensEditHeader(
             if (compactHeader) {
                 PageStrip(Modifier.fillMaxWidth().padding(horizontal = 4.dp))
             }
+
+            if (isMaskMode) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 2.dp)
+                        .testTag("screens-mask-mode-bar"),
+                ) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item("hint") {
+                            Text(
+                                text = stringResource(R.string.board_workspace_mask_hint),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1,
+                            )
+                        }
+                        item("hide-page") {
+                            TextButton(
+                                onClick = onHideAllOnPage,
+                                modifier = Modifier.heightIn(min = 40.dp).testTag("screens-mask-hide-page"),
+                            ) {
+                                Text(stringResource(R.string.board_workspace_mask_hide_page))
+                            }
+                        }
+                        item("show-page") {
+                            TextButton(
+                                onClick = onShowAllOnPage,
+                                modifier = Modifier.heightIn(min = 40.dp).testTag("screens-mask-show-page"),
+                            ) {
+                                Text(stringResource(R.string.board_workspace_mask_show_page))
+                            }
+                        }
+                        if (boards.size > 1) {
+                            item("hide-screen") {
+                                TextButton(
+                                    onClick = onHideAllInScreen,
+                                    modifier = Modifier.heightIn(min = 40.dp).testTag("screens-mask-hide-screen"),
+                                ) {
+                                    Text(stringResource(R.string.board_workspace_mask_hide_screen))
+                                }
+                            }
+                            item("show-screen") {
+                                TextButton(
+                                    onClick = onShowAllInScreen,
+                                    modifier = Modifier.heightIn(min = 40.dp).testTag("screens-mask-show-screen"),
+                                ) {
+                                    Text(stringResource(R.string.board_workspace_mask_show_screen))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -517,6 +650,8 @@ private fun EditPageStrip(
     onSelectBoard: (String) -> Unit,
     onOpenPageSettings: () -> Unit,
     onResizePage: () -> Unit,
+    onHideAllOnPage: () -> Unit,
+    onShowAllOnPage: () -> Unit,
     onSetRootPage: (String) -> Unit,
     onDeletePage: () -> Unit,
     onAddPage: () -> Unit,
@@ -628,6 +763,22 @@ private fun EditPageStrip(
                             onClick = {
                                 pageMenuExpanded = false
                                 onResizePage()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.board_workspace_mask_hide_page)) },
+                            leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
+                            onClick = {
+                                pageMenuExpanded = false
+                                onHideAllOnPage()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.board_workspace_mask_show_page)) },
+                            leadingIcon = { Icon(Icons.Default.Visibility, contentDescription = null) },
+                            onClick = {
+                                pageMenuExpanded = false
+                                onShowAllOnPage()
                             },
                         )
                         if (!isStartPage) {
