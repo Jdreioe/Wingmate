@@ -10,6 +10,29 @@
 	<string>$(WINGMATE_GOOGLE_IOS_CLIENT_ID)</string>
 	<key>WINGMATE_MICROSOFT_CLIENT_ID</key>
 	<string>$(WINGMATE_MICROSOFT_CLIENT_ID)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.hojmoseit.wingmate.google-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(WINGMATE_GOOGLE_IOS_URL_SCHEME)</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.hojmoseit.wingmate.microsoft-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>wingmate-auth</string>
+			</array>
+		</dict>
+	</array>
 	<key>CKSharingSupported</key>
 	<true/>
 	<key>OPEN_SYMBOLS_PROXY_URL</key>

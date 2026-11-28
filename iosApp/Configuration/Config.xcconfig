@@ -11,8 +11,12 @@ MARKETING_VERSION=1.10.0
 APTABASE_APP_KEY =
 
 // Public OAuth client IDs for Google Drive (iOS client) and OneDrive (Microsoft Entra app).
-// Empty hides that storage option. Xcode Cloud fills them in ci_post_clone.sh.
+// Empty hides that storage option. Xcode Cloud fills them in iosApp/ci_scripts/ci_post_clone.sh
+// (delegating to ci_scripts/ci_post_clone.sh).
 WINGMATE_GOOGLE_IOS_CLIENT_ID =
+// Reversed Google iOS client ID registered in Info.plist (com.googleusercontent.apps.<prefix>).
+// Non-empty default keeps App Store validation passing when Google Drive is not configured.
+WINGMATE_GOOGLE_IOS_URL_SCHEME = com.hojmoseit.wingmate.google-oauth
 WINGMATE_MICROSOFT_CLIENT_ID =
 
 // Public endpoint only. The OpenSymbols secret is stored in the Worker.

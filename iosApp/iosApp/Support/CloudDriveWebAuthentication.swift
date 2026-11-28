@@ -13,9 +13,10 @@ final class CloudDriveWebAuthentication: NSObject, IosWebAuthenticationBridge, A
     /// Hands the bridge and the public OAuth client IDs (from Info.plist) to the shared module.
     static func register() {
         func value(_ key: String) -> String? {
-            (Bundle.main.object(forInfoDictionaryKey: key) as? String)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .nilIfEmpty
+            guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("$(") else { return nil }
+            return trimmed
         }
         IosDiBridge().registerCloudDriveSignIn(
             bridge: shared,
@@ -54,13 +55,15 @@ final class CloudDriveWebAuthentication: NSObject, IosWebAuthenticationBridge, A
     }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let activeWindows = scenes
+            .filter { $0.activationState == .foregroundActive }
             .flatMap(\.windows)
-        return windows.first(where: \.isKeyWindow) ?? windows.first ?? ASPresentationAnchor()
+        let allWindows = scenes.flatMap(\.windows)
+        return activeWindows.first(where: \.isKeyWindow)
+            ?? activeWindows.first
+            ?? allWindows.first(where: \.isKeyWindow)
+            ?? allWindows.first
+            ?? ASPresentationAnchor()
     }
-}
-
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -27,7 +27,7 @@ A storage option appears only when its public OAuth client ID is configured. The
 
 1. Enable the Google Drive API.
 2. Configure the OAuth consent screen with the `.../auth/drive.file` scope.
-3. Create an **iOS** OAuth client for bundle ID `com.hojmoseit.wingmate`. Put its client ID in `WINGMATE_GOOGLE_IOS_CLIENT_ID` (Xcode Cloud environment variable, or `iosApp/Configuration/Config.xcconfig` locally).
+3. Create an **iOS** OAuth client for bundle ID `com.hojmoseit.wingmate`. Put its client ID in `WINGMATE_GOOGLE_IOS_CLIENT_ID` (Xcode Cloud environment variable, where `iosApp/ci_scripts/ci_post_clone.sh` also populates `WINGMATE_GOOGLE_IOS_URL_SCHEME`; for local Xcode builds, set both `WINGMATE_GOOGLE_IOS_CLIENT_ID` and `WINGMATE_GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.<client-id-prefix>` in `iosApp/Configuration/Config.xcconfig`).
 4. Create one **Android** OAuth client per signing key: package `com.hojmoseit.wingmate` with the Play App Signing key SHA-1 (copies installed from Google Play), and a second one with the upload key SHA-1 (release APKs installed directly, for example with `adb`). Debug builds use `com.hojmoseit.wingmate.dev` with the debug key SHA-1. A missing match makes Google answer `UNREGISTERED_ON_API_CONSOLE` (Wingmate shows "Google error 8"). Android signs in through Google Play services and needs no client ID in the app, only `WINGMATE_GOOGLE_DRIVE_ANDROID_ENABLED=true` (Infisical `prod`, `local.properties`, or a Gradle property).
 
 **Microsoft Entra** (one app registration):
