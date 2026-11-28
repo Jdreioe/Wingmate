@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct WelcomeFlow: View {
     @ObservedObject var model: IosViewModel
+    @ObservedObject var speech: SpeechSettingsModel
+    @ObservedObject var backup: BackupModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State var currentStep = 0
     @State var modeTour: String? = nil // "keyboard" or "screens"
@@ -21,8 +23,9 @@ struct WelcomeFlow: View {
     @State var previewText: String = NSLocalizedString("welcome_flow.test_text", comment: "")
     @State var importingBackup = false
     @State var confirmRestoreURL: URL? = nil
-    @State var restoreStatus: String? = nil
-    @State var isRestoring = false
+
+    var restoreStatus: String? { backup.state.statusMessage }
+    var isRestoring: Bool { backup.state.isRestoring }
 
     let onComplete: () -> Void
     let onSkip: () -> Void
@@ -100,11 +103,11 @@ struct WelcomeFlow: View {
         .sheet(isPresented: $showVoicePicker, onDismiss: { systemVoiceChoices = SystemVoicePreferences.all }) {
             VoiceSelectionSheet(
                 selected: selectedVoice,
-                primaryLanguage: model.primaryLanguage,
+                primaryLanguage: speech.primaryLanguage,
                 onClose: { showVoicePicker = false }
             ) { voice in
                 Task {
-                    await model.chooseVoice(voice)
+                    await speech.chooseVoice(voice)
                     let langs = availablePrimaryLanguages(for: voice)
 
                     await MainActor.run {
@@ -124,10 +127,10 @@ struct WelcomeFlow: View {
         .sheet(isPresented: $showLanguagePicker) {
             LanguageSelectionSheet(
                 languages: languageOptions,
-                selected: model.primaryLanguage,
+                selected: speech.primaryLanguage,
                 onClose: { showLanguagePicker = false },
                 onSelect: { lang in
-                    model.updateLanguage(lang)
+                    speech.updateLanguage(lang)
                     pendingLanguageSelection = false
                     showLanguagePicker = false
                 }
@@ -138,7 +141,7 @@ struct WelcomeFlow: View {
                 onDone: {
                     showAzureSetup = false
                     Task {
-                        await model.refreshAzureConfiguration()
+                        await speech.refreshAzureConfiguration()
                         await MainActor.run {
                             completeProviderSetup(.azure)
                         }
@@ -150,7 +153,7 @@ struct WelcomeFlow: View {
         }
         .sheet(isPresented: $showGoogleSetup) {
             GoogleTtsSetupView(
-                model: model,
+                speech: speech,
                 onClose: { showGoogleSetup = false },
                 onSaved: {
                     showGoogleSetup = false
@@ -160,7 +163,7 @@ struct WelcomeFlow: View {
         }
         .sheet(isPresented: $showElevenLabsSetup) {
             ElevenLabsSetupView(
-                model: model,
+                speech: speech,
                 onClose: { showElevenLabsSetup = false },
                 onSaved: {
                     showElevenLabsSetup = false
@@ -170,7 +173,7 @@ struct WelcomeFlow: View {
         }
         .onAppear {
             checkTtsConfiguration()
-            selectedVoice = model.selectedVoice
+            selectedVoice = speech.selectedVoice
         }
         .task {
             await refreshAllProviderConfigurations()
@@ -189,29 +192,13 @@ struct WelcomeFlow: View {
             Button("backup.replace_action", role: .destructive) {
                 guard let url = confirmRestoreURL else { return }
                 confirmRestoreURL = nil
-                isRestoring = true
-                restoreStatus = nil
                 Task {
-                    let accessed = url.startAccessingSecurityScopedResource()
-                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    do {
-                        let result = try await model.restoreCompleteBackup(path: url.path)
-                        if !result.isSuccess {
-                            restoreStatus = result.message ?? NSLocalizedString("backup.failed", comment: "")
-                            isRestoring = false
-                            return
-                        }
-                        await model.refreshParitySettings()
+                    let restored = await backup.restoreBackup(from: url) {
+                        try await model.reloadAfterBackupRestore()
                         await refreshAllProviderConfigurations()
-                        model.refreshVoiceAndLanguages()
-                        await model.loadBoardSets()
-                        isRestoring = false
+                    }.value
+                    if restored {
                         onRestoreComplete()
-                    } catch is CancellationError {
-                        isRestoring = false
-                    } catch {
-                        restoreStatus = NSLocalizedString("backup.failed", comment: "")
-                        isRestoring = false
                     }
                 }
             }

@@ -168,7 +168,7 @@ extension WelcomeFlow {
     // MARK: - Step 3: Voice Selection Page
     @ViewBuilder
     var voiceSelectionStep: some View {
-        let activeProvider = WelcomeTtsProvider.from(engineId: model.ttsEngine)
+        let activeProvider = WelcomeTtsProvider.from(engineId: speech.ttsEngine)
 
         VStack(spacing: 20) {
             Image(systemName: "person.wave.2.fill")
@@ -179,8 +179,8 @@ extension WelcomeFlow {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            if model.useSystemTts {
-                let chosenSystemVoice = systemVoiceChoices[SystemVoicePreferences.languageCode(of: model.primaryLanguage)]
+            if speech.useSystemTts {
+                let chosenSystemVoice = systemVoiceChoices[SystemVoicePreferences.languageCode(of: speech.primaryLanguage)]
                     .flatMap { AVSpeechSynthesisVoice(identifier: $0) }
 
                 VStack(spacing: 16) {
@@ -196,8 +196,8 @@ extension WelcomeFlow {
 
                     SelectedSystemVoiceCard(
                         voice: chosenSystemVoice,
-                        language: model.primaryLanguage,
-                        onSpeak: { model.speak(previewText) }
+                        language: speech.primaryLanguage,
+                        onSpeak: { model.communication.speak(previewText) }
                     )
 
                     Button(action: { showVoicePicker = true }) {
@@ -219,7 +219,7 @@ extension WelcomeFlow {
                         .foregroundColor(.secondary)
 
                     if let voice = selectedVoice {
-                        SelectedVoiceCard(voice: voice, onSpeak: { model.speak(previewText) })
+                        SelectedVoiceCard(voice: voice, onSpeak: { model.communication.speak(previewText) })
                     }
 
                     Button(action: { showVoicePicker = true }) {
@@ -261,7 +261,7 @@ extension WelcomeFlow {
                 VStack(spacing: 12) {
                     ForEach(languageOptions, id: \.self) { lang in
                         Button(action: {
-                            model.updateLanguage(lang)
+                            speech.updateLanguage(lang)
                             pendingLanguageSelection = false
                             withAnimation(.easeInOut(duration: 0.4)) {
                                 currentStep = 5
@@ -272,7 +272,7 @@ extension WelcomeFlow {
                                     .font(.headline)
                                     .foregroundColor(.primary)
                                 Spacer()
-                                if lang == model.primaryLanguage {
+                                if lang == speech.primaryLanguage {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.blue)
                                 }
@@ -288,7 +288,7 @@ extension WelcomeFlow {
                 }
             } else {
                 VStack(spacing: 12) {
-                    Text(model.primaryLanguage)
+                    Text(speech.primaryLanguage)
                         .font(.title3)
                         .fontWeight(.semibold)
 
@@ -317,8 +317,8 @@ extension WelcomeFlow {
             VoicePreviewCard(
                 title: NSLocalizedString("welcome_flow.test_voice", comment: ""),
                 previewText: $previewText,
-                onSpeak: { model.speak(previewText) },
-                onStop: { model.stopSpeech() }
+                onSpeak: { model.communication.speak(previewText) },
+                onStop: { model.communication.stopSpeech() }
             )
         }
     }
@@ -343,8 +343,8 @@ extension WelcomeFlow {
 
             // Bound to the shared setting, like Settings, so both screens show the same consent.
             Toggle(isOn: Binding(
-                get: { model.featureUsageReportingEnabled },
-                set: { model.setFeatureUsageReportingEnabled($0) }
+                get: { model.settings.featureUsageReportingEnabled },
+                set: { model.settings.setFeatureUsageReportingEnabled($0) }
             )) {
                 Text(NSLocalizedString("welcome_analytics.opt_in", comment: ""))
                     .font(.headline)
@@ -468,7 +468,7 @@ extension WelcomeFlow {
         case 0: return true
         case 1: return true
         case 2: return selectedTtsEngine != nil
-        case 3: return model.useSystemTts || selectedVoice != nil
+        case 3: return speech.useSystemTts || selectedVoice != nil
         case 4: return true
         case 5: return true
         case 6: return true
@@ -480,14 +480,12 @@ extension WelcomeFlow {
         // On a brand-new first run, leave no provider pre-highlighted so all four choices
         // start with equal visual weight. When re-running setup, highlight the saved choice.
         if UserDefaults.standard.bool(forKey: "welcome_flow_completed") {
-            selectedTtsEngine = model.ttsEngine
+            selectedTtsEngine = speech.ttsEngine
         }
     }
 
     func refreshAllProviderConfigurations() async {
-        await model.refreshAzureConfiguration()
-        await model.refreshGoogleConfiguration()
-        await model.refreshElevenLabsConfiguration()
+        await speech.refreshAllProviderConfigurations()
     }
 
     func selectProvider(_ provider: WelcomeTtsProvider) {
@@ -507,8 +505,8 @@ extension WelcomeFlow {
     }
 
     func proceed(with provider: WelcomeTtsProvider) {
-        if !provider.requiresSetup || provider.isConfigured(in: model) {
-            model.setTtsEngine(provider.engineId)
+        if !provider.requiresSetup || provider.isConfigured(in: speech) {
+            speech.setTtsEngine(provider.engineId)
             withAnimation(.easeInOut(duration: 0.4)) {
                 currentStep = 3
             }
@@ -531,9 +529,9 @@ extension WelcomeFlow {
     }
 
     func completeProviderSetup(_ provider: WelcomeTtsProvider) {
-        let changedEngine = !provider.matches(engineId: model.ttsEngine)
+        let changedEngine = !provider.matches(engineId: speech.ttsEngine)
         selectedTtsEngine = provider.engineId
-        model.setTtsEngine(provider.engineId)
+        speech.setTtsEngine(provider.engineId)
         if changedEngine {
             selectedVoice = nil
             pendingLanguageSelection = false

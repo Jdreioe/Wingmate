@@ -2,27 +2,29 @@ import SwiftUI
 import Shared
 
 struct SpeechSettingsView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var settings: AppSettingsModel
+    @ObservedObject var speech: SpeechSettingsModel
+    let onSecondaryLanguageChanged: () -> Void
     @State private var showVoicePicker = false
     @State private var showAzureSetup = false
     @State private var showGoogleSetup = false
     @State private var showElevenLabsSetup = false
 
     private var languages: [String] {
-        model.availableLanguages.isEmpty ? [model.primaryLanguage] : model.availableLanguages
+        speech.availableLanguages.isEmpty ? [speech.primaryLanguage] : speech.availableLanguages
     }
 
     var body: some View {
         Form {
             Section("settings.interaction.title") {
                 Picker("settings.interaction.select_key", selection: Binding(
-                    get: { model.selectKeyBinding }, set: { model.setSelectKeyBinding($0) }
+                    get: { settings.selectKeyBinding }, set: { settings.setSelectKeyBinding($0) }
                 )) {
                     Text("common.off").tag("")
                     ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
                 }
                 Picker("settings.interaction.rest_key", selection: Binding(
-                    get: { model.restModeKeyBinding }, set: { model.setRestModeKeyBinding($0) }
+                    get: { settings.restModeKeyBinding }, set: { settings.setRestModeKeyBinding($0) }
                 )) {
                     Text("common.off").tag("")
                     ForEach(["Space", "Enter", "F8", "F9"], id: \.self) { Text($0).tag($0) }
@@ -32,8 +34,8 @@ struct SpeechSettingsView: View {
 
             Section("settings.tts.title") {
                 Picker("settings.speech.engine", selection: Binding(
-                    get: { model.ttsEngine },
-                    set: { model.setTtsEngine($0) }
+                    get: { speech.ttsEngine },
+                    set: { speech.setTtsEngine($0) }
                 )) {
                     Text("settings.speech.engine.system").tag("SYSTEM")
                     Text("settings.speech.engine.azure").tag("AZURE_USER_RESOURCE")
@@ -42,24 +44,24 @@ struct SpeechSettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                if model.ttsEngine == "AZURE_USER_RESOURCE" || model.ttsEngine == "AZURE_MANAGED" {
+                if speech.ttsEngine == "AZURE_USER_RESOURCE" || speech.ttsEngine == "AZURE_MANAGED" {
                     Button {
                         showAzureSetup = true
                     } label: {
                         SettingsNavigationLabel(
                             title: "settings.speech.azure.configure",
-                            value: model.azureConfigured ? "settings.speech.azure.configured" : "settings.speech.azure.not_configured"
+                            value: speech.azureConfigured ? "settings.speech.azure.configured" : "settings.speech.azure.not_configured"
                         )
                     }
                 }
-                if model.ttsEngine == "ELEVENLABS" {
+                if speech.ttsEngine == "ELEVENLABS" {
                     Button("elevenlabs.setup") { showElevenLabsSetup = true }
                 }
-                if model.ttsEngine == "GOOGLE_CLOUD" {
+                if speech.ttsEngine == "GOOGLE_CLOUD" {
                     Button { showGoogleSetup = true } label: {
                         SettingsNavigationLabel(
                             title: "settings.speech.google.configure",
-                            value: model.googleConfigured ? "settings.speech.google.configured" : "settings.speech.google.not_configured"
+                            value: speech.googleConfigured ? "settings.speech.google.configured" : "settings.speech.google.not_configured"
                         )
                     }
                 }
@@ -69,24 +71,26 @@ struct SpeechSettingsView: View {
                 Button { showVoicePicker = true } label: {
                     SettingsNavigationLabel(
                         title: "settings.speech.voice.choose",
-                        value: (model.selectedVoice?.displayName ?? model.selectedVoice?.name) ?? "—"
+                        value: (speech.selectedVoice?.displayName ?? speech.selectedVoice?.name) ?? "—"
                     )
                 }
 
                 Picker("toolbar.language", selection: Binding(
-                    get: { model.primaryLanguage },
-                    set: { model.updateLanguage($0) }
+                    get: { speech.primaryLanguage },
+                    set: { speech.updateLanguage($0) }
                 )) {
                     ForEach(languages, id: \.self) { Text($0).tag($0) }
                 }
 
-                if model.canChangeVoiceLanguage {
+                if speech.canChangeVoiceLanguage {
                     Picker("toolbar.second_language", selection: Binding(
-                        get: { model.secondaryLanguage },
-                        set: { model.updateSecondaryLanguage($0) }
+                        get: { speech.secondaryLanguage },
+                        set: { lang in
+                            speech.updateSecondaryLanguage(lang, onApplied: onSecondaryLanguageChanged)
+                        }
                     )) {
                         Text("settings.speech.language.none").tag("")
-                        ForEach(languages.filter { $0 != model.primaryLanguage }, id: \.self) { Text($0).tag($0) }
+                        ForEach(languages.filter { $0 != speech.primaryLanguage }, id: \.self) { Text($0).tag($0) }
                     }
                 }
             }
@@ -94,9 +98,9 @@ struct SpeechSettingsView: View {
         .navigationTitle(Text("settings.category.speech"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showVoicePicker) {
-            VoiceSelectionSheet(selected: model.selectedVoice, primaryLanguage: model.primaryLanguage, onClose: { showVoicePicker = false }) { voice in
+            VoiceSelectionSheet(selected: speech.selectedVoice, primaryLanguage: speech.primaryLanguage, onClose: { showVoicePicker = false }) { voice in
                 Task {
-                    await model.chooseVoice(voice)
+                    await speech.chooseVoice(voice)
                     showVoicePicker = false
                 }
             }
@@ -105,16 +109,16 @@ struct SpeechSettingsView: View {
             F0SetupView(
                 onDone: {
                     showAzureSetup = false
-                    Task { await model.refreshAzureConfiguration() }
+                    Task { await speech.refreshAzureConfiguration() }
                 },
                 onBack: { showAzureSetup = false }
             )
         }
         .sheet(isPresented: $showElevenLabsSetup) {
-            ElevenLabsSetupView(model: model, onClose: { showElevenLabsSetup = false })
+            ElevenLabsSetupView(speech: speech, onClose: { showElevenLabsSetup = false })
         }
         .sheet(isPresented: $showGoogleSetup) {
-            GoogleTtsSetupView(model: model, onClose: { showGoogleSetup = false })
+            GoogleTtsSetupView(speech: speech, onClose: { showGoogleSetup = false })
         }
     }
 }
@@ -135,7 +139,7 @@ private func googleSetupFailureKey(_ error: Error) -> String {
 }
 
 struct GoogleTtsSetupView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var speech: SpeechSettingsModel
     let onClose: () -> Void
     let onSaved: (() -> Void)?
     @State private var step = GoogleTtsSetupStep.welcome
@@ -147,8 +151,8 @@ struct GoogleTtsSetupView: View {
     private let apiURL = URL(string: "https://console.cloud.google.com/apis/library/texttospeech.googleapis.com")!
     private let credentialsURL = URL(string: "https://console.cloud.google.com/apis/credentials")!
 
-    init(model: IosViewModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
-        self.model = model
+    init(speech: SpeechSettingsModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
+        self.speech = speech
         self.onClose = onClose
         self.onSaved = onSaved
     }
@@ -168,7 +172,7 @@ struct GoogleTtsSetupView: View {
                         Button("settings.speech.google.setup.have_key") {
                             step = .apiKey
                         }
-                        if model.googleConfigured {
+                        if speech.googleConfigured {
                             Label("settings.speech.google.configured", systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                             Button("common.continue", action: onClose)
@@ -221,7 +225,7 @@ struct GoogleTtsSetupView: View {
                                 errorMessage = nil
                                 defer { saving = false }
                                 do {
-                                    try await model.saveGoogleApiKey(apiKey)
+                                    try await speech.saveGoogleApiKey(apiKey)
                                     apiKey = ""
                                     step = .success
                                     onSaved?()
@@ -236,12 +240,12 @@ struct GoogleTtsSetupView: View {
                         Text("settings.speech.google.setup.key_title")
                     }
 
-                    if model.googleConfigured {
+                    if speech.googleConfigured {
                         Section {
                             Button("settings.speech.google.clear", role: .destructive) {
                                 Task {
                                     do {
-                                        try await model.clearGoogleApiKey()
+                                        try await speech.clearGoogleApiKey()
                                     } catch {
                                         errorMessage = NSLocalizedString("settings.speech.google.clear_failed", comment: "")
                                     }
@@ -281,15 +285,15 @@ struct GoogleTtsSetupView: View {
 }
 
 struct ElevenLabsSetupView: View {
-    @ObservedObject var model: IosViewModel
+    @ObservedObject var speech: SpeechSettingsModel
     let onClose: () -> Void
     let onSaved: (() -> Void)?
     @State private var apiKey = ""
     @State private var busy = false
     @State private var failed = false
 
-    init(model: IosViewModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
-        self.model = model
+    init(speech: SpeechSettingsModel, onClose: @escaping () -> Void, onSaved: (() -> Void)? = nil) {
+        self.speech = speech
         self.onClose = onClose
         self.onSaved = onSaved
     }
@@ -301,7 +305,7 @@ struct ElevenLabsSetupView: View {
                     Text("elevenlabs.description")
                     Text("elevenlabs.help")
                     Link("elevenlabs.key", destination: URL(string: "https://elevenlabs.io/app/settings/api-keys")!)
-                    if model.elevenLabsConfigured { Text("elevenlabs.configured") }
+                    if speech.elevenLabsConfigured { Text("elevenlabs.configured") }
                     SecureField("elevenlabs.key", text: $apiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -313,7 +317,7 @@ struct ElevenLabsSetupView: View {
                         Task { @MainActor in
                             defer { busy = false }
                             do {
-                                try await model.saveElevenLabsApiKey(apiKey)
+                                try await speech.saveElevenLabsApiKey(apiKey)
                                 apiKey = ""
                                 if let onSaved {
                                     onSaved()
@@ -324,12 +328,12 @@ struct ElevenLabsSetupView: View {
                         }
                     }
                     .disabled(busy || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    if model.elevenLabsConfigured {
+                    if speech.elevenLabsConfigured {
                         Button("elevenlabs.clear", role: .destructive) {
                             busy = true; failed = false
                             Task { @MainActor in
                                 defer { busy = false }
-                                do { try await model.clearElevenLabsApiKey(); apiKey = "" }
+                                do { try await speech.clearElevenLabsApiKey(); apiKey = "" }
                                 catch { failed = true }
                             }
                         }.disabled(busy)
@@ -339,7 +343,7 @@ struct ElevenLabsSetupView: View {
             .navigationTitle("elevenlabs.setup")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("common.done", action: onClose).disabled(busy) } }
             .interactiveDismissDisabled(busy)
-            .task { await model.refreshElevenLabsConfiguration() }
+            .task { await speech.refreshElevenLabsConfiguration() }
         }
     }
 }

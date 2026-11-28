@@ -67,9 +67,9 @@ struct PartnerDisplayView: View {
     @ObservedObject var model: IosViewModel
 
     private var messageText: String {
-        let trimmedInput = model.input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedInput = model.communication.input.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedInput.isEmpty { return trimmedInput }
-        return model.messageParts
+        return model.communication.messageParts
             .map { $0.displayText.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
@@ -77,10 +77,10 @@ struct PartnerDisplayView: View {
 
     private var symbolParts: [(id: String, title: String, imageUrl: String)] {
         guard model.boardModeEnabled else { return [] }
-        return model.messageParts.enumerated().compactMap { index, part in
+        return model.communication.messageParts.enumerated().compactMap { index, part in
             let look: (label: String, imageUrl: String?)?
             if let source = part.source as? Shared.MessagePartSourceScreenButton {
-                look = model.screenButtonLooks["\(source.pageId)|\(source.buttonId)"]
+                look = model.communication.screenButtonLooks["\(source.pageId)|\(source.buttonId)"]
             } else {
                 look = nil
             }
@@ -91,7 +91,7 @@ struct PartnerDisplayView: View {
     }
 
     private var isSpeaking: Bool {
-        model.playback.name == "Playing" || model.playback.name == "Preparing"
+        model.communication.playback.name == "Playing" || model.communication.playback.name == "Preparing"
     }
 
     var body: some View {

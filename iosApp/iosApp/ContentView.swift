@@ -51,16 +51,16 @@ struct ContentView: View {
 
     private var shouldShowPartnerDisplay: Bool {
         guard !partnerDisplayMuted else { return false }
-        let isSpeakingOrActive = model.playback.name != "Idle"
+        let isSpeakingOrActive = model.communication.playback.name != "Idle"
         return PartnerDisplayPolicy.shouldShow(
             mode: partnerDisplayMode,
             inWelcomeFlow: shouldShowWelcomeFlow,
             isConfiguringOrUnlocking: isConfiguringOrUnlocking,
             isEditingScreen: isEditingScreen,
-            inputIsPaused: model.inputIsPaused,
+            inputIsPaused: model.settings.inputIsPaused,
             hingePosture: hingePosture,
-            messageText: model.input,
-            hasMessageParts: !model.messageParts.isEmpty,
+            messageText: model.communication.input,
+            hasMessageParts: !model.communication.messageParts.isEmpty,
             isSpeakingOrActive: isSpeakingOrActive,
             isFullscreenMessage: isMessageFullscreen
         )
@@ -114,7 +114,7 @@ struct ContentView: View {
             uiPlayIconSize: $uiPlayIconSize,
             recorder: recorder,
             saveRecordingPath: { phraseId, path in
-                model.setRecordingPath(path, for: phraseId)
+                model.communication.setRecordingPath(path, for: phraseId)
             }
         ) {
             NavigationStack {
@@ -122,14 +122,16 @@ struct ContentView: View {
                     if shouldShowWelcomeFlow {
                         WelcomeFlow(
                             model: model,
+                            speech: model.speech,
+                            backup: model.backup,
                             onComplete: {
-                                model.setStartupUsesScreens(model.boardModeEnabled)
+                                model.settings.setStartupUsesScreens(model.boardModeEnabled)
                                 hasCompletedWelcome = true
                                 showWelcomeFlow = false
                                 UserDefaults.standard.set(true, forKey: "welcome_flow_completed")
                             },
                             onSkip: {
-                                model.setStartupUsesScreens(model.boardModeEnabled)
+                                model.settings.setStartupUsesScreens(model.boardModeEnabled)
                                 hasCompletedWelcome = true
                                 showWelcomeFlow = false
                                 UserDefaults.standard.set(true, forKey: "welcome_flow_completed")
@@ -145,7 +147,7 @@ struct ContentView: View {
                             let widePadding = WindowLayoutClass.of(width: proxy.size.width).isLarge
 
                             VStack(spacing: model.boardModeEnabled ? 0 : 8) {
-                                CommunicationNoticeBanner(model: model)
+                                CommunicationNoticeBanner(communication: model.communication)
                                     .padding(.horizontal, (model.boardModeEnabled || widePadding) ? 16 : 0)
                                     .padding(.top, model.boardModeEnabled ? 8 : 0)
                                 mainContent
@@ -179,7 +181,7 @@ struct ContentView: View {
                                             partnerDisplayMuted ? "toolbar.partner_display.resume" : "toolbar.partner_display.pause"
                                         )))
                                 }
-                                .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                                .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanTopBarEnabled)
                             }
                         }
 
@@ -192,7 +194,7 @@ struct ContentView: View {
                                 Image(systemName: model.boardModeEnabled ? "text.bubble" : "square.grid.3x3.fill")
                                     .accessibilityLabel(Text(LocalizedStringKey(model.boardModeEnabled ? "toolbar.switch_phrase_mode" : "toolbar.switch_symbol_mode")))
                             }
-                            .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanTopBarEnabled)
                         }
 
                         ToolbarItem(placement: .topBarTrailing) {
@@ -204,7 +206,7 @@ struct ContentView: View {
                                 Image(systemName: "slider.horizontal.3")
                                     .accessibilityLabel(Text("toolbar.settings_panel"))
                             }
-                            .accessibilityHidden(model.scanningEnabled && !model.scanTopBarEnabled)
+                            .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanTopBarEnabled)
                         }
                     }
                 }
@@ -218,11 +220,11 @@ struct ContentView: View {
             )
             // Editing access relocks whenever Wingmate leaves the foreground, in either workspace.
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { model.lockEditingAccess() }
+                if phase != .active { model.editingAccess.lock() }
             }
             .onKeyPress(phases: [.down, .up]) { press -> KeyPress.Result in
                 guard !shouldShowWelcomeFlow else { return .ignored }
-                return model.accessKey(press.characters, isDown: press.phase == .down) ? .handled : .ignored
+                return model.settings.accessKey(press.characters, isDown: press.phase == .down) ? .handled : .ignored
             }
             .onChange(of: cloudShares.pendingShare) { _, share in
                 // An accepted iCloud share link opens in the Screens workspace.
@@ -230,8 +232,8 @@ struct ContentView: View {
             }
             .task {
                 while !Task.isCancelled {
-                    if model.dwellToSelectMillis > 0 {
-                        model.tickAccessInput()
+                    if model.settings.dwellToSelectMillis > 0 {
+                        model.settings.tickAccessInput()
                         try? await Task.sleep(nanoseconds: 16_000_000)
                     } else {
                         try? await Task.sleep(nanoseconds: 200_000_000)
@@ -239,25 +241,25 @@ struct ContentView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if !shouldShowWelcomeFlow && (model.dwellToSelectMillis > 0 || !model.selectKeyBinding.isEmpty) {
-                    Button(action: model.toggleInputPause) {
-                        Image(systemName: model.inputIsPaused ? "play.fill" : "pause.fill")
+                if !shouldShowWelcomeFlow && (model.settings.dwellToSelectMillis > 0 || !model.settings.selectKeyBinding.isEmpty) {
+                    Button(action: model.settings.toggleInputPause) {
+                        Image(systemName: model.settings.inputIsPaused ? "play.fill" : "pause.fill")
                             .font(.title2.weight(.semibold))
                             .frame(minWidth: 56, minHeight: 56)
                     }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.circle)
                     .padding(16)
-                    .accessibilityLabel(Text(LocalizedStringKey(model.inputIsPaused ? "interaction.resume" : "interaction.rest_mode")))
+                    .accessibilityLabel(Text(LocalizedStringKey(model.settings.inputIsPaused ? "interaction.resume" : "interaction.rest_mode")))
                     .accessibilityAddTraits(.isButton)
                 }
             }
             .overlay(alignment: .bottom) {
-                if model.inputIsPaused && restBannerVisible {
+                if model.settings.inputIsPaused && restBannerVisible {
                     HStack(spacing: 12) {
                         Text("interaction.paused_status")
                             .font(.subheadline.weight(.semibold))
-                        Button(action: model.toggleInputPause) {
+                        Button(action: model.settings.toggleInputPause) {
                             Text("interaction.resume")
                                 .font(.subheadline.weight(.semibold))
                         }
@@ -272,8 +274,8 @@ struct ContentView: View {
                     .accessibilityAddTraits(.updatesFrequently)
                 }
             }
-            .task(id: model.inputIsPaused) {
-                if model.inputIsPaused {
+            .task(id: model.settings.inputIsPaused) {
+                if model.settings.inputIsPaused {
                     withAnimation(.easeInOut(duration: 0.2)) { restBannerVisible = true }
                     try? await Task.sleep(nanoseconds: 10_000_000_000)
                     withAnimation(.easeInOut(duration: 0.2)) { restBannerVisible = false }
@@ -289,7 +291,7 @@ struct ContentView: View {
             Task { @MainActor in
                 guard let activePhraseId = recordingForPhraseId else { return }
                 if let url = try? await recorder.stopRecording() {
-                    model.setRecordingPath(url.path, for: activePhraseId)
+                    model.communication.setRecordingPath(url.path, for: activePhraseId)
                 }
                 recordingForPhraseId = nil
             }

@@ -7,7 +7,7 @@ extension SymbolBoardWorkspaceView {
     var libraryView: some View {
         ZStack {
             VStack(spacing: 16) {
-            if model.boardSets.isEmpty {
+            if model.screens.boardSets.isEmpty {
                 emptyLibraryState
             } else {
                 // Keep library actions in one row above the grid; the navigation bar
@@ -41,24 +41,24 @@ extension SymbolBoardWorkspaceView {
                         columns: [GridItem(.adaptive(minimum: 280, maximum: 460), spacing: 16)],
                         spacing: 16
                     ) {
-                        ForEach(model.boardSets) { set in
+                        ForEach(model.screens.boardSets) { set in
                             BoardSetLibraryCard(
                                 set: set,
-                                loadPreview: { await model.loadScreenPreview(rootBoardId: set.rootBoardId) },
+                                loadPreview: { await model.screens.loadScreenPreview(rootBoardId: set.rootBoardId) },
                                 onOpen: {
                                     Task {
-                                        await model.selectBoardSet(id: set.id)
+                                        await model.screens.selectBoardSet(id: set.id)
                                         route = .workspace(boardSetId: set.id, mode: .run)
                                     }
                                 },
                                 onEdit: {
                                     Task {
-                                        await model.selectBoardSet(id: set.id)
+                                        await model.screens.selectBoardSet(id: set.id)
                                         await requestEnterEditing(boardSetId: set.id)
                                     }
                                 },
                                 onDuplicate: {
-                                    Task { await model.duplicateBoardSet(id: set.id) }
+                                    Task { await model.screens.duplicateBoardSet(id: set.id) }
                                 },
                                 onToggleLock: {
                                     Task { await beginScreenLockToggle(set) }
@@ -79,7 +79,7 @@ extension SymbolBoardWorkspaceView {
                 }
             }
             }
-            if model.isCreatingBoardSet {
+            if model.screens.isCreatingBoardSet {
                 Color(.systemBackground)
                     .ignoresSafeArea()
                 VStack(spacing: 12) {

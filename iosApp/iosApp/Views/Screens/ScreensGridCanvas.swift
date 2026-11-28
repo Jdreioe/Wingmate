@@ -5,7 +5,7 @@ import AudioToolbox
 extension SymbolBoardWorkspaceView {
     @ViewBuilder
     func boardPreview(isEditMode: Bool) -> some View {
-        if let board = model.selectedBoard {
+        if let board = model.screens.selectedBoard {
             let rows = max(1, Int(board.grid?.rows ?? 1))
             let cols = max(1, Int(board.grid?.columns ?? 1))
             let gridGap: CGFloat = 8
@@ -49,8 +49,8 @@ extension SymbolBoardWorkspaceView {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
-                        ForEach(model.boardFieldItems) { field in
-                            let occupied = model.cellAt(row: field.row, col: field.column) != nil
+                        ForEach(model.screens.boardFieldItems) { field in
+                            let occupied = model.screens.cellAt(row: field.row, col: field.column) != nil
                             let rect = foldLayout.frame(
                                 row: field.row,
                                 column: field.column,
@@ -94,19 +94,19 @@ extension SymbolBoardWorkspaceView {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background {
-                    if !model.highContrastMode { PageBackgroundView(source: model.boardBackgroundImageUrl, fit: model.boardBackgroundImageFit) }
+                    if !model.settings.highContrastMode { PageBackgroundView(source: model.screens.boardBackgroundImageUrl, fit: model.screens.boardBackgroundImageFit) }
                 }
                 .background(
-                    model.highContrastMode
+                    model.settings.highContrastMode
                         ? Color(.systemBackground)
                         : colorFromHex(board.backgroundColor, fallback: Color(.secondarySystemBackground))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .scrollDisabled(model.selectOnTouchDown && !isEditMode)
+                .scrollDisabled(model.settings.selectOnTouchDown && !isEditMode)
                 .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
                     guard !isEditMode, abs(value.translation.width) >= 64,
                           abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                    Task { await model.swipePage(by: value.translation.width < 0 ? 1 : -1) }
+                    Task { await model.screens.swipePage(by: value.translation.width < 0 ? 1 : -1) }
                 })
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -120,13 +120,13 @@ extension SymbolBoardWorkspaceView {
     }
 
     func boardCellButton(row: Int, col: Int, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1, metrics: BoardGridMetrics = BoardGridMetrics()) -> some View {
-        let cell = model.cellAt(row: row, col: col)
+        let cell = model.screens.cellAt(row: row, col: col)
         let cornerRadius = boardCellCornerRadius(cell, width: width, height: height)
         let isLinked = trimmed(cell?.linkedBoardId) != nil
         let sourceCellId = "\(row):\(col)"
         let anchor = BoardCellAnchor(row: row, column: col)
         let isSelected = isEditMode && selectedFieldAnchor == anchor && cell != nil
-        let hiddenInRunMode = !model.boardButtonIsVisible(
+        let hiddenInRunMode = !model.screens.boardButtonIsVisible(
             hidden: cell?.hidden == true,
             isEditMode: isEditMode,
             showHiddenButtons: showHiddenButtons
@@ -138,7 +138,7 @@ extension SymbolBoardWorkspaceView {
                     suppressNextCellTap = false
                     return
                 }
-                if isEditMode && model.canEditSelectedBoardSet {
+                if isEditMode && model.screens.canEditSelectedBoardSet {
                     if cell == nil {
                         openCellEditor(row: row, col: col, existing: nil)
                     } else if selectedFieldAnchor == anchor {
@@ -147,8 +147,8 @@ extension SymbolBoardWorkspaceView {
                         selectField(anchor)
                     }
                 } else {
-                    guard model.holdToSelectMillis <= 0 else { return }
-                    if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                    guard model.settings.holdToSelectMillis <= 0 else { return }
+                    if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             } label: {
@@ -159,49 +159,49 @@ extension SymbolBoardWorkspaceView {
                     .matchedGeometryEffect(id: flyingTokenId ?? "cell-\(sourceCellId)", in: sentenceAnimationNamespace, isSource: true)
                     .zIndex(flyingTokenId == nil ? 0 : 3)
             }
-            .buttonStyle(CommunicationButtonStyle(touchDown: model.selectOnTouchDown && model.holdToSelectMillis <= 0 && !isEditMode))
+            .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown && model.settings.holdToSelectMillis <= 0 && !isEditMode))
             .frame(width: width, height: height)
             .simultaneousGesture(
-                LongPressGesture(minimumDuration: max(0.01, model.holdToSelectMillis / 1_000))
+                LongPressGesture(minimumDuration: max(0.01, model.settings.holdToSelectMillis / 1_000))
                     .onEnded { _ in
-                        guard !isEditMode, model.holdToSelectMillis > 0 else { return }
-                        if model.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
+                        guard !isEditMode, model.settings.holdToSelectMillis > 0 else { return }
+                        if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
                         activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                     }
             )
             .onHover { hovering in
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
                 if hovering {
-                    model.accessEnter(targetId)
-                    if model.auditoryFishingEnabled, !model.inputIsPaused,
+                    model.settings.accessEnter(targetId)
+                    if model.settings.auditoryFishingEnabled, !model.settings.inputIsPaused,
                        let preview = trimmed(cell?.vocalization) ?? trimmed(cell?.label) {
-                        model.speak(preview)
+                        model.communication.speak(preview)
                     }
                 } else {
-                    model.accessExit(targetId)
+                    model.settings.accessExit(targetId)
                 }
             }
             .onAppear {
                 guard !isEditMode, cell != nil else { return }
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                model.registerAccessTarget(targetId) {
+                model.settings.registerAccessTarget(targetId) {
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
-            .onDisappear { model.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
+            .onDisappear { model.settings.unregisterAccessTarget("board:\(cell?.buttonId ?? sourceCellId)") }
             .accessTargetFocus(model: model, targetId: "board:\(cell?.buttonId ?? sourceCellId)")
             .overlay {
                 let targetId = "board:\(cell?.buttonId ?? sourceCellId)"
-                if !isEditMode && model.accessTargetId == targetId && model.pointerEmphasisStyle != "System" {
+                if !isEditMode && model.settings.accessTargetId == targetId && model.settings.pointerEmphasisStyle != "System" {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(Color.accentColor, lineWidth: 3 * model.pointerEmphasisScale)
-                        .padding(6 / model.pointerEmphasisScale)
+                        .stroke(Color.accentColor, lineWidth: 3 * model.settings.pointerEmphasisScale)
+                        .padding(6 / model.settings.pointerEmphasisScale)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
                 }
-                if !isEditMode && model.accessTargetId == targetId && model.accessDwellProgress > 0 {
+                if !isEditMode && model.settings.accessTargetId == targetId && model.settings.accessDwellProgress > 0 {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .trim(from: 0, to: model.accessDwellProgress)
+                        .trim(from: 0, to: model.settings.accessDwellProgress)
                         .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
@@ -214,14 +214,14 @@ extension SymbolBoardWorkspaceView {
             .accessibilitySortPriority(Double(max(0, 10_000 - (row * 100 + col))))
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityAction(.default) {
-                if isEditMode && model.canEditSelectedBoardSet {
+                if isEditMode && model.screens.canEditSelectedBoardSet {
                     openCellEditor(row: row, col: col, existing: cell)
                 } else if cell != nil {
                     activateBoardCell(cell, row: row, col: col, sourceCellId: sourceCellId)
                 }
             }
             .modifier(FieldEditActions(
-                enabled: isEditMode && cell != nil && model.canEditSelectedBoardSet,
+                enabled: isEditMode && cell != nil && model.screens.canEditSelectedBoardSet,
                 moveUp: { Task { await moveField(from: anchor, directionRow: -1, directionColumn: 0) } },
                 moveDown: { Task { await moveField(from: anchor, directionRow: 1, directionColumn: 0) } },
                 moveLeft: { Task { await moveField(from: anchor, directionRow: 0, directionColumn: -1) } },
@@ -233,10 +233,10 @@ extension SymbolBoardWorkspaceView {
             ))
             .simultaneousGesture(editMoveGesture(anchor: anchor, cell: cell, isEditMode: isEditMode, metrics: metrics))
 
-            if isSelected, model.canEditSelectedBoardSet {
+            if isSelected, model.screens.canEditSelectedBoardSet {
                 Button(role: .destructive) {
                     selectedFieldAnchor = nil
-                    Task { await model.clearSelectedBoardCell(row: row, col: col) }
+                    Task { await model.screens.clearSelectedBoardCell(row: row, col: col) }
                 } label: {
                     Image(systemName: "trash.circle.fill")
                         .font(.title3)
@@ -255,26 +255,26 @@ extension SymbolBoardWorkspaceView {
                     .accessibilityLabel(Text("board_workspace.temporarily_revealed"))
             }
             if !isEditMode, isLinked, let linkedBoardId = trimmed(cell?.linkedBoardId) {
-                let isHomeLink = linkedBoardId == model.selectedBoardSet?.rootBoardId
+                let isHomeLink = linkedBoardId == model.screens.selectedBoardSet?.rootBoardId
                 Image(systemName: isHomeLink ? "house.fill" : "arrowshape.turn.up.right.fill")
                     .font(.caption)
                     .foregroundStyle(Color.primary.opacity(0.8))
                     .padding(4)
                     .background(.regularMaterial, in: Circle())
                     .overlay(Circle().stroke(Color(.separator), lineWidth: 1))
-                    .accessibilityLabel(Text(isHomeLink ? NSLocalizedString("boardset.cell.action.home", comment: "") : String(format: NSLocalizedString("board_cell_opens_board", comment: ""), model.boardDisplayName(id: linkedBoardId))))
+                    .accessibilityLabel(Text(isHomeLink ? NSLocalizedString("boardset.cell.action.home", comment: "") : String(format: NSLocalizedString("board_cell_opens_board", comment: ""), model.screens.boardDisplayName(id: linkedBoardId))))
             }
         }
         .opacity(hiddenInRunMode ? 0 : (cell?.hidden == true && isEditMode ? 0.5 : 1))
         .allowsHitTesting(!hiddenInRunMode)
-        .accessibilityHidden(hiddenInRunMode || (model.scanningEnabled && !model.scanPhraseGridEnabled))
+        .accessibilityHidden(hiddenInRunMode || (model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled))
     }
 
     func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         // Labels follow the height of one grid cell, so they grow with the grid
         // instead of staying at a fixed point size; merged fields scale up further.
         let unitHeight = height / CGFloat(max(1, rowSpan))
-        let labelSize = min(max(unitHeight * 0.2, 15), 40) * model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
+        let labelSize = min(max(unitHeight * 0.2, 15), 40) * model.screens.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
         if cell == nil && isEditMode {
             return AnyView(
                 ZStack {
@@ -292,11 +292,11 @@ extension SymbolBoardWorkspaceView {
                 .frame(width: width, height: height)
             )
         }
-        let isHighlighted = model.highlightedButtonId != nil && model.highlightedButtonId == cell?.buttonId
-        let hasSymbol = model.boardShowSymbols && trimmed(cell?.imageUrl) != nil
+        let isHighlighted = model.settings.highlightedButtonId != nil && model.settings.highlightedButtonId == cell?.buttonId
+        let hasSymbol = model.screens.boardShowSymbols && trimmed(cell?.imageUrl) != nil
         return AnyView(
             VStack(alignment: .center, spacing: 4) {
-            if model.boardLabelAtTop && model.boardShowLabels && hasSymbol {
+            if model.screens.boardLabelAtTop && model.screens.boardShowLabels && hasSymbol {
                 boardCellLabel(cell, size: labelSize, hasSymbol: true, rowSpan: rowSpan, columnSpan: columnSpan)
             }
 
@@ -320,12 +320,12 @@ extension SymbolBoardWorkspaceView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            if (!model.boardLabelAtTop || !hasSymbol) && model.boardShowLabels {
+            if (!model.screens.boardLabelAtTop || !hasSymbol) && model.screens.boardShowLabels {
                 boardCellLabel(cell, size: labelSize, hasSymbol: hasSymbol, rowSpan: rowSpan, columnSpan: columnSpan)
             }
 
             if let linkedBoardId = trimmed(cell?.linkedBoardId) {
-                Label(model.boardDisplayName(id: linkedBoardId), systemImage: "arrowshape.turn.up.right")
+                Label(model.screens.boardDisplayName(id: linkedBoardId), systemImage: "arrowshape.turn.up.right")
                     .font(.caption2)
                     .foregroundStyle(contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.secondary))
                     .lineLimit(1)
@@ -336,12 +336,12 @@ extension SymbolBoardWorkspaceView {
         .frame(width: width, height: height)
         .background(
             RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
-                .fill(model.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
+                .fill(model.settings.highContrastMode ? Color(.systemBackground) : colorFromHex(cell?.resolvedBackgroundColor, fallback: Color(.tertiarySystemBackground)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
-                .stroke(model.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)),
-                    lineWidth: model.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
+                .stroke(model.settings.highContrastMode ? Color.primary : colorFromHex(cell?.borderColor, fallback: isLinked ? .accentColor : Color(.separator)),
+                    lineWidth: model.settings.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
         )
         .overlay {
             if isHighlighted {
@@ -364,7 +364,7 @@ extension SymbolBoardWorkspaceView {
     func boardCellLabel(_ cell: BoardCellInfo?, size: CGFloat, hasSymbol: Bool, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         let expanded = !hasSymbol ? ScreenButtonText.expandedText(label: cell?.label, vocalization: cell?.vocalization) : nil
         let text = expanded ?? boardCellDisplayLabel(cell)
-        let foreground = model.highContrastMode
+        let foreground = model.settings.highContrastMode
             ? Color.primary
             : contrastingColor(for: cell?.resolvedBackgroundColor, fallback: Color.primary)
         if !text.isEmpty {
@@ -372,7 +372,7 @@ extension SymbolBoardWorkspaceView {
                 // Speech paragraphs and longer sentences read cleanly from top-leading without
                 // duplicate vocalization lines or two-line truncation.
                 let readingBase: CGFloat = horizontalSizeClass == .regular ? 24 : 17
-                let readingSize = readingBase * min(model.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan), 1.35)
+                let readingSize = readingBase * min(model.screens.boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan), 1.35)
                 Text(text)
                     .font(.system(size: readingSize, weight: .medium))
                     .multilineTextAlignment(.leading)
@@ -444,7 +444,7 @@ extension SymbolBoardWorkspaceView {
     func selectField(_ anchor: BoardCellAnchor) {
         selectedFieldAnchor = anchor
         Task {
-            let options = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+            let options = await model.screens.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
             await MainActor.run {
                 guard selectedFieldAnchor == anchor else { return }
                 selectedFieldSpans = options
@@ -465,7 +465,7 @@ extension SymbolBoardWorkspaceView {
     }
 
     func editMoveGesture(anchor: BoardCellAnchor, cell: BoardCellInfo?, isEditMode: Bool, metrics: BoardGridMetrics) -> some Gesture {
-        let enabled = isEditMode && cell != nil && model.canEditSelectedBoardSet
+        let enabled = isEditMode && cell != nil && model.screens.canEditSelectedBoardSet
         return LongPressGesture(minimumDuration: enabled ? 0.35 : 10_000)
             .sequenced(before: DragGesture(minimumDistance: 8, coordinateSpace: .named("boardGrid")))
             .onChanged { value in
@@ -492,16 +492,16 @@ extension SymbolBoardWorkspaceView {
                 suppressNextCellTap = true
                 guard target.0 != anchor.row || target.1 != anchor.column else { return }
                 Task {
-                    let moved = await model.moveBoardField(
+                    let moved = await model.screens.moveBoardField(
                         fromRow: anchor.row,
                         fromCol: anchor.column,
                         toRow: target.0,
                         toCol: target.1
                     )
-                    if moved, let item = model.boardFieldItems.first(where: { $0.buttonId == buttonId }) {
+                    if moved, let item = model.screens.boardFieldItems.first(where: { $0.buttonId == buttonId }) {
                         selectField(BoardCellAnchor(row: item.row, column: item.column))
                     } else if !moved {
-                        model.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
+                        model.screens.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
                     }
                 }
             }
@@ -510,7 +510,7 @@ extension SymbolBoardWorkspaceView {
     func fieldEditChrome(layout: BoardFoldLayout, contentWidth: CGFloat, contentHeight: CGFloat, rows: Int, columns: Int) -> some View {
         return ZStack(alignment: .topLeading) {
         if let drag = fieldDrag {
-            let target = model.boardFieldItems.first { item in
+            let target = model.screens.boardFieldItems.first { item in
                 drag.targetRow >= item.row && drag.targetRow < item.row + item.rowSpan &&
                     drag.targetColumn >= item.column && drag.targetColumn < item.column + item.columnSpan
             }
@@ -530,7 +530,7 @@ extension SymbolBoardWorkspaceView {
             }
         }
         if let anchor = selectedFieldAnchor,
-           let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) {
+           let field = model.screens.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) {
             let span = resizePreview ?? GridFieldSpanInfo(rows: field.rowSpan, columns: field.columnSpan)
             let rect = layout.frame(
                 row: field.row,
@@ -613,12 +613,12 @@ extension SymbolBoardWorkspaceView {
                         guard let next, selectedFieldSpans.contains(next),
                               next.rows != field.rowSpan || next.columns != field.columnSpan else {
                             if next != nil && (next?.rows != field.rowSpan || next?.columns != field.columnSpan) {
-                                model.boardStatusMessage = NSLocalizedString("boardset.cell.size.blocked", comment: "")
+                                model.screens.boardStatusMessage = NSLocalizedString("boardset.cell.size.blocked", comment: "")
                             }
                             return
                         }
                         Task {
-                            await model.resizeSelectedBoardField(
+                            await model.screens.resizeSelectedBoardField(
                                 row: field.row,
                                 col: field.column,
                                 rows: next.rows,
@@ -638,17 +638,17 @@ extension SymbolBoardWorkspaceView {
     }
 
     func moveField(from anchor: BoardCellAnchor, directionRow: Int, directionColumn: Int, fromEditor: Bool = false) async {
-        guard let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) else { return }
+        guard let field = model.screens.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) else { return }
         let targetRow = anchor.row + (directionRow > 0 ? field.rowSpan : directionRow)
         let targetColumn = anchor.column + (directionColumn > 0 ? field.columnSpan : directionColumn)
         guard targetRow >= 0, targetColumn >= 0 else {
-            model.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
+            model.screens.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
             return
         }
         let buttonId = field.buttonId
-        let moved = await model.moveBoardField(fromRow: anchor.row, fromCol: anchor.column, toRow: targetRow, toCol: targetColumn)
-        guard moved, let buttonId, let item = model.boardFieldItems.first(where: { $0.buttonId == buttonId }) else {
-            model.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
+        let moved = await model.screens.moveBoardField(fromRow: anchor.row, fromCol: anchor.column, toRow: targetRow, toCol: targetColumn)
+        guard moved, let buttonId, let item = model.screens.boardFieldItems.first(where: { $0.buttonId == buttonId }) else {
+            model.screens.boardStatusMessage = NSLocalizedString("boardset.cell.move.blocked", comment: "")
             return
         }
         let next = BoardCellAnchor(row: item.row, column: item.column)
@@ -661,26 +661,26 @@ extension SymbolBoardWorkspaceView {
     }
 
     func resizeField(_ anchor: BoardCellAnchor, deltaRows: Int, deltaColumns: Int, fromEditor: Bool = false) async {
-        guard let field = model.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) else { return }
-        let options = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+        guard let field = model.screens.boardFieldItems.first(where: { $0.row == anchor.row && $0.column == anchor.column && $0.buttonId != nil }) else { return }
+        let options = await model.screens.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
         let next = GridFieldSpanInfo(rows: field.rowSpan + deltaRows, columns: field.columnSpan + deltaColumns)
         guard options.contains(next) else {
-            model.boardStatusMessage = NSLocalizedString("boardset.cell.size.blocked", comment: "")
+            model.screens.boardStatusMessage = NSLocalizedString("boardset.cell.size.blocked", comment: "")
             return
         }
-        await model.resizeSelectedBoardField(row: anchor.row, col: anchor.column, rows: next.rows, columns: next.columns)
+        await model.screens.resizeSelectedBoardField(row: anchor.row, col: anchor.column, rows: next.rows, columns: next.columns)
         selectedFieldSpans = options
         if fromEditor {
             editingSpan = next.rows == 1 && next.columns == 1 ? .single : .custom(next)
-            editingSpanOptions = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+            editingSpanOptions = await model.screens.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
         } else {
             selectField(anchor)
         }
     }
 
     func reloadEditingSpans(anchor: BoardCellAnchor) async {
-        let options = await model.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
-        let field = model.boardFieldItems.first { $0.row == anchor.row && $0.column == anchor.column }
+        let options = await model.screens.availableFieldSpanOptions(row: anchor.row, col: anchor.column)
+        let field = model.screens.boardFieldItems.first { $0.row == anchor.row && $0.column == anchor.column }
         editingSpanOptions = options
         if let field, let match = options.first(where: { $0.rows == field.rowSpan && $0.columns == field.columnSpan }) {
             editingSpan = match.rows == 1 && match.columns == 1 ? .single : .custom(match)
