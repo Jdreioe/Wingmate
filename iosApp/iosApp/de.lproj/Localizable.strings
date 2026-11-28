@@ -617,6 +617,9 @@
 "boardset.status.unsupported_action" = "Diese Tastenaktion ist nicht verfügbar.";
 "board_page.back" = "Vorherige Seite";
 "board_page.start" = "Startseite";
+"board_page.stay_here" = "Hier bleiben";
+"board_page.stay_here.on" = "Ein";
+"board_page.stay_here.off" = "Aus";
 "board_settings.screen_title" = "Bildschirmeinstellungen";
 "board_settings.page_title" = "Seiteneinstellungen";
 "board_settings.appearance" = "Tastenaussehen";

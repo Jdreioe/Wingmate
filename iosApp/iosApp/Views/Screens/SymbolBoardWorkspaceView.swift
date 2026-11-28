@@ -198,8 +198,12 @@ struct SymbolBoardWorkspaceView: View {
         .onChange(of: route) { _, newRoute in
             if case .workspace(_, .edit) = newRoute {
                 isEditingScreen = true
+                model.screens.resetStayOnCurrentPage()
             } else {
                 isEditingScreen = false
+                if case .library = newRoute {
+                    model.screens.resetStayOnCurrentPage()
+                }
             }
         }
         .onDisappear {

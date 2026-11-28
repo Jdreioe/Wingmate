@@ -28,6 +28,7 @@ internal data class BoardWorkspaceState(
     val mode: BoardWorkspaceMode = BoardWorkspaceMode.Run,
     val selectedBoardId: String? = null,
     val boardStack: List<String> = emptyList(),
+    val stayOnCurrentPage: Boolean = false,
     val showFinishDialog: Boolean = false,
     val showEditingAccessDialog: Boolean = false,
     val isSaving: Boolean = false,
@@ -40,17 +41,18 @@ internal data class BoardWorkspaceState(
     val canNavigateBack: Boolean get() = boardStack.isNotEmpty()
 
     fun selectBoard(boardId: String): BoardWorkspaceState =
-        copy(selectedBoardId = boardId, boardStack = emptyList())
+        copy(selectedBoardId = boardId, boardStack = emptyList(), stayOnCurrentPage = false)
 
     fun openBoard(boardId: String): BoardWorkspaceState =
         copy(
             selectedBoardId = boardId,
             boardStack = selectedBoardId?.let { boardStack + it } ?: boardStack,
+            stayOnCurrentPage = false,
         )
 
     fun navigateBack(): BoardWorkspaceState =
         boardStack.lastOrNull()?.let { previous ->
-            copy(selectedBoardId = previous, boardStack = boardStack.dropLast(1))
+            copy(selectedBoardId = previous, boardStack = boardStack.dropLast(1), stayOnCurrentPage = false)
         } ?: this
 
     /**
@@ -64,11 +66,11 @@ internal data class BoardWorkspaceState(
         val order = graph.boardSet.boardIds.filter { it in graph.boardsById }
         val index = order.indexOf(selectedBoardId).takeIf { it >= 0 } ?: return this
         val target = order.getOrNull(index + step) ?: return this
-        return copy(selectedBoardId = target)
+        return copy(selectedBoardId = target, stayOnCurrentPage = false)
     }
 
     fun goHome(rootBoardId: String): BoardWorkspaceState =
-        copy(selectedBoardId = rootBoardId, boardStack = emptyList())
+        copy(selectedBoardId = rootBoardId, boardStack = emptyList(), stayOnCurrentPage = false)
 
     fun withPosition(
         selectedBoardId: String?,
@@ -76,7 +78,11 @@ internal data class BoardWorkspaceState(
     ): BoardWorkspaceState = copy(
         selectedBoardId = selectedBoardId,
         boardStack = boardStack,
+        stayOnCurrentPage = if (selectedBoardId == this.selectedBoardId) stayOnCurrentPage else false,
     )
+
+    fun toggleStayOnCurrentPage(): BoardWorkspaceState =
+        copy(stayOnCurrentPage = !stayOnCurrentPage)
 }
 
 internal sealed interface BoardWorkspaceContentStatus {
@@ -105,6 +111,7 @@ internal sealed interface BoardWorkspaceAction {
         val selectedBoardId: String?,
         val boardStack: List<String>,
     ) : BoardWorkspaceAction
+    data object ToggleStayOnCurrentPage : BoardWorkspaceAction
     data object StartEditing : BoardWorkspaceAction
     data object EditingAccessRequired : BoardWorkspaceAction
     data object EditingAccessDismissed : BoardWorkspaceAction
@@ -190,6 +197,7 @@ internal class BoardWorkspaceViewModel(
                     savedGraph = graph,
                     selectedBoardId = nextSelected,
                     boardStack = nextStack,
+                    stayOnCurrentPage = if (nextSelected == current.selectedBoardId) current.stayOnCurrentPage else false,
                 )
             }
             is BoardWorkspaceAction.LoadFailed -> _state.value.copy(
@@ -212,6 +220,7 @@ internal class BoardWorkspaceViewModel(
                 selectedBoardId = action.selectedBoardId,
                 boardStack = action.boardStack,
             )
+            BoardWorkspaceAction.ToggleStayOnCurrentPage -> _state.value.toggleStayOnCurrentPage()
             BoardWorkspaceAction.StartEditing -> {
                 val graph = _state.value.savedGraph ?: return
                 _state.value.goHome(graph.boardSet.rootBoardId).copy(

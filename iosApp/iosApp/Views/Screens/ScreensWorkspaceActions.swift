@@ -51,16 +51,21 @@ extension SymbolBoardWorkspaceView {
             let behavior = model.screens.boardActivationBehavior
             let shouldAdd = behavior != "SpeakOnly"
             let shouldSpeak = model.screens.shouldSpeakSelectionImmediately
+            let hasContent = (trimmed(cell.vocalization) ?? trimmed(cell.label)) != nil
+            let hasSound = trimmed(cell.soundPath) != nil || trimmed(cell.soundDataUrl) != nil
             // A Button's own sound replaces its spoken text, so it is said once.
             if shouldSpeak { playCellSound(cell) }
             if shouldAdd {
                 appendCellToSentenceIfNeeded(cell, pageId: pageId, sourceCellId: sourceCellId)
             }
             Task {
-                if shouldSpeak && trimmed(cell.soundPath) == nil && trimmed(cell.soundDataUrl) == nil {
+                if shouldSpeak && !hasSound {
                     await model.screens.activateBoardCell(cell, onPageId: pageId, checkDebounce: false)
                 }
                 await model.screens.activateBoardSelectionHighlight(buttonId: cell.buttonId)
+                if hasContent || hasSound {
+                    await model.screens.applyBoardReturnBehavior()
+                }
             }
             return
         }

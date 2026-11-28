@@ -528,12 +528,29 @@ class BoardsFacade(
         currentBoardId: String?,
         boardStack: List<String>,
         rootBoardId: String,
+        stayOnCurrentPage: Boolean = false,
     ): IosBoardReturnResult {
         val (boardId, stack) = applyBoardReturnBehavior(
-            behavior.toBoardReturnBehavior(), currentBoardId, boardStack, rootBoardId,
+            behavior.toBoardReturnBehavior(),
+            currentBoardId,
+            boardStack,
+            rootBoardId,
+            stayOnCurrentPage = stayOnCurrentPage,
         )
         return IosBoardReturnResult(boardId = boardId, boardStack = stack)
     }
+
+    fun canStayOnCurrentPage(
+        behavior: String,
+        currentBoardId: String?,
+        boardStack: List<String>,
+        rootBoardId: String,
+    ): Boolean = io.github.jdreioe.wingmate.domain.obf.canStayOnCurrentPage(
+        behavior = behavior.toBoardReturnBehavior(),
+        currentBoardId = currentBoardId,
+        boardStack = boardStack,
+        rootBoardId = rootBoardId,
+    )
 
     fun boardButtonIsVisible(hidden: Boolean, isEditMode: Boolean, showHiddenButtons: Boolean): Boolean =
         !hidden || isEditMode || showHiddenButtons

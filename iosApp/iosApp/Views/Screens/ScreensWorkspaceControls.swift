@@ -460,10 +460,14 @@ extension SymbolBoardWorkspaceView {
     }
 
     /// Back and start Page, in the top row opposite the menu. They stay visible,
-    /// disabled when there is nowhere to go, so the row does not jump.
+    /// disabled when there is nowhere to go, so the row does not jump. On a
+    /// self-returning Page, a "Stay here" toggle sits beside them for this visit.
     var pageNavigation: some View {
         let showsLabels = horizontalSizeClass == .regular
         return HStack(spacing: 4) {
+            if model.screens.canStayOnCurrentPage {
+                stayOnPageButton
+            }
             Button { Task { await model.screens.navigateBoardBack() } } label: {
                 topRowLabel("board_page.back", systemImage: "chevron.backward", showsTitle: showsLabels)
             }
@@ -477,6 +481,32 @@ extension SymbolBoardWorkspaceView {
         }
         .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
         .accessibilityHidden(model.settings.scanningEnabled && !model.settings.scanPlaybackAreaEnabled)
+    }
+
+    var stayOnPageButton: some View {
+        let targetId = "screens:stay-here"
+        let isStaying = model.screens.stayOnCurrentPage
+        let action: () -> Void = { model.screens.toggleStayOnCurrentPage() }
+        return Button(action: action) {
+            Label("board_page.stay_here", systemImage: isStaying ? "pin.fill" : "pin")
+                .font(.subheadline.weight(isStaying ? .bold : .semibold))
+                .lineLimit(1)
+                .foregroundStyle(isStaying ? Color.white : Color.accentColor)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 44, minHeight: 44)
+                .background(
+                    Capsule().fill(isStaying ? Color.accentColor : Color(.secondarySystemBackground))
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(CommunicationButtonStyle(touchDown: model.settings.selectOnTouchDown))
+        .accessibilityLabel(Text("board_page.stay_here"))
+        .accessibilityValue(Text(LocalizedStringKey(isStaying ? "board_page.stay_here.on" : "board_page.stay_here.off")))
+        .accessibilityAddTraits(isStaying ? [.isButton, .isSelected] : .isButton)
+        .onAppear { model.settings.registerAccessTarget(targetId, action: action) }
+        .onDisappear { model.settings.unregisterAccessTarget(targetId) }
+        .onHover { if $0 { model.settings.accessEnter(targetId) } else { model.settings.accessExit(targetId) } }
+        .accessTargetFocus(model: model, targetId: targetId)
     }
 
     func topRowLabel(_ key: LocalizedStringKey, systemImage: String, showsTitle: Bool) -> some View {

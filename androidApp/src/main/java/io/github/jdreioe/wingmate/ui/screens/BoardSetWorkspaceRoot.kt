@@ -51,6 +51,7 @@ import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.ScreenKind
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
 import io.github.jdreioe.wingmate.domain.obf.backgroundImage
+import io.github.jdreioe.wingmate.domain.obf.canStayOnCurrentPage
 import io.github.jdreioe.wingmate.domain.obf.clearDraftCell
 import io.github.jdreioe.wingmate.domain.obf.fieldAnchorAt
 import io.github.jdreioe.wingmate.domain.obf.moveDraftField
@@ -519,6 +520,16 @@ internal fun BoardSetWorkspaceRoot(
                 atStartPage = workspace.selectedBoardId == graph.boardSet.rootBoardId,
                 onBack = { workspaceViewModel.onAction(BoardWorkspaceAction.PreviousPageClicked) },
                 onStartPage = { workspaceViewModel.onAction(BoardWorkspaceAction.GoHome(graph.boardSet.rootBoardId)) },
+                canStayOnCurrentPage = canStayOnCurrentPage(
+                    behavior = resolvedBoardSettings.returnBehavior,
+                    currentBoardId = workspace.selectedBoardId,
+                    boardStack = workspace.boardStack,
+                    rootBoardId = graph.boardSet.rootBoardId,
+                ),
+                stayOnCurrentPage = workspace.stayOnCurrentPage,
+                onToggleStayOnCurrentPage = {
+                    workspaceViewModel.onAction(BoardWorkspaceAction.ToggleStayOnCurrentPage)
+                },
             )
         }
 
@@ -585,6 +596,7 @@ internal fun BoardSetWorkspaceRoot(
                         onBackToLibrary = ::leave,
                         onSwitchToTyping = onSwitchToKeyboard,
                         onOpenSettings = onOpenSettings,
+                        selectOnTouchDown = settings.selectOnTouchDown,
                     )
                 }
 

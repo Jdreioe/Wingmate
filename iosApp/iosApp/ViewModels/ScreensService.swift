@@ -107,8 +107,15 @@ protocol ScreensService {
         behavior: String,
         currentBoardId: String?,
         boardStack: [String],
-        rootBoardId: String
+        rootBoardId: String,
+        stayOnCurrentPage: Bool
     ) -> Shared.IosBoardReturnResult
+    func canStayOnCurrentPage(
+        behavior: String,
+        currentBoardId: String?,
+        boardStack: [String],
+        rootBoardId: String
+    ) -> Bool
     func nGramPredictionInsertion(sentence: String, suggestion: String) -> String
     func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool
     func boardFieldFontScale(rowSpan: Int32, columnSpan: Int32) -> Float
@@ -437,9 +444,25 @@ struct SharedScreensService: ScreensService {
         behavior: String,
         currentBoardId: String?,
         boardStack: [String],
-        rootBoardId: String
+        rootBoardId: String,
+        stayOnCurrentPage: Bool
     ) -> Shared.IosBoardReturnResult {
         resolveBoards().boardReturnBehavior(
+            behavior: behavior,
+            currentBoardId: currentBoardId,
+            boardStack: boardStack,
+            rootBoardId: rootBoardId,
+            stayOnCurrentPage: stayOnCurrentPage
+        )
+    }
+
+    func canStayOnCurrentPage(
+        behavior: String,
+        currentBoardId: String?,
+        boardStack: [String],
+        rootBoardId: String
+    ) -> Bool {
+        resolveBoards().canStayOnCurrentPage(
             behavior: behavior,
             currentBoardId: currentBoardId,
             boardStack: boardStack,
