@@ -207,6 +207,7 @@ final class IosViewModel: ObservableObject {
             openSymbolsProxyUrl: resolveOpenSymbolsProxyUrl(),
             aptabaseAppKey: Bundle.main.object(forInfoDictionaryKey: "APTABASE_APP_KEY") as? String
         )
+        CloudDriveWebAuthentication.register()
     }
 
     func start() async {

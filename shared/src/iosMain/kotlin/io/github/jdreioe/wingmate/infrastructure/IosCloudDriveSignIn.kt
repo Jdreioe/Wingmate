@@ -28,6 +28,7 @@ class IosOAuthBrowser(private val bridge: IosWebAuthenticationBridge) : OAuthBro
         val scheme = redirectUriTemplate.substringBefore(':')
         return suspendCancellableCoroutine { continuation ->
             bridge.authenticate(url, scheme) { callbackUrl, error ->
+                if (!continuation.isActive) return@authenticate
                 when {
                     callbackUrl != null -> continuation.resume(OAuthRedirect(redirectUriTemplate, callbackUrl))
                     error == null || error == CANCELLED -> continuation.resume(null)
