@@ -45,23 +45,52 @@ fun shouldSpeakSelectionImmediately(policy: SpeechPolicy, behavior: BoardActivat
 
 /**
  * Resolve the board to show after a selection, given the return behavior and the
- * navigation history. Returns the next board id and the updated stack.
+ * navigation history. When [stayOnCurrentPage] is true, the Communicator has
+ * temporarily pinned the current Page ("Stay here") for this visit, so selections
+ * keep the current Page and navigation stack untouched. Returns the next board id
+ * and the updated stack.
  */
 fun applyBoardReturnBehavior(
     behavior: BoardReturnBehavior,
     currentBoardId: String?,
     boardStack: List<String>,
-    rootBoardId: String
-): Pair<String?, List<String>> = when (behavior) {
-    BoardReturnBehavior.Stay -> currentBoardId to boardStack
-    BoardReturnBehavior.Previous -> {
-        if (boardStack.isEmpty()) {
-            currentBoardId to boardStack
-        } else {
-            boardStack.last() to boardStack.dropLast(1)
+    rootBoardId: String,
+    stayOnCurrentPage: Boolean = false
+): Pair<String?, List<String>> = if (stayOnCurrentPage) {
+    currentBoardId to boardStack
+} else {
+    when (behavior) {
+        BoardReturnBehavior.Stay -> currentBoardId to boardStack
+        BoardReturnBehavior.Previous -> {
+            if (boardStack.isEmpty()) {
+                currentBoardId to boardStack
+            } else {
+                boardStack.last() to boardStack.dropLast(1)
+            }
         }
+        BoardReturnBehavior.StartPage -> rootBoardId to emptyList()
     }
-    BoardReturnBehavior.StartPage -> rootBoardId to emptyList()
+}
+
+/**
+ * Whether selecting a Button on the current Page would automatically navigate to
+ * another Page, so offering a temporary "Stay here" toggle in run mode is useful.
+ */
+fun canStayOnCurrentPage(
+    behavior: BoardReturnBehavior,
+    currentBoardId: String?,
+    boardStack: List<String>,
+    rootBoardId: String
+): Boolean {
+    if (behavior == BoardReturnBehavior.Stay || currentBoardId == null) return false
+    val (nextBoardId, _) = applyBoardReturnBehavior(
+        behavior = behavior,
+        currentBoardId = currentBoardId,
+        boardStack = boardStack,
+        rootBoardId = rootBoardId,
+        stayOnCurrentPage = false
+    )
+    return nextBoardId != null && nextBoardId != currentBoardId
 }
 
 /**

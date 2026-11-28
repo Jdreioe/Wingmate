@@ -105,6 +105,58 @@ final class ScreensModelTests: XCTestCase {
         XCTAssertTrue(model.boardStack.isEmpty)
     }
 
+    func testStayOnCurrentPageOverridesReturnBehaviorAndResetsOnPageExit() async {
+        let service = FakeScreensService()
+        let set = FakeScreensService.makeBoardSet(id: "set-1", name: "Core", rootBoardId: "home", boardIds: ["home", "food", "drinks"], updatedAt: 2_000)
+        service.boardSets = [set]
+        service.boardsById["home"] = FakeScreensService.makeBoard(id: "home", name: "Home")
+        service.boardsById["food"] = FakeScreensService.makeBoard(id: "food", name: "Food")
+        service.boardsById["drinks"] = FakeScreensService.makeBoard(id: "drinks", name: "Drinks")
+        service.resolvedSettings = Shared.IosResolvedBoardSettings(
+            showLabels: true,
+            showSymbols: true,
+            labelAtTop: false,
+            showMessageBar: true,
+            showSpeakButton: true,
+            messageBarEditable: false,
+            activationBehavior: "SpeakAndAdd",
+            returnBehavior: "Previous",
+            speechPolicy: nil,
+            messageBarActions: ["Speak"],
+            cellGapDp: nil,
+            outerMarginDp: nil
+        )
+
+        let model = makeModel(service: service)
+        await model.loadBoardSets()
+        XCTAssertFalse(model.canStayOnCurrentPage)
+        XCTAssertFalse(model.stayOnCurrentPage)
+
+        model.pushBoardNavigationStack("home")
+        await model.selectBoard(id: "food")
+        XCTAssertTrue(model.canStayOnCurrentPage)
+        XCTAssertFalse(model.stayOnCurrentPage)
+
+        model.toggleStayOnCurrentPage()
+        XCTAssertTrue(model.stayOnCurrentPage)
+
+        await model.applyBoardReturnBehavior()
+        XCTAssertEqual(model.selectedBoardId, "food")
+        XCTAssertEqual(model.boardStack, ["home"])
+        XCTAssertTrue(model.stayOnCurrentPage)
+
+        await model.navigateBoardBack()
+        XCTAssertEqual(model.selectedBoardId, "home")
+        XCTAssertFalse(model.stayOnCurrentPage)
+
+        // Visiting the Page again restores its configured self-returning behavior.
+        model.pushBoardNavigationStack("home")
+        await model.selectBoard(id: "food")
+        XCTAssertFalse(model.stayOnCurrentPage)
+        await model.applyBoardReturnBehavior()
+        XCTAssertEqual(model.selectedBoardId, "home")
+    }
+
     func testLockedScreenBlocksEditsAndSetsLockedStatus() async {
         let service = FakeScreensService()
         let lockedSet = FakeScreensService.makeBoardSet(id: "set-locked", name: "Locked", rootBoardId: "home", boardIds: ["home"], isLocked: true, updatedAt: 1_000)
@@ -599,7 +651,10 @@ private final class FakeScreensService: ScreensService {
     func updateBoardSetSpeechCacheOnline(online: Bool) {}
     func cacheAllBoardSetFields() async throws {}
     func retryBoardSetSpeechCaching() async throws {}
-    func boardReturnBehavior(behavior: String, currentBoardId: String?, boardStack: [String], rootBoardId: String) -> Shared.IosBoardReturnResult {
+    func boardReturnBehavior(behavior: String, currentBoardId: String?, boardStack: [String], rootBoardId: String, stayOnCurrentPage: Bool) -> Shared.IosBoardReturnResult {
+        if stayOnCurrentPage {
+            return Shared.IosBoardReturnResult(boardId: currentBoardId, boardStack: boardStack)
+        }
         if behavior == "Previous", let prev = boardStack.last {
             return Shared.IosBoardReturnResult(boardId: prev, boardStack: Array(boardStack.dropLast()))
         }
@@ -607,6 +662,17 @@ private final class FakeScreensService: ScreensService {
             return Shared.IosBoardReturnResult(boardId: rootBoardId, boardStack: [])
         }
         return Shared.IosBoardReturnResult(boardId: currentBoardId, boardStack: boardStack)
+    }
+    func canStayOnCurrentPage(behavior: String, currentBoardId: String?, boardStack: [String], rootBoardId: String) -> Bool {
+        guard behavior != "Stay", let currentBoardId else { return false }
+        let result = boardReturnBehavior(
+            behavior: behavior,
+            currentBoardId: currentBoardId,
+            boardStack: boardStack,
+            rootBoardId: rootBoardId,
+            stayOnCurrentPage: false
+        )
+        return result.boardId != nil && result.boardId != currentBoardId
     }
     func nGramPredictionInsertion(sentence: String, suggestion: String) -> String { suggestion }
     func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool {

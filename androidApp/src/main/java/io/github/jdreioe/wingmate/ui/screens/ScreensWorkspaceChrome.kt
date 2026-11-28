@@ -2,6 +2,7 @@ package io.github.jdreioe.wingmate.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,10 +33,12 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -87,6 +90,7 @@ internal fun ScreensRunTopRow(
     onBackToLibrary: () -> Unit,
     onSwitchToTyping: () -> Unit,
     onOpenSettings: () -> Unit,
+    selectOnTouchDown: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val large = currentWindowWidth().isLarge
@@ -202,6 +206,68 @@ internal fun ScreensRunTopRow(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (pageNavigation.canStayOnCurrentPage) {
+                    val stayLabel = stringResource(R.string.board_page_stay_here)
+                    val isStaying = pageNavigation.stayOnCurrentPage
+                    val shape = RoundedCornerShape(50)
+                    Surface(
+                        shape = shape,
+                        color = if (isStaying) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        modifier = Modifier
+                            .heightIn(min = 44.dp)
+                            .clip(shape)
+                            .typingAccessTarget(
+                                targetId = "screens:stay-here",
+                                enabled = true,
+                                shape = shape,
+                                action = pageNavigation.onToggleStayOnCurrentPage,
+                            )
+                            .toggleable(
+                                value = isStaying,
+                                role = Role.Switch,
+                                onValueChange = { pageNavigation.onToggleStayOnCurrentPage() },
+                            )
+                            .selectOnTouchDown(
+                                enabled = selectOnTouchDown,
+                                onSelect = pageNavigation.onToggleStayOnCurrentPage,
+                            )
+                            .testTag("screens-stay-here-toggle"),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (isStaying) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (isStaying) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                            )
+                            Text(
+                                text = stayLabel,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = if (isStaying) FontWeight.Bold else FontWeight.SemiBold,
+                                ),
+                                color = if (isStaying) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
                 if (large) {
                     TextButton(
                         onClick = pageNavigation.onBack,

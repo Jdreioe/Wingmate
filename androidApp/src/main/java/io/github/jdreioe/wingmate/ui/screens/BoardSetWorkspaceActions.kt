@@ -313,7 +313,8 @@ internal fun handleWorkspaceButtonClick(
             behavior = resolvedBoardSettings.returnBehavior,
             currentBoardId = workspace.selectedBoardId,
             boardStack = workspace.boardStack,
-            rootBoardId = activeGraph.boardSet.rootBoardId
+            rootBoardId = activeGraph.boardSet.rootBoardId,
+            stayOnCurrentPage = workspace.stayOnCurrentPage,
         )
         workspaceViewModel.onAction(
             BoardWorkspaceAction.RestorePosition(

@@ -296,6 +296,9 @@ class PageNavigation(
     val atStartPage: Boolean,
     val onBack: () -> Unit,
     val onStartPage: () -> Unit,
+    val canStayOnCurrentPage: Boolean = false,
+    val stayOnCurrentPage: Boolean = false,
+    val onToggleStayOnCurrentPage: () -> Unit = {},
 )
 
 @Composable

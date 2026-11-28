@@ -23,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -96,6 +97,38 @@ class BoardsFacadeTest {
         )
 
         assertEquals("root", result.boardId)
+    }
+
+    @Test
+    fun boardReturnBehaviorRespectsStayOnCurrentPageOverride() = runBlocking {
+        val facade = facade()
+
+        assertTrue(
+            facade.canStayOnCurrentPage(
+                behavior = "Previous",
+                currentBoardId = "food",
+                boardStack = listOf("root"),
+                rootBoardId = "root",
+            )
+        )
+        assertFalse(
+            facade.canStayOnCurrentPage(
+                behavior = "Stay",
+                currentBoardId = "food",
+                boardStack = listOf("root"),
+                rootBoardId = "root",
+            )
+        )
+
+        val result = facade.boardReturnBehavior(
+            behavior = "Previous",
+            currentBoardId = "food",
+            boardStack = listOf("root"),
+            rootBoardId = "root",
+            stayOnCurrentPage = true,
+        )
+        assertEquals("food", result.boardId)
+        assertEquals(listOf("root"), result.boardStack)
     }
 
     @Test

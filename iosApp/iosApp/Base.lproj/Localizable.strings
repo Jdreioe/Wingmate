@@ -263,6 +263,9 @@
 "boardset.status.unsupported_action" = "This button’s action is not available.";
 "board_page.back" = "Previous page";
 "board_page.start" = "Start page";
+"board_page.stay_here" = "Stay here";
+"board_page.stay_here.on" = "On";
+"board_page.stay_here.off" = "Off";
 "board_settings.screen_title" = "Screen settings";
 "board_settings.page_title" = "Page settings";
 "board_settings.appearance" = "Button appearance";

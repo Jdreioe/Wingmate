@@ -66,4 +66,72 @@ class BoardSettingsBehaviorTest {
             )
         )
     }
+
+    @Test
+    fun stayOnCurrentPageOverridesSelfReturningBehaviorsWithoutAlteringStack() {
+        assertEquals(
+            "food" to listOf("home", "category"),
+            applyBoardReturnBehavior(
+                BoardReturnBehavior.Previous,
+                currentBoardId = "food",
+                boardStack = listOf("home", "category"),
+                rootBoardId = "home",
+                stayOnCurrentPage = true
+            )
+        )
+        assertEquals(
+            "food" to listOf("home", "category"),
+            applyBoardReturnBehavior(
+                BoardReturnBehavior.StartPage,
+                currentBoardId = "food",
+                boardStack = listOf("home", "category"),
+                rootBoardId = "home",
+                stayOnCurrentPage = true
+            )
+        )
+    }
+
+    @Test
+    fun canStayOnCurrentPageReflectsWhetherSelectionWouldNavigateAway() {
+        assertFalse(
+            canStayOnCurrentPage(
+                BoardReturnBehavior.Stay,
+                currentBoardId = "food",
+                boardStack = listOf("home"),
+                rootBoardId = "home"
+            )
+        )
+        assertTrue(
+            canStayOnCurrentPage(
+                BoardReturnBehavior.Previous,
+                currentBoardId = "food",
+                boardStack = listOf("home"),
+                rootBoardId = "home"
+            )
+        )
+        assertFalse(
+            canStayOnCurrentPage(
+                BoardReturnBehavior.Previous,
+                currentBoardId = "home",
+                boardStack = emptyList(),
+                rootBoardId = "home"
+            )
+        )
+        assertTrue(
+            canStayOnCurrentPage(
+                BoardReturnBehavior.StartPage,
+                currentBoardId = "food",
+                boardStack = emptyList(),
+                rootBoardId = "home"
+            )
+        )
+        assertFalse(
+            canStayOnCurrentPage(
+                BoardReturnBehavior.StartPage,
+                currentBoardId = "home",
+                boardStack = emptyList(),
+                rootBoardId = "home"
+            )
+        )
+    }
 }

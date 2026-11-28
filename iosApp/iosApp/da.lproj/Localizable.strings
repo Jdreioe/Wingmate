@@ -437,6 +437,9 @@
 "boardset.status.unsupported_action" = "Knappens handling er ikke tilgængelig.";
 "board_page.back" = "Forrige side";
 "board_page.start" = "Startside";
+"board_page.stay_here" = "Bliv her";
+"board_page.stay_here.on" = "Til";
+"board_page.stay_here.off" = "Fra";
 "board_settings.screen_title" = "Skærmindstillinger";
 "board_settings.page_title" = "Sideindstillinger";
 "board_settings.appearance" = "Knapudseende";

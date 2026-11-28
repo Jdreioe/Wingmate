@@ -49,6 +49,7 @@ final class ScreensModel: ObservableObject {
         didSet { if oldValue != resolvedBoardOuterMarginDp { boardLayoutRevision &+= 1 } }
     }
     @Published private(set) var boardStack: [String] = []
+    @Published private(set) var stayOnCurrentPage: Bool = false
 
     let service: any ScreensService
     private let settings: AppSettingsModel
@@ -140,6 +141,27 @@ final class ScreensModel: ObservableObject {
         return selectedBoardId == root
     }
 
+    var canStayOnCurrentPage: Bool {
+        service.canStayOnCurrentPage(
+            behavior: boardReturnBehavior,
+            currentBoardId: selectedBoardId,
+            boardStack: boardStack,
+            rootBoardId: selectedBoardSet?.rootBoardId ?? ""
+        )
+    }
+
+    func toggleStayOnCurrentPage() {
+        if stayOnCurrentPage {
+            stayOnCurrentPage = false
+        } else if canStayOnCurrentPage {
+            stayOnCurrentPage = true
+        }
+    }
+
+    func resetStayOnCurrentPage() {
+        stayOnCurrentPage = false
+    }
+
     func boardDisplayName(id: String) -> String {
         if let selectedBoard, selectedBoard.id == id {
             let selectedName = selectedBoard.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -215,11 +237,13 @@ final class ScreensModel: ObservableObject {
         if let set = selectedBoardSet {
             if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
                 selectedBoardId = set.rootBoardId
+                stayOnCurrentPage = false
             }
             await loadSelectedBoard()
             await refreshBoardNames(for: set)
         } else {
             selectedBoardId = nil
+            stayOnCurrentPage = false
             clearSelectedBoardState()
             boardNamesById = [:]
         }
@@ -418,6 +442,7 @@ final class ScreensModel: ObservableObject {
         guard boardSets.contains(where: { $0.id == id }) else { return }
         selectedBoardSetId = id
         boardStack = []
+        stayOnCurrentPage = false
         if let set = selectedBoardSet {
             if selectedBoardId == nil || !set.boardIds.contains(selectedBoardId ?? "") {
                 selectedBoardId = set.rootBoardId
@@ -432,6 +457,7 @@ final class ScreensModel: ObservableObject {
             return
         }
         if resetStack { boardStack = [] }
+        stayOnCurrentPage = false
         if loadedBoardCellsPageId != id {
             loadedBoardCellsPageId = nil
         }
@@ -451,6 +477,7 @@ final class ScreensModel: ObservableObject {
     func navigateBoardHome() async {
         guard let root = selectedBoardSet?.rootBoardId else { return }
         boardStack = []
+        stayOnCurrentPage = false
         guard root != selectedBoardId else { return }
         await selectBoard(id: root)
     }
@@ -465,11 +492,13 @@ final class ScreensModel: ObservableObject {
             behavior: boardReturnBehavior,
             currentBoardId: selectedBoardId,
             boardStack: boardStack,
-            rootBoardId: selectedBoardSet?.rootBoardId ?? ""
+            rootBoardId: selectedBoardSet?.rootBoardId ?? "",
+            stayOnCurrentPage: stayOnCurrentPage
         )
         let nextBoardId = result.boardId
         boardStack = result.boardStack
         guard let nextBoardId, nextBoardId != selectedBoardId else { return }
+        stayOnCurrentPage = false
         selectedBoardId = nextBoardId
         await loadSelectedBoard()
     }
@@ -842,6 +871,7 @@ final class ScreensModel: ObservableObject {
 
     func clearSelectedBoardState(failedPageId: String? = nil) {
         selectedBoard = nil
+        stayOnCurrentPage = false
         loadedBoardCellsPageId = nil
         boardCellsLoadFailedPageId = failedPageId
         boardCells = []

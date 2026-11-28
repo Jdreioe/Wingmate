@@ -751,6 +751,7 @@
     <string name="board_message_clear">Clear</string>
     <string name="board_page_back">Previous page</string>
     <string name="board_page_start">Start page</string>
+    <string name="board_page_stay_here">Stay here</string>
     <string name="remote_screen_open">Open remote Screen</string>
     <string name="remote_screen_title_for">Remote storage for %1$s</string>
     <string name="remote_screen_provider_linked_file">Linked file (Drive / folder)</string>

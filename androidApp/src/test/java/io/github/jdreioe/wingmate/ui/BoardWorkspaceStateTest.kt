@@ -93,6 +93,48 @@ class BoardWorkspaceStateTest {
     }
 
     @Test
+    fun `stay here persists while remaining on the page and resets on every page exit`() {
+        val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
+        viewModel.onAction(
+            BoardWorkspaceAction.Initialize(
+                graph = graph(name = "Core words", boardIds = listOf("home", "people", "actions")),
+                startInEditMode = false,
+            )
+        )
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("people"))
+        assertFalse(viewModel.state.value.stayOnCurrentPage)
+
+        viewModel.onAction(BoardWorkspaceAction.ToggleStayOnCurrentPage)
+        assertTrue(viewModel.state.value.stayOnCurrentPage)
+
+        // Staying on the same Page after a selection keeps the toggle active.
+        viewModel.onAction(BoardWorkspaceAction.RestorePosition("people", listOf("home")))
+        assertTrue(viewModel.state.value.stayOnCurrentPage)
+
+        // Returning to another Page resets the toggle.
+        viewModel.onAction(BoardWorkspaceAction.RestorePosition("home", emptyList()))
+        assertFalse(viewModel.state.value.stayOnCurrentPage)
+
+        // Navigating back resets the toggle.
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("people"))
+        viewModel.onAction(BoardWorkspaceAction.ToggleStayOnCurrentPage)
+        viewModel.onAction(BoardWorkspaceAction.PreviousPageClicked)
+        assertFalse(viewModel.state.value.stayOnCurrentPage)
+
+        // Swiping to another Page resets the toggle.
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("people"))
+        viewModel.onAction(BoardWorkspaceAction.ToggleStayOnCurrentPage)
+        viewModel.onAction(BoardWorkspaceAction.SwipePage(1))
+        assertEquals("actions", viewModel.state.value.selectedBoardId)
+        assertFalse(viewModel.state.value.stayOnCurrentPage)
+
+        // Following a linked Page or going Home resets the toggle.
+        viewModel.onAction(BoardWorkspaceAction.ToggleStayOnCurrentPage)
+        viewModel.onAction(BoardWorkspaceAction.GoHome("home"))
+        assertFalse(viewModel.state.value.stayOnCurrentPage)
+    }
+
+    @Test
     fun `initialization falls back to the home board when restored board was removed`() {
         val savedState = SavedStateHandle(
             mapOf(
