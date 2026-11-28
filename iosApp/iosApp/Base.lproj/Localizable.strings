@@ -808,3 +808,18 @@
 "typing.action.typing:ssml:telephone" = "Telephone";
 "typing.action.typing:ssml:currency" = "Currency";
 "boardset.default_root_page" = "Home";
+/* Word Finder */
+"word_finder.title" = "Find word";
+"word_finder.search_hint" = "Search for a word…";
+"word_finder.clear_search" = "Clear search";
+"word_finder.prompt" = "Type a word to see how to reach it.";
+"word_finder.no_results" = "No matching words found.";
+"word_finder.hidden_badge" = "Hidden";
+"word_finder.from_start_page" = "From start page";
+"word_finder.finding" = "Finding %@";
+"word_finder.step_instruction" = "Step %d of %d: Tap %@";
+"word_finder.go_to_step" = "Go to step";
+"word_finder.stop" = "Stop";
+"word_finder.stop_description" = "Stop word finder guidance";
+"word_finder.next_step_description" = "Next step for %@";
+"word_finder.target_description" = "Target word";

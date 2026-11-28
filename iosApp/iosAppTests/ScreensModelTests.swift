@@ -293,6 +293,129 @@ final class ScreensModelTests: XCTestCase {
 
         XCTAssertNil(model.boardStatusMessage)
     }
+
+    func testWordFinderSearchAndStepByStepGuidanceWithRootFallback() async {
+        let service = FakeScreensService()
+        let set = FakeScreensService.makeBoardSet(
+            id: "set-1",
+            name: "Core",
+            rootBoardId: "home",
+            boardIds: ["home", "food", "drinks"],
+            updatedAt: 2_000
+        )
+        service.boardSets = [set]
+        service.boardsById["home"] = FakeScreensService.makeBoard(id: "home", name: "Home")
+        service.boardsById["food"] = FakeScreensService.makeBoard(id: "food", name: "Food")
+        service.boardsById["drinks"] = FakeScreensService.makeBoard(id: "drinks", name: "Drinks")
+        service.wordFinderMatches = [
+            Shared.IosWordFinderMatch(
+                targetBoardId: "food",
+                targetBoardName: "Food",
+                buttonId: "btn-apple",
+                label: "Apple",
+                vocalization: nil,
+                isHidden: false,
+                startsFromRoot: true,
+                steps: [
+                    Shared.IosWordFinderStep(
+                        boardId: "home",
+                        boardName: "Home",
+                        buttonId: "btn-food",
+                        buttonLabel: "Food",
+                        targetBoardId: "food",
+                        isHidden: false
+                    ),
+                    Shared.IosWordFinderStep(
+                        boardId: "food",
+                        boardName: "Food",
+                        buttonId: "btn-apple",
+                        buttonLabel: "Apple",
+                        targetBoardId: nil,
+                        isHidden: false
+                    )
+                ],
+                formattedPath: "Home → Food → Apple"
+            )
+        ]
+
+        let model = makeModel(service: service)
+        await model.loadBoardSets()
+        model.pushBoardNavigationStack("home")
+        await model.selectBoard(id: "drinks")
+        XCTAssertEqual(model.selectedBoardId, "drinks")
+
+        let results = await model.findWords(query: "apple", includeHidden: false)
+        XCTAssertEqual(service.lastFindWordsQuery, "apple")
+        XCTAssertEqual(service.lastFindWordsCurrentBoardId, "drinks")
+        XCTAssertEqual(service.lastFindWordsIncludeHidden, false)
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.formattedPath, "Home → Food → Apple")
+
+        // Selecting a root-fallback match navigates to Home first and highlights Food.
+        await model.startWordFinderGuidance(results[0])
+        XCTAssertEqual(model.selectedBoardId, "home")
+        XCTAssertTrue(model.boardStack.isEmpty)
+        XCTAssertEqual(model.guidedWordFinderButtonId, "btn-food")
+
+        // Activating Food advances guidance and navigating to Food highlights Apple.
+        model.advanceWordFinderGuidanceIfMatching(boardId: "home", buttonId: "btn-food")
+        model.pushBoardNavigationStack("home")
+        await model.selectBoard(id: "food")
+        XCTAssertEqual(model.guidedWordFinderButtonId, "btn-apple")
+
+        // Going back to Home re-syncs guidance to step 0 (Food).
+        await model.navigateBoardBack()
+        XCTAssertEqual(model.selectedBoardId, "home")
+        XCTAssertEqual(model.guidedWordFinderButtonId, "btn-food")
+
+        // Returning to Food and activating Apple completes and clears guidance.
+        await model.selectBoard(id: "food")
+        XCTAssertEqual(model.guidedWordFinderButtonId, "btn-apple")
+        model.advanceWordFinderGuidanceIfMatching(boardId: "food", buttonId: "btn-apple")
+        XCTAssertNil(model.wordFinderGuidance)
+        XCTAssertNil(model.guidedWordFinderButtonId)
+    }
+
+    func testWordFinderGuidanceCanBeStoppedAndBlankQuerySkipsService() async {
+        let service = FakeScreensService()
+        let set = FakeScreensService.makeBoardSet(id: "set-1", name: "Core", rootBoardId: "home", boardIds: ["home"], updatedAt: 1_000)
+        service.boardSets = [set]
+        service.boardsById["home"] = FakeScreensService.makeBoard(id: "home", name: "Home")
+
+        let model = makeModel(service: service)
+        await model.loadBoardSets()
+
+        let emptyResults = await model.findWords(query: "   ", includeHidden: true)
+        XCTAssertTrue(emptyResults.isEmpty)
+        XCTAssertNil(service.lastFindWordsQuery)
+
+        let match = WordFinderMatchInfo(
+            targetBoardId: "home",
+            targetBoardName: "Home",
+            buttonId: "btn-yes",
+            label: "Yes",
+            vocalization: nil,
+            isHidden: true,
+            startsFromRoot: false,
+            steps: [
+                WordFinderStepInfo(
+                    boardId: "home",
+                    boardName: "Home",
+                    buttonId: "btn-yes",
+                    buttonLabel: "Yes",
+                    targetBoardId: nil,
+                    isHidden: true
+                )
+            ],
+            formattedPath: "Home → Yes"
+        )
+        await model.startWordFinderGuidance(match)
+        XCTAssertEqual(model.guidedWordFinderButtonId, "btn-yes")
+
+        model.stopWordFinderGuidance()
+        XCTAssertNil(model.wordFinderGuidance)
+        XCTAssertNil(model.guidedWordFinderButtonId)
+    }
 }
 
 private enum FakeScreensError: Error {
@@ -397,6 +520,10 @@ private final class FakeScreensService: ScreensService {
     var backgroundImageCalls = 0
     var predictionObserver: ((Shared.PredictionUpdate) -> Void)?
     var predictionSubscriptions: [TrackingScreensSubscription] = []
+    var wordFinderMatches: [Shared.IosWordFinderMatch] = []
+    var lastFindWordsQuery: String? = nil
+    var lastFindWordsCurrentBoardId: String? = nil
+    var lastFindWordsIncludeHidden: Bool? = nil
 
     static func makeBoardSet(
         id: String,
@@ -679,6 +806,17 @@ private final class FakeScreensService: ScreensService {
         !hidden || isEditMode || showHiddenButtons
     }
     func boardFieldFontScale(rowSpan: Int32, columnSpan: Int32) -> Float { 1.0 }
+    func findWords(
+        boardSetId: String,
+        query: String,
+        currentBoardId: String?,
+        includeHidden: Bool
+    ) async throws -> [Shared.IosWordFinderMatch] {
+        lastFindWordsQuery = query
+        lastFindWordsCurrentBoardId = currentBoardId
+        lastFindWordsIncludeHidden = includeHidden
+        return wordFinderMatches
+    }
     func observePredictions(context: String, maxWords: Int32, maxLetters: Int32, onChange: @escaping (Shared.PredictionUpdate) -> Void) -> any CancellableSubscription {
         predictionObserver = onChange
         let sub = TrackingScreensSubscription()

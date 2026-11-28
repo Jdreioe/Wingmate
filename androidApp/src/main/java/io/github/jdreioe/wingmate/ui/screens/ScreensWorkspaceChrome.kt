@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
@@ -83,6 +84,7 @@ internal fun ScreensRunTopRow(
     showHiddenButtons: Boolean,
     isExporting: Boolean,
     pageNavigation: PageNavigation?,
+    onFindWord: () -> Unit = {},
     onEditScreen: () -> Unit,
     onToggleHiddenButtons: () -> Unit,
     onExport: () -> Unit,
@@ -122,6 +124,15 @@ internal fun ScreensRunTopRow(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
             ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.word_finder_title)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    modifier = Modifier.testTag("screens-menu-word-finder"),
+                    onClick = {
+                        menuExpanded = false
+                        onFindWord()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.board_workspace_edit)) },
                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
@@ -322,6 +333,7 @@ internal fun ScreensEditHeader(
     canResizePage: Boolean,
     canUndo: Boolean,
     onLeave: () -> Unit,
+    onFindWord: () -> Unit = {},
     onRenameScreen: () -> Unit,
     onOpenScreenSettings: () -> Unit,
     onSelectBoard: (String) -> Unit,
@@ -423,6 +435,14 @@ internal fun ScreensEditHeader(
                         onDismissRequest = { screenMenuExpanded = false },
                     ) {
                         DropdownMenuItem(
+                            text = { Text(stringResource(R.string.word_finder_title)) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            onClick = {
+                                screenMenuExpanded = false
+                                onFindWord()
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.board_workspace_rename_screen)) },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                             onClick = {
@@ -443,6 +463,18 @@ internal fun ScreensEditHeader(
 
                 if (!compactHeader) {
                     PageStrip(Modifier.weight(1f))
+                }
+
+                IconButton(
+                    onClick = onFindWord,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("screens-edit-word-finder"),
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = stringResource(R.string.word_finder_title),
+                    )
                 }
 
                 IconButton(

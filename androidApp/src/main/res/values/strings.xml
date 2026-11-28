@@ -825,4 +825,19 @@
     <string name="typing_action_time">Time</string>
     <string name="typing_action_telephone">Telephone</string>
     <string name="typing_action_currency">Currency</string>
+    <!-- Word Finder -->
+    <string name="word_finder_title">Find word</string>
+    <string name="word_finder_search_hint">Search for a word…</string>
+    <string name="word_finder_clear_search">Clear search</string>
+    <string name="word_finder_prompt">Type a word to see how to reach it.</string>
+    <string name="word_finder_no_results">No matching words found.</string>
+    <string name="word_finder_hidden_badge">Hidden</string>
+    <string name="word_finder_from_start_page">From start page</string>
+    <string name="word_finder_finding">Finding %1$s</string>
+    <string name="word_finder_step_instruction">Step %1$d of %2$d: Tap %3$s</string>
+    <string name="word_finder_go_to_step">Go to step</string>
+    <string name="word_finder_stop">Stop</string>
+    <string name="word_finder_stop_description">Stop word finder guidance</string>
+    <string name="word_finder_next_step_description">Next step for %1$s</string>
+    <string name="word_finder_target_description">Target word</string>
 </resources>

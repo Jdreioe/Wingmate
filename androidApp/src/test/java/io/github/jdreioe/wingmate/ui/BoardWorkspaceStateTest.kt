@@ -5,6 +5,11 @@ import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
 import io.github.jdreioe.wingmate.domain.obf.ObfBoardSet
+import io.github.jdreioe.wingmate.domain.obf.ObfGrid
+import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
+import io.github.jdreioe.wingmate.domain.obf.findWords
+import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
+import org.junit.Assert.assertNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -235,6 +240,113 @@ class BoardWorkspaceStateTest {
         viewModel.onAction(BoardWorkspaceAction.UndoEdit)
         assertEquals(original, viewModel.state.value.activeGraph)
         assertFalse(viewModel.state.value.editSession?.isDirty ?: true)
+    }
+
+    @Test
+    fun `word finder guidance navigates to start page when needed, steps through pages, and completes on target`() {
+        val home = ObfBoard(
+            format = "open-board-0.1",
+            id = "home",
+            name = "Home",
+            buttons = listOf(
+                ObfButton(id = "to-food", label = "Food", loadBoard = ObfLoadBoard(id = "food", name = "Food")),
+                ObfButton(id = "to-drinks", label = "Drinks", loadBoard = ObfLoadBoard(id = "drinks", name = "Drinks")),
+            ),
+            grid = ObfGrid(1, 2, listOf(listOf("to-food", "to-drinks"))),
+        )
+        val food = ObfBoard(
+            format = "open-board-0.1",
+            id = "food",
+            name = "Food",
+            buttons = listOf(ObfButton(id = "apple", label = "Apple")),
+            grid = ObfGrid(1, 1, listOf(listOf("apple"))),
+        )
+        val drinks = ObfBoard(
+            format = "open-board-0.1",
+            id = "drinks",
+            name = "Drinks",
+            buttons = listOf(ObfButton(id = "water", label = "Water")),
+            grid = ObfGrid(1, 1, listOf(listOf("water"))),
+        )
+        val graph = BoardSetGraph(
+            boardSet = ObfBoardSet(
+                id = "core",
+                name = "Core",
+                rootBoardId = "home",
+                boardIds = listOf("home", "food", "drinks"),
+                createdAt = 1L,
+                updatedAt = 1L,
+            ),
+            boards = listOf(home, food, drinks),
+        )
+        val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
+        viewModel.onAction(BoardWorkspaceAction.Initialize(graph, startInEditMode = false))
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("drinks"))
+        assertEquals("drinks", viewModel.state.value.selectedBoardId)
+
+        // Apple is unreachable from Drinks, so Word Finder falls back to Home.
+        val match = graph.findWords("apple", currentBoardId = "drinks").single()
+        assertTrue(match.startsFromRoot)
+
+        // Starting guidance navigates to Home first and highlights Food without modifying vocabulary.
+        viewModel.onAction(BoardWorkspaceAction.StartWordFinderGuidance(match))
+        assertEquals("home", viewModel.state.value.selectedBoardId)
+        assertTrue(viewModel.state.value.boardStack.isEmpty())
+        assertEquals("to-food", viewModel.state.value.guidedButtonId)
+        assertEquals(graph.withHomeFieldsBottomLeft(), viewModel.state.value.activeGraph)
+
+        // Activating Food advances guidance and opening Food highlights Apple.
+        viewModel.onAction(BoardWorkspaceAction.WordFinderButtonActivated("home", "to-food"))
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("food"))
+        assertEquals("food", viewModel.state.value.selectedBoardId)
+        assertEquals("apple", viewModel.state.value.guidedButtonId)
+
+        // Stepping back re-syncs guidance to Home -> Food.
+        viewModel.onAction(BoardWorkspaceAction.PreviousPageClicked)
+        assertEquals("home", viewModel.state.value.selectedBoardId)
+        assertEquals("to-food", viewModel.state.value.guidedButtonId)
+
+        // Returning to Food and activating Apple completes and clears guidance.
+        viewModel.onAction(BoardWorkspaceAction.OpenBoard("food"))
+        assertEquals("apple", viewModel.state.value.guidedButtonId)
+        viewModel.onAction(BoardWorkspaceAction.WordFinderButtonActivated("food", "apple"))
+        assertNull(viewModel.state.value.wordFinderGuidance)
+        assertNull(viewModel.state.value.guidedButtonId)
+    }
+
+    @Test
+    fun `word finder guidance can be cancelled and clears when entering edit mode`() {
+        val home = ObfBoard(
+            format = "open-board-0.1",
+            id = "home",
+            name = "Home",
+            buttons = listOf(ObfButton(id = "apple", label = "Apple")),
+            grid = ObfGrid(1, 1, listOf(listOf("apple"))),
+        )
+        val graph = BoardSetGraph(
+            boardSet = ObfBoardSet(
+                id = "core",
+                name = "Core",
+                rootBoardId = "home",
+                boardIds = listOf("home"),
+                createdAt = 1L,
+                updatedAt = 1L,
+            ),
+            boards = listOf(home),
+        )
+        val match = graph.findWords("apple", currentBoardId = "home").single()
+        val viewModel = BoardWorkspaceViewModel(SavedStateHandle())
+        viewModel.onAction(BoardWorkspaceAction.Initialize(graph, startInEditMode = false))
+
+        viewModel.onAction(BoardWorkspaceAction.StartWordFinderGuidance(match))
+        assertEquals("apple", viewModel.state.value.guidedButtonId)
+
+        viewModel.onAction(BoardWorkspaceAction.StopWordFinderGuidance)
+        assertNull(viewModel.state.value.wordFinderGuidance)
+
+        viewModel.onAction(BoardWorkspaceAction.StartWordFinderGuidance(match))
+        viewModel.onAction(BoardWorkspaceAction.StartEditing)
+        assertNull(viewModel.state.value.wordFinderGuidance)
     }
 
     private fun graph(

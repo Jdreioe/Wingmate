@@ -81,6 +81,54 @@ struct SentencePhraseToken: Identifiable, Equatable {    var id: String = UUID()
     var imageUrl: String?
 }
 
+struct WordFinderStepInfo: Identifiable, Equatable {
+    var boardId: String
+    var boardName: String
+    var buttonId: String
+    var buttonLabel: String
+    var targetBoardId: String?
+    var isHidden: Bool
+
+    var id: String { "\(boardId):\(buttonId)" }
+}
+
+struct WordFinderMatchInfo: Identifiable, Equatable {
+    var targetBoardId: String
+    var targetBoardName: String
+    var buttonId: String
+    var label: String
+    var vocalization: String?
+    var isHidden: Bool
+    var startsFromRoot: Bool
+    var steps: [WordFinderStepInfo]
+    var formattedPath: String
+
+    var startingBoardId: String? { steps.first?.boardId }
+    var hasHiddenStep: Bool { steps.contains { $0.isHidden } }
+    var id: String { "\(targetBoardId):\(buttonId):\(formattedPath)" }
+}
+
+struct WordFinderGuidanceState: Equatable {
+    var match: WordFinderMatchInfo
+    var currentStepIndex: Int = 0
+
+    var currentStep: WordFinderStepInfo? {
+        guard match.steps.indices.contains(currentStepIndex) else { return nil }
+        return match.steps[currentStepIndex]
+    }
+
+    var totalSteps: Int { match.steps.count }
+
+    var isOnFinalStep: Bool {
+        !match.steps.isEmpty && currentStepIndex == match.steps.count - 1
+    }
+
+    func highlightedButtonId(for boardId: String?) -> String? {
+        guard let boardId, let step = currentStep, step.boardId == boardId else { return nil }
+        return step.buttonId
+    }
+}
+
 extension Float {
     func clamped(to range: ClosedRange<Float>) -> Float {
         min(max(self, range.lowerBound), range.upperBound)

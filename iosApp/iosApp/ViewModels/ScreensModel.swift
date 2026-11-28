@@ -50,6 +50,7 @@ final class ScreensModel: ObservableObject {
     }
     @Published private(set) var boardStack: [String] = []
     @Published private(set) var stayOnCurrentPage: Bool = false
+    @Published private(set) var wordFinderGuidance: WordFinderGuidanceState? = nil
 
     let service: any ScreensService
     private let settings: AppSettingsModel
@@ -160,6 +161,93 @@ final class ScreensModel: ObservableObject {
 
     func resetStayOnCurrentPage() {
         stayOnCurrentPage = false
+    }
+
+    // MARK: - Word Finder
+
+    var guidedWordFinderButtonId: String? {
+        wordFinderGuidance?.highlightedButtonId(for: selectedBoardId)
+    }
+
+    func findWords(query: String, includeHidden: Bool) async -> [WordFinderMatchInfo] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let boardSetId = selectedBoardSetId else { return [] }
+        do {
+            let matches = try await service.findWords(
+                boardSetId: boardSetId,
+                query: trimmed,
+                currentBoardId: selectedBoardId,
+                includeHidden: includeHidden
+            )
+            return matches.map { match in
+                WordFinderMatchInfo(
+                    targetBoardId: match.targetBoardId,
+                    targetBoardName: match.targetBoardName,
+                    buttonId: match.buttonId,
+                    label: match.label,
+                    vocalization: match.vocalization,
+                    isHidden: match.isHidden,
+                    startsFromRoot: match.startsFromRoot,
+                    steps: match.steps.map { step in
+                        WordFinderStepInfo(
+                            boardId: step.boardId,
+                            boardName: step.boardName,
+                            buttonId: step.buttonId,
+                            buttonLabel: step.buttonLabel,
+                            targetBoardId: step.targetBoardId,
+                            isHidden: step.isHidden
+                        )
+                    },
+                    formattedPath: match.formattedPath
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func startWordFinderGuidance(_ match: WordFinderMatchInfo) async {
+        guard !match.steps.isEmpty else {
+            wordFinderGuidance = nil
+            return
+        }
+        wordFinderGuidance = WordFinderGuidanceState(match: match, currentStepIndex: 0)
+        if let entryBoardId = match.startingBoardId, entryBoardId != selectedBoardId {
+            if match.startsFromRoot {
+                await selectBoard(id: entryBoardId, resetStack: true)
+            } else {
+                await selectBoard(id: entryBoardId)
+            }
+        } else {
+            syncWordFinderGuidance(for: selectedBoardId)
+        }
+    }
+
+    func advanceWordFinderGuidanceIfMatching(boardId: String, buttonId: String) {
+        guard var guidance = wordFinderGuidance,
+              let step = guidance.currentStep,
+              step.boardId == boardId,
+              step.buttonId == buttonId else { return }
+        let nextIndex = guidance.currentStepIndex + 1
+        if nextIndex >= guidance.match.steps.count {
+            wordFinderGuidance = nil
+        } else {
+            guidance.currentStepIndex = nextIndex
+            wordFinderGuidance = guidance
+        }
+    }
+
+    func stopWordFinderGuidance() {
+        wordFinderGuidance = nil
+    }
+
+    func syncWordFinderGuidance(for boardId: String?) {
+        guard let boardId, var guidance = wordFinderGuidance else { return }
+        if let index = guidance.match.steps.firstIndex(where: { $0.boardId == boardId }),
+           index != guidance.currentStepIndex {
+            guidance.currentStepIndex = index
+            wordFinderGuidance = guidance
+        }
     }
 
     func boardDisplayName(id: String) -> String {
@@ -440,6 +528,9 @@ final class ScreensModel: ObservableObject {
 
     func selectBoardSet(id: String) async {
         guard boardSets.contains(where: { $0.id == id }) else { return }
+        if selectedBoardSetId != id {
+            wordFinderGuidance = nil
+        }
         selectedBoardSetId = id
         boardStack = []
         stayOnCurrentPage = false
@@ -463,6 +554,7 @@ final class ScreensModel: ObservableObject {
         }
         boardCellsLoadFailedPageId = nil
         selectedBoardId = id
+        syncWordFinderGuidance(for: id)
         await loadSelectedBoard()
     }
 
@@ -500,6 +592,7 @@ final class ScreensModel: ObservableObject {
         guard let nextBoardId, nextBoardId != selectedBoardId else { return }
         stayOnCurrentPage = false
         selectedBoardId = nextBoardId
+        syncWordFinderGuidance(for: nextBoardId)
         await loadSelectedBoard()
     }
 
