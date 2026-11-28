@@ -161,7 +161,7 @@ final class IosAudioSessionRouter: NSObject, SpeechAudioRouter {
                     try self.backend.setActive(true, options: [])
                     self.setRouteModified(true)
 
-                case .headphonesOrEarpiece:
+                case .headphonesorearpiece:
                     let outputs = self.backend.currentOutputPortTypes
                     let isHfpOnly = outputs.contains(.bluetoothHFP) && !outputs.contains {
                         $0 == .headphones || $0 == .bluetoothA2DP || $0 == .bluetoothLE || $0 == .usbAudio
@@ -175,7 +175,7 @@ final class IosAudioSessionRouter: NSObject, SpeechAudioRouter {
                     try self.backend.setActive(true, options: [])
                     self.setRouteModified(true)
 
-                case .systemDefault:
+                case .systemdefault:
                     if decision.duckAudio {
                         try self.backend.setCategory(.playback, mode: .default, options: [.duckOthers])
                         try self.backend.overrideOutputAudioPort(.none)

@@ -17,7 +17,7 @@ final class IosAudioSessionRouterTests: XCTestCase {
         XCTAssertTrue(capabilities.hasSpeaker)
 
         let previewDecision = AudioPreviewRoutingPolicy.shared.resolve(
-            role: .auditoryPreview,
+            role: .auditorypreview,
             routePreviewToHeadphones: true,
             capabilities: capabilities
         )
@@ -27,7 +27,7 @@ final class IosAudioSessionRouterTests: XCTestCase {
         XCTAssertTrue(router.hasActiveOverride)
 
         let speakerDecision = AudioPreviewRoutingPolicy.shared.resolve(
-            role: .primaryMessage,
+            role: .primarymessage,
             routePreviewToHeadphones: true,
             capabilities: capabilities
         )
@@ -54,11 +54,11 @@ final class IosAudioSessionRouterTests: XCTestCase {
         XCTAssertTrue(capabilities.hasSpeaker)
 
         let previewDecision = AudioPreviewRoutingPolicy.shared.resolve(
-            role: .auditoryPreview,
+            role: .auditorypreview,
             routePreviewToHeadphones: true,
             capabilities: capabilities
         )
-        XCTAssertEqual(previewDecision.route, .systemDefault)
+        XCTAssertEqual(previewDecision.route, .systemdefault)
         XCTAssertTrue(previewDecision.duckAudio)
 
         router.prepareRoute(decision: previewDecision)
@@ -81,7 +81,7 @@ final class IosAudioSessionRouterTests: XCTestCase {
         )
 
         router.prepareRoute(decision: AudioRouteDecision(
-            route: .headphonesOrEarpiece,
+            route: .headphonesorearpiece,
             duckAudio: false,
             requiresRouteOverride: true
         ))

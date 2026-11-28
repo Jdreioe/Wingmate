@@ -28,7 +28,7 @@ final class SystemTtsManager: NSObject, AVSpeechSynthesizerDelegate, IosDeviceSp
             languageTag: languageTag,
             rate: rate,
             pitch: pitch,
-            audioRoute: AudioRouteDecision(route: .systemDefault, duckAudio: false, requiresRouteOverride: false),
+            audioRoute: AudioRouteDecision(route: .systemdefault, duckAudio: false, requiresRouteOverride: false),
             onFinished: onFinished
         )
     }
