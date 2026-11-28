@@ -1,4 +1,2 @@
-• Synkroniser Skærme via Google Drev, OneDrive eller iCloud-deling (Indstillinger → Synkronisering), så nærtstående og hjælpere kan redigere skærme på afstand – stadig med lokal kopi offline.
-• Rettede et nedbrud ved opstart på nye installationer.
-• iPad: tastaturlayoutet i liggende visning forbliver nu stabilt, når skærmtastaturet åbner.
-• Udtryksknapper i Skrivning tilpasses den valgte stemme (ElevenLabs eller Azure), standardknapper og nye skærmes startside vises nu på dansk, og knapper i importerede taler er renere at læse.
+• Rettede login og synkronisering med Google Drev og OneDrive i Indstillinger → Synkronisering på iOS.
+• Vælg en indbygget iOS-systemstemme direkte i Wingmate under opsætningen.
