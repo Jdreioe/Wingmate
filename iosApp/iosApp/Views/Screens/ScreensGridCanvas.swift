@@ -232,6 +232,23 @@ extension SymbolBoardWorkspaceView {
         let sourceCellId = "\(row):\(col)"
         let anchor = BoardCellAnchor(row: row, column: col)
         let isSelected = isEditMode && selectedFieldAnchor == anchor && cell != nil
+        let isGuided = cell != nil && model.screens.guidedWordFinderButtonId == cell?.buttonId
+        let guidedHint: String = {
+            guard isGuided, let guidance = model.screens.wordFinderGuidance else { return "" }
+            if guidance.isOnFinalStep {
+                return NSLocalizedString("word_finder.target_description", comment: "")
+            }
+            return String(
+                format: NSLocalizedString("word_finder.next_step_description", comment: ""),
+                guidance.match.label
+            )
+        }()
+        let combinedAccessibilityHint: String = {
+            let base = cell == nil ? "" : boardCellAccessibilityHint(cell)
+            if guidedHint.isEmpty { return base }
+            if base.isEmpty { return guidedHint }
+            return "\(guidedHint). \(base)"
+        }()
         let hiddenInRunMode = !model.screens.boardButtonIsVisible(
             hidden: cell?.hidden == true,
             isEditMode: isEditMode,
@@ -251,6 +268,15 @@ extension SymbolBoardWorkspaceView {
                     return
                 }
                 if isEditMode && model.screens.canEditSelectedBoardSet {
+                    if let cell, isGuided, let guidance = model.screens.wordFinderGuidance {
+                        if !guidance.isOnFinalStep, let nextBoardId = guidance.currentStep?.targetBoardId ?? trimmed(cell.linkedBoardId) {
+                            model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                            selectedFieldAnchor = nil
+                            Task { await model.screens.selectBoard(id: nextBoardId, resetStack: true) }
+                            return
+                        }
+                        model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                    }
                     if cell == nil {
                         openCellEditor(row: row, col: col, existing: nil)
                     } else if selectedFieldAnchor == anchor {
@@ -266,7 +292,7 @@ extension SymbolBoardWorkspaceView {
                 // One view in both states, so starting the fly-in does not rebuild
                 // the cell (and reload its symbol image).
                 let flyingTokenId = activeSentenceAnimation.flatMap { $0.sourceCellId == sourceCellId ? $0.tokenId : nil }
-                boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, width: width, height: height, rowSpan: rowSpan, columnSpan: columnSpan)
+                boardCellContent(row: row, col: col, cell: cell, isLinked: isLinked, isEditMode: isEditMode, isGuided: isGuided, width: width, height: height, rowSpan: rowSpan, columnSpan: columnSpan)
                     .matchedGeometryEffect(id: flyingTokenId ?? "cell-\(sourceCellId)", in: sentenceAnimationNamespace, isSource: true)
                     .zIndex(flyingTokenId == nil ? 0 : 3)
             }
@@ -366,11 +392,20 @@ extension SymbolBoardWorkspaceView {
             .accessibilityLabel(Text(cell == nil
                 ? NSLocalizedString("boardset.cell.add", comment: "")
                 : boardCellDisplayLabel(cell)))
-            .accessibilityHint(Text(cell == nil ? "" : boardCellAccessibilityHint(cell)))
+            .accessibilityHint(Text(combinedAccessibilityHint))
             .accessibilitySortPriority(Double(max(0, 10_000 - (row * 100 + col))))
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityAction(.default) {
                 if isEditMode && model.screens.canEditSelectedBoardSet {
+                    if let cell, isGuided, let guidance = model.screens.wordFinderGuidance {
+                        if !guidance.isOnFinalStep, let nextBoardId = guidance.currentStep?.targetBoardId ?? trimmed(cell.linkedBoardId) {
+                            model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                            selectedFieldAnchor = nil
+                            Task { await model.screens.selectBoard(id: nextBoardId, resetStack: true) }
+                            return
+                        }
+                        model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
+                    }
                     openCellEditor(row: row, col: col, existing: cell)
                 } else if cell != nil {
                     activateBoardCell(cell, pageId: pageId, row: row, col: col, sourceCellId: sourceCellId)
@@ -426,7 +461,7 @@ extension SymbolBoardWorkspaceView {
         .accessibilityHidden(hiddenInRunMode || (model.settings.scanningEnabled && !model.settings.scanPhraseGridEnabled))
     }
 
-    func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
+    func boardCellContent(row: Int, col: Int, cell: BoardCellInfo?, isLinked: Bool, isEditMode: Bool, isGuided: Bool = false, width: CGFloat, height: CGFloat, rowSpan: Int = 1, columnSpan: Int = 1) -> some View {
         // Labels follow the height of one grid cell, so they grow with the grid
         // instead of staying at a fixed point size; merged fields scale up further.
         let unitHeight = height / CGFloat(max(1, rowSpan))
@@ -500,6 +535,23 @@ extension SymbolBoardWorkspaceView {
                     lineWidth: model.settings.highContrastMode ? 2 : (isLinked ? 1.5 : 1))
         )
         .overlay {
+            if isGuided {
+                let shape = RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height))
+                let ringColor: Color = model.settings.highContrastMode ? .primary : .accentColor
+                ZStack(alignment: .topLeading) {
+                    shape
+                        .stroke(ringColor, lineWidth: 5)
+                        .overlay(shape.inset(by: 3).stroke(Color.white, lineWidth: 2))
+                    Image(systemName: "safari.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(model.settings.highContrastMode ? Color(.systemBackground) : Color.white)
+                        .padding(5)
+                        .background(ringColor, in: Circle())
+                        .padding(6)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
             if isHighlighted {
                 SelectionHighlightOutline(shape: RoundedRectangle(cornerRadius: boardCellCornerRadius(cell, width: width, height: height)))
             }

@@ -33,6 +33,11 @@ extension SymbolBoardWorkspaceView {
                             // The Screen's own actions sit on its title.
                             Menu {
                                 Button {
+                                    showWordFinderSheet = true
+                                } label: {
+                                    Label("word_finder.title", systemImage: "magnifyingglass")
+                                }
+                                Button {
                                     managementName = model.screens.selectedBoardSet?.name ?? ""
                                     managementSheet = .renameSet
                                 } label: {
@@ -59,6 +64,16 @@ extension SymbolBoardWorkspaceView {
                             } else {
                                 Spacer(minLength: 0)
                             }
+
+                            Button(action: {
+                                showWordFinderSheet = true
+                            }) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.headline)
+                                    .foregroundColor(.blue)
+                                    .frame(minWidth: 44, minHeight: 44)
+                            }
+                            .accessibilityLabel(Text("word_finder.title"))
 
                             Button(action: {
                                 route = .workspace(boardSetId: boardSetId, mode: .run)
@@ -124,6 +139,26 @@ extension SymbolBoardWorkspaceView {
                             messageControls(boardSetId: boardSetId, editing: true)
                         }
                         .padding(.horizontal)
+                    }
+
+                    if let guidance = model.screens.wordFinderGuidance {
+                        WordFinderGuidanceBanner(
+                            model: model,
+                            guidance: guidance,
+                            onGoToStep: { stepBoardId in
+                                Task {
+                                    if mode == .edit {
+                                        selectedFieldAnchor = nil
+                                        await model.screens.selectBoard(id: stepBoardId, resetStack: true)
+                                    } else if stepBoardId == model.screens.selectedBoardSet?.rootBoardId {
+                                        await model.screens.navigateBoardHome()
+                                    } else {
+                                        await model.screens.selectBoard(id: stepBoardId)
+                                    }
+                                }
+                            },
+                            onStop: { model.screens.stopWordFinderGuidance() }
+                        )
                     }
 
                     boardPreview(isEditMode: mode == .edit)
@@ -528,6 +563,9 @@ extension SymbolBoardWorkspaceView {
     /// the message bar, so the board can fill the screen.
     func workspaceMenu(boardSetId: String) -> some View {
         Menu {
+            Button { showWordFinderSheet = true } label: {
+                Label("word_finder.title", systemImage: "magnifyingglass")
+            }
             Button {
                 if model.screens.canEditSelectedBoardSet {
                     Task { await requestEnterEditing(boardSetId: boardSetId) }

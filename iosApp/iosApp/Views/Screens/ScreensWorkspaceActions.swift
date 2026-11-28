@@ -40,12 +40,14 @@ extension SymbolBoardWorkspaceView {
         if cell.actions.isEmpty, trimmed(cell.linkedBoardId) != nil {
             if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
             AccessHaptics.perform(.confirm)
+            model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
             model.screens.pushBoardNavigationStack(pageId)
             Task { await model.screens.activateBoardCell(cell, onPageId: pageId, checkDebounce: false) }
             return
         }
         // #118 / #405: enforce per-Page, per-Button debounce and confirm/reject haptics for every non-link Button.
         guard model.settings.acceptActivation(targetId: model.screens.screenButtonDebounceKey(pageId: pageId, buttonId: cell.buttonId)) else { return }
+        model.screens.advanceWordFinderGuidanceIfMatching(boardId: pageId, buttonId: cell.buttonId)
         if model.settings.selectionSoundEnabled { AudioServicesPlaySystemSound(1104) }
         if cell.actions.isEmpty {
             let behavior = model.screens.boardActivationBehavior

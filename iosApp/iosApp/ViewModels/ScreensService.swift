@@ -119,6 +119,12 @@ protocol ScreensService {
     func nGramPredictionInsertion(sentence: String, suggestion: String) -> String
     func boardButtonIsVisible(hidden: Bool, isEditMode: Bool, showHiddenButtons: Bool) -> Bool
     func boardFieldFontScale(rowSpan: Int32, columnSpan: Int32) -> Float
+    func findWords(
+        boardSetId: String,
+        query: String,
+        currentBoardId: String?,
+        includeHidden: Bool
+    ) async throws -> [Shared.IosWordFinderMatch]
     func observePredictions(
         context: String,
         maxWords: Int32,
@@ -484,6 +490,20 @@ struct SharedScreensService: ScreensService {
 
     func boardFieldFontScale(rowSpan: Int32, columnSpan: Int32) -> Float {
         resolveBoards().boardFieldFontScale(rowSpan: rowSpan, columnSpan: columnSpan)
+    }
+
+    func findWords(
+        boardSetId: String,
+        query: String,
+        currentBoardId: String?,
+        includeHidden: Bool
+    ) async throws -> [Shared.IosWordFinderMatch] {
+        try await resolveBoards().findWords(
+            boardSetId: boardSetId,
+            query: query,
+            currentBoardId: currentBoardId,
+            includeHidden: includeHidden
+        )
     }
 
     func observePredictions(

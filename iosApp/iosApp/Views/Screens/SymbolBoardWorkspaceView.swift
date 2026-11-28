@@ -111,6 +111,7 @@ struct SymbolBoardWorkspaceView: View {
     @State var shouldClearEditingSymbol: Bool = false
     @State var showNativeKeyboardSheet = false
     @State var nativeKeyboardDraft = ""
+    @State var showWordFinderSheet = false
     @State var activeSentenceAnimation: ActiveSentenceAnimation? = nil
     @State var showHiddenButtons = false
     @State var showEditingAccessSheet = false
@@ -196,6 +197,7 @@ struct SymbolBoardWorkspaceView: View {
             }
         }
         .onChange(of: route) { _, newRoute in
+            model.screens.stopWordFinderGuidance()
             if case .workspace(_, .edit) = newRoute {
                 isEditingScreen = true
                 model.screens.resetStayOnCurrentPage()
@@ -265,6 +267,22 @@ struct SymbolBoardWorkspaceView: View {
             BoardSettingsSheet(screens: model.screens, forPage: target.forPage) {
                 settingsTarget = nil
             }
+        }
+        .sheet(isPresented: $showWordFinderSheet) {
+            let includeHidden: Bool = {
+                if case .workspace(_, .edit) = route { return true }
+                return showHiddenButtons
+            }()
+            WordFinderSheet(
+                screens: model.screens,
+                includeHidden: includeHidden,
+                onSelect: { match in
+                    showWordFinderSheet = false
+                    selectedFieldAnchor = nil
+                    Task { await model.screens.startWordFinderGuidance(match) }
+                },
+                onDismiss: { showWordFinderSheet = false }
+            )
         }
         .sheet(isPresented: $showNativeKeyboardSheet) {
             NavigationStack {

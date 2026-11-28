@@ -113,6 +113,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.ui.draw.shadow
@@ -163,6 +164,8 @@ internal fun ObfButtonContent(
     labelOverride: String? = null,
     enabled: Boolean = true,
     isSelectionHighlighted: Boolean = false,
+    isGuidedHighlighted: Boolean = false,
+    guidedDescription: String? = null,
     fieldFontScale: Float = 1f,
     rowSpan: Int = 1,
     onLongClick: (() -> Unit)? = null,
@@ -339,8 +342,12 @@ internal fun ObfButtonContent(
                 role = Role.Button
                 if (!enabled) disabled()
                 // The visible label is already read; state only adds what sight alone shows.
-                if (isTemporarilyRevealed) stateDescription = temporarilyRevealedDescription
-                else if (button.hidden && isEditMode) stateDescription = hiddenDescription
+                val stateParts = buildList {
+                    if (isTemporarilyRevealed) add(temporarilyRevealedDescription)
+                    else if (button.hidden && isEditMode) add(hiddenDescription)
+                    if (isGuidedHighlighted && !guidedDescription.isNullOrBlank()) add(guidedDescription)
+                }
+                if (stateParts.isNotEmpty()) stateDescription = stateParts.joinToString(", ")
                 if (cellActions.isNotEmpty()) customActions = cellActions
             }
             // Right click does what a long press does, before hold or touch-down selection sees it.
@@ -579,6 +586,44 @@ internal fun ObfButtonContent(
                     }
                 }
             }
+            if (isGuidedHighlighted) {
+                val guidedPulse = rememberInfiniteTransition(label = "word-finder-guidance")
+                val pulseAlpha by guidedPulse.animateFloat(
+                    initialValue = 0.65f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                    label = "word-finder-alpha",
+                )
+                val ringColor = if (settings.highContrastMode) highContrastContent else MaterialTheme.colorScheme.tertiary
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .testTag("word-finder-guided-button")
+                        .alpha(pulseAlpha)
+                        .border(5.dp, ringColor, buttonShape)
+                        .padding(3.dp)
+                        .border(2.dp, Color.White, buttonShape),
+                ) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).padding(2.dp).size(26.dp),
+                        shape = CircleShape,
+                        color = ringColor,
+                        contentColor = if (settings.highContrastMode) highContrastContainer else MaterialTheme.colorScheme.onTertiary,
+                        tonalElevation = 4.dp,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Explore,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+            }
             if (isSelectionHighlighted) {
                 Box(
                     modifier = Modifier
@@ -620,6 +665,8 @@ internal fun BoxWithConstraintsScope.RenderAbsoluteButtons(
     showHiddenButtons: Boolean,
     predictionLabels: Map<String, String>,
     highlightedButtonId: String? = null,
+    guidedButtonId: String? = null,
+    guidedButtonDescription: String? = null,
     onButtonLongClick: ((ObfButton) -> Unit)? = null,
     settings: Settings,
     feedback: BoardFeedback,
@@ -653,7 +700,9 @@ internal fun BoxWithConstraintsScope.RenderAbsoluteButtons(
                     isHomeLink = button.isHomeNavigation(homeBoardId),
                     boardSettings = boardSettings,
                     labelOverride = predictionLabels[button.id],
-                    isSelectionHighlighted = button.id == highlightedButtonId
+                    isSelectionHighlighted = button.id == highlightedButtonId,
+                    isGuidedHighlighted = button.id == guidedButtonId,
+                    guidedDescription = guidedButtonDescription,
                 )
             }
         }

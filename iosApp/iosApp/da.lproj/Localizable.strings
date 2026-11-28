@@ -810,3 +810,18 @@
 "typing.action.typing:ssml:telephone" = "Telefon";
 "typing.action.typing:ssml:currency" = "Valuta";
 "boardset.default_root_page" = "Hjem";
+/* Word Finder */
+"word_finder.title" = "Find ord";
+"word_finder.search_hint" = "Søg efter et ord…";
+"word_finder.clear_search" = "Ryd søgning";
+"word_finder.prompt" = "Skriv et ord for at se, hvordan du finder det.";
+"word_finder.no_results" = "Ingen matchende ord fundet.";
+"word_finder.hidden_badge" = "Skjult";
+"word_finder.from_start_page" = "Fra startsiden";
+"word_finder.finding" = "Finder %@";
+"word_finder.step_instruction" = "Trin %d af %d: Tryk på %@";
+"word_finder.go_to_step" = "Gå til trin";
+"word_finder.stop" = "Stop";
+"word_finder.stop_description" = "Stop ordvejledning";
+"word_finder.next_step_description" = "Næste trin til %@";
+"word_finder.target_description" = "Målord";

@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.ObfButton
+import io.github.jdreioe.wingmate.domain.obf.WordFinderGuidance
+import io.github.jdreioe.wingmate.domain.obf.WordFinderMatch
 import io.github.jdreioe.wingmate.domain.obf.withHomeFieldsBottomLeft
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +31,7 @@ internal data class BoardWorkspaceState(
     val selectedBoardId: String? = null,
     val boardStack: List<String> = emptyList(),
     val stayOnCurrentPage: Boolean = false,
+    val wordFinderGuidance: WordFinderGuidance? = null,
     val showFinishDialog: Boolean = false,
     val showEditingAccessDialog: Boolean = false,
     val isSaving: Boolean = false,
@@ -39,20 +42,30 @@ internal data class BoardWorkspaceState(
 ) {
     val activeGraph: BoardSetGraph? get() = editSession?.draft ?: savedGraph
     val canNavigateBack: Boolean get() = boardStack.isNotEmpty()
+    val guidedButtonId: String? get() = wordFinderGuidance?.highlightedButtonIdFor(selectedBoardId)
 
-    fun selectBoard(boardId: String): BoardWorkspaceState =
-        copy(selectedBoardId = boardId, boardStack = emptyList(), stayOnCurrentPage = false)
+    fun selectBoard(boardId: String): BoardWorkspaceState = copy(
+        selectedBoardId = boardId,
+        boardStack = emptyList(),
+        stayOnCurrentPage = false,
+        wordFinderGuidance = wordFinderGuidance?.onBoardChanged(boardId),
+    )
 
-    fun openBoard(boardId: String): BoardWorkspaceState =
-        copy(
-            selectedBoardId = boardId,
-            boardStack = selectedBoardId?.let { boardStack + it } ?: boardStack,
-            stayOnCurrentPage = false,
-        )
+    fun openBoard(boardId: String): BoardWorkspaceState = copy(
+        selectedBoardId = boardId,
+        boardStack = selectedBoardId?.let { boardStack + it } ?: boardStack,
+        stayOnCurrentPage = false,
+        wordFinderGuidance = wordFinderGuidance?.onBoardChanged(boardId),
+    )
 
     fun navigateBack(): BoardWorkspaceState =
         boardStack.lastOrNull()?.let { previous ->
-            copy(selectedBoardId = previous, boardStack = boardStack.dropLast(1), stayOnCurrentPage = false)
+            copy(
+                selectedBoardId = previous,
+                boardStack = boardStack.dropLast(1),
+                stayOnCurrentPage = false,
+                wordFinderGuidance = wordFinderGuidance?.onBoardChanged(previous),
+            )
         } ?: this
 
     /**
@@ -66,11 +79,19 @@ internal data class BoardWorkspaceState(
         val order = graph.boardSet.boardIds.filter { it in graph.boardsById }
         val index = order.indexOf(selectedBoardId).takeIf { it >= 0 } ?: return this
         val target = order.getOrNull(index + step) ?: return this
-        return copy(selectedBoardId = target, stayOnCurrentPage = false)
+        return copy(
+            selectedBoardId = target,
+            stayOnCurrentPage = false,
+            wordFinderGuidance = wordFinderGuidance?.onBoardChanged(target),
+        )
     }
 
-    fun goHome(rootBoardId: String): BoardWorkspaceState =
-        copy(selectedBoardId = rootBoardId, boardStack = emptyList(), stayOnCurrentPage = false)
+    fun goHome(rootBoardId: String): BoardWorkspaceState = copy(
+        selectedBoardId = rootBoardId,
+        boardStack = emptyList(),
+        stayOnCurrentPage = false,
+        wordFinderGuidance = wordFinderGuidance?.onBoardChanged(rootBoardId),
+    )
 
     fun withPosition(
         selectedBoardId: String?,
@@ -79,10 +100,28 @@ internal data class BoardWorkspaceState(
         selectedBoardId = selectedBoardId,
         boardStack = boardStack,
         stayOnCurrentPage = if (selectedBoardId == this.selectedBoardId) stayOnCurrentPage else false,
+        wordFinderGuidance = wordFinderGuidance?.onBoardChanged(selectedBoardId),
     )
 
     fun toggleStayOnCurrentPage(): BoardWorkspaceState =
         copy(stayOnCurrentPage = !stayOnCurrentPage)
+
+    fun startWordFinderGuidance(match: WordFinderMatch): BoardWorkspaceState {
+        val guidance = WordFinderGuidance(match)
+        val entryBoardId = match.startingBoardId
+        val positioned = when {
+            entryBoardId == null || entryBoardId == selectedBoardId -> this
+            match.startsFromRoot -> goHome(entryBoardId)
+            else -> selectBoard(entryBoardId)
+        }
+        return positioned.copy(wordFinderGuidance = guidance.onBoardChanged(positioned.selectedBoardId))
+    }
+
+    fun onWordFinderButtonActivated(boardId: String, buttonId: String): BoardWorkspaceState = copy(
+        wordFinderGuidance = wordFinderGuidance?.onButtonActivated(boardId, buttonId),
+    )
+
+    fun stopWordFinderGuidance(): BoardWorkspaceState = copy(wordFinderGuidance = null)
 }
 
 internal sealed interface BoardWorkspaceContentStatus {
@@ -112,6 +151,9 @@ internal sealed interface BoardWorkspaceAction {
         val boardStack: List<String>,
     ) : BoardWorkspaceAction
     data object ToggleStayOnCurrentPage : BoardWorkspaceAction
+    data class StartWordFinderGuidance(val match: WordFinderMatch) : BoardWorkspaceAction
+    data class WordFinderButtonActivated(val boardId: String, val buttonId: String) : BoardWorkspaceAction
+    data object StopWordFinderGuidance : BoardWorkspaceAction
     data object StartEditing : BoardWorkspaceAction
     data object EditingAccessRequired : BoardWorkspaceAction
     data object EditingAccessDismissed : BoardWorkspaceAction
@@ -192,12 +234,16 @@ internal class BoardWorkspaceViewModel(
                 val validIds = graph.boardsById.keys
                 val nextSelected = current.selectedBoardId?.takeIf { it in validIds } ?: graph.boardSet.rootBoardId
                 val nextStack = current.boardStack.filter { it in validIds }
+                val nextGuidance = current.wordFinderGuidance?.takeIf { guidance ->
+                    guidance.match.targetBoardId in validIds
+                }?.onBoardChanged(nextSelected)
                 current.copy(
                     contentStatus = BoardWorkspaceContentStatus.Ready,
                     savedGraph = graph,
                     selectedBoardId = nextSelected,
                     boardStack = nextStack,
                     stayOnCurrentPage = if (nextSelected == current.selectedBoardId) current.stayOnCurrentPage else false,
+                    wordFinderGuidance = nextGuidance,
                 )
             }
             is BoardWorkspaceAction.LoadFailed -> _state.value.copy(
@@ -221,12 +267,19 @@ internal class BoardWorkspaceViewModel(
                 boardStack = action.boardStack,
             )
             BoardWorkspaceAction.ToggleStayOnCurrentPage -> _state.value.toggleStayOnCurrentPage()
+            is BoardWorkspaceAction.StartWordFinderGuidance -> _state.value.startWordFinderGuidance(action.match)
+            is BoardWorkspaceAction.WordFinderButtonActivated -> _state.value.onWordFinderButtonActivated(
+                boardId = action.boardId,
+                buttonId = action.buttonId,
+            )
+            BoardWorkspaceAction.StopWordFinderGuidance -> _state.value.stopWordFinderGuidance()
             BoardWorkspaceAction.StartEditing -> {
                 val graph = _state.value.savedGraph ?: return
                 _state.value.goHome(graph.boardSet.rootBoardId).copy(
                     editSession = BoardSetEditSession(graph, graph),
                     mode = BoardWorkspaceMode.Edit,
                     showEditingAccessDialog = false,
+                    wordFinderGuidance = null,
                 )
             }
             BoardWorkspaceAction.EditingAccessRequired -> _state.value.copy(
@@ -250,6 +303,7 @@ internal class BoardWorkspaceViewModel(
                     editSession = null,
                     mode = BoardWorkspaceMode.Run,
                     showFinishDialog = false,
+                    wordFinderGuidance = null,
                 )
             }
             BoardWorkspaceAction.SaveStarted -> _state.value.copy(
@@ -263,6 +317,7 @@ internal class BoardWorkspaceViewModel(
                 mode = BoardWorkspaceMode.Run,
                 isSaving = false,
                 statusMessage = null,
+                wordFinderGuidance = null,
             )
             is BoardWorkspaceAction.SaveFailed -> _state.value.copy(
                 contentStatus = BoardWorkspaceContentStatus.RecoverableFailure(action.message),

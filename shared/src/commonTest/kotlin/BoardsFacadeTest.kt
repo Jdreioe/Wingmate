@@ -470,6 +470,54 @@ class BoardsFacadeTest {
         assertEquals(false, locked.isRetryable)
     }
 
+    @Test
+    fun wordFinderSearchesMultiPageScreenHonorsHiddenVisibilityAndFallsBackToRoot() = runBlocking {
+        val facade = facade()
+        val set = facade.createBoardSet("Core", rows = 2, columns = 2, rootBoardName = "Home")
+        val food = facade.createBoard(set.id, name = "Food", rows = 2, columns = 2)
+        val drinks = facade.createBoard(set.id, name = "Drinks", rows = 2, columns = 2)
+
+        facade.upsertBoardCellButton(
+            boardId = set.rootBoardId, row = 0, col = 0, label = "Food", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = food.id,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        facade.upsertBoardCellButton(
+            boardId = set.rootBoardId, row = 0, col = 1, label = "Drinks", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = drinks.id,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        facade.upsertBoardCellButton(
+            boardId = food.id, row = 0, col = 0, label = "Apple", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+        )
+        facade.upsertBoardCellButton(
+            boardId = food.id, row = 0, col = 1, label = "Apple pie", vocalization = null,
+            backgroundColor = null, borderColor = null, linkedBoardId = null,
+            imageUrl = null, clearImage = false, actions = emptyList(), wordType = null,
+            applyAppearance = true, hidden = true,
+        )
+
+        val fromHomeRun = facade.findWords(set.id, query = "apple", currentBoardId = set.rootBoardId, includeHidden = false)
+        assertEquals(1, fromHomeRun.size)
+        assertEquals("Home → Food → Apple", fromHomeRun.single().formattedPath)
+        assertFalse(fromHomeRun.single().isHidden)
+        assertFalse(fromHomeRun.single().startsFromRoot)
+
+        val fromDrinksFallback = facade.findWords(set.id, query = "apple", currentBoardId = drinks.id, includeHidden = false)
+        assertEquals(1, fromDrinksFallback.size)
+        assertEquals("Home → Food → Apple", fromDrinksFallback.single().formattedPath)
+        assertTrue(fromDrinksFallback.single().startsFromRoot)
+
+        val fromHomeEdit = facade.findWords(set.id, query = "apple", currentBoardId = set.rootBoardId, includeHidden = true)
+        assertEquals(listOf("Apple", "Apple pie"), fromHomeEdit.map { it.label })
+        assertFalse(fromHomeEdit[0].isHidden)
+        assertTrue(fromHomeEdit[1].isHidden)
+
+        assertTrue(facade.findWords("missing-screen", query = "apple", currentBoardId = null).isEmpty())
+    }
+
     private fun facade(
         settings: InMemorySettingsRepository = InMemorySettingsRepository(),
         share: ShareService = RecordingShareService(),

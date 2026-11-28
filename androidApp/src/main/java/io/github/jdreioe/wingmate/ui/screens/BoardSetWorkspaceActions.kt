@@ -159,6 +159,7 @@ internal fun handleWorkspaceButtonClick(
 ) {
     // #118: debounce gating lives in ObfButtonItem, which only dispatches accepted activations.
     onMarkButtonSelected(button.id)
+    workspaceViewModel.onAction(BoardWorkspaceAction.WordFinderButtonActivated(activeBoard.id, button.id))
     val actions = parseObfButtonActions(button)
     if (actions.isNotEmpty()) {
         var navigateHome = false

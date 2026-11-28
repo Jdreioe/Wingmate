@@ -825,4 +825,19 @@
     <string name="typing_action_time">Klokkeslæt</string>
     <string name="typing_action_telephone">Telefon</string>
     <string name="typing_action_currency">Valuta</string>
+    <!-- Word Finder -->
+    <string name="word_finder_title">Find ord</string>
+    <string name="word_finder_search_hint">Søg efter et ord…</string>
+    <string name="word_finder_clear_search">Ryd søgning</string>
+    <string name="word_finder_prompt">Skriv et ord for at se, hvordan du finder det.</string>
+    <string name="word_finder_no_results">Ingen matchende ord fundet.</string>
+    <string name="word_finder_hidden_badge">Skjult</string>
+    <string name="word_finder_from_start_page">Fra startsiden</string>
+    <string name="word_finder_finding">Finder %1$s</string>
+    <string name="word_finder_step_instruction">Trin %1$d af %2$d: Tryk på %3$s</string>
+    <string name="word_finder_go_to_step">Gå til trin</string>
+    <string name="word_finder_stop">Stop</string>
+    <string name="word_finder_stop_description">Stop ordvejledning</string>
+    <string name="word_finder_next_step_description">Næste trin til %1$s</string>
+    <string name="word_finder_target_description">Målord</string>
 </resources>

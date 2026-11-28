@@ -11,6 +11,7 @@ import io.github.jdreioe.wingmate.domain.obf.printableScreen
 import io.github.jdreioe.wingmate.domain.obf.usedImageIds
 import io.github.jdreioe.wingmate.domain.obf.BoardActivationBehavior
 import io.github.jdreioe.wingmate.domain.obf.BoardReturnBehavior
+import io.github.jdreioe.wingmate.domain.obf.BoardSetGraph
 import io.github.jdreioe.wingmate.domain.obf.BoardSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_CELL_GAP_DP
 import io.github.jdreioe.wingmate.domain.obf.MAX_KEYGUARD_OUTER_MARGIN_DP
@@ -26,7 +27,10 @@ import io.github.jdreioe.wingmate.domain.obf.ObfKeyboardLayout
 import io.github.jdreioe.wingmate.domain.obf.ObfLoadBoard
 import io.github.jdreioe.wingmate.domain.obf.ObfMediaUrlLoader
 import io.github.jdreioe.wingmate.domain.obf.ObfSound
+import io.github.jdreioe.wingmate.domain.obf.WordFinderMatch
+import io.github.jdreioe.wingmate.domain.obf.WordFinderStep
 import io.github.jdreioe.wingmate.domain.obf.WordType
+import io.github.jdreioe.wingmate.domain.obf.findWords
 import io.github.jdreioe.wingmate.domain.obf.withPageSettingsOverrides
 import io.github.jdreioe.wingmate.domain.obf.applyBoardReturnBehavior
 import io.github.jdreioe.wingmate.domain.obf.availableFieldSpansAt
@@ -130,6 +134,47 @@ data class IosBoardReturnResult(
     val boardId: String?,
     val boardStack: List<String>,
 )
+
+data class IosWordFinderStep(
+    val boardId: String,
+    val boardName: String,
+    val buttonId: String,
+    val buttonLabel: String,
+    val targetBoardId: String? = null,
+    val isHidden: Boolean = false,
+)
+
+data class IosWordFinderMatch(
+    val targetBoardId: String,
+    val targetBoardName: String,
+    val buttonId: String,
+    val label: String,
+    val vocalization: String? = null,
+    val isHidden: Boolean = false,
+    val startsFromRoot: Boolean = false,
+    val steps: List<IosWordFinderStep>,
+    val formattedPath: String,
+) {
+    fun toDomainMatch(): WordFinderMatch = WordFinderMatch(
+        targetBoardId = targetBoardId,
+        targetBoardName = targetBoardName,
+        buttonId = buttonId,
+        label = label,
+        vocalization = vocalization,
+        isHidden = isHidden,
+        startsFromRoot = startsFromRoot,
+        steps = steps.map { step ->
+            WordFinderStep(
+                boardId = step.boardId,
+                boardName = step.boardName,
+                buttonId = step.buttonId,
+                buttonLabel = step.buttonLabel,
+                targetBoardId = step.targetBoardId,
+                isHidden = step.isHidden,
+            )
+        },
+    )
+}
 
 /**
  * Tri-state Screen or Page settings. Boolean choices are `inherit`, `on`, or `off`.
@@ -781,6 +826,45 @@ class BoardsFacade(
         printableScreen(boardSetUseCase.loadBoardSetGraph(boardSetId) ?: throw NativeFailure(NativeFailureKind.NotFound), locale)
     }
 
+    /**
+     * Searches the persisted Screen for Buttons matching [query] and returns shortest
+     * navigation paths from [currentBoardId] (falling back to the starting Page when unreachable).
+     */
+    @Throws(NativeFailure::class, CancellationException::class)
+    suspend fun findWords(
+        boardSetId: String,
+        query: String,
+        currentBoardId: String?,
+        includeHidden: Boolean = false,
+    ): List<IosWordFinderMatch> = nativeCall {
+        val graph = boardSetUseCase.loadBoardSetGraph(boardSetId) ?: return@nativeCall emptyList()
+        val locale = settingsUseCase.get().primaryLanguage
+        findWordsInGraph(
+            graph = graph,
+            query = query,
+            currentBoardId = currentBoardId,
+            locale = locale,
+            includeHidden = includeHidden,
+        )
+    }
+
+    /**
+     * Searches an in-memory Screen [graph] directly (used by Android Edit mode so unsaved
+     * draft changes are searchable immediately).
+     */
+    fun findWordsInGraph(
+        graph: BoardSetGraph,
+        query: String,
+        currentBoardId: String?,
+        locale: String?,
+        includeHidden: Boolean = false,
+    ): List<IosWordFinderMatch> = graph.findWords(
+        query = query,
+        currentBoardId = currentBoardId,
+        locale = locale,
+        includeHidden = includeHidden,
+    ).map(WordFinderMatch::toIosWordFinderMatch)
+
     private suspend fun requireBoardSet(id: String): ObfBoardSet =
         boardSetUseCase.getBoardSet(id) ?: throw NativeFailure(NativeFailureKind.NotFound)
 
@@ -853,3 +937,24 @@ private fun String.toReturnBehavior(): BoardReturnBehavior? = when (this) {
     "StartPage" -> BoardReturnBehavior.StartPage
     else -> null
 }
+
+private fun WordFinderStep.toIosWordFinderStep(): IosWordFinderStep = IosWordFinderStep(
+    boardId = boardId,
+    boardName = boardName,
+    buttonId = buttonId,
+    buttonLabel = buttonLabel,
+    targetBoardId = targetBoardId,
+    isHidden = isHidden,
+)
+
+private fun WordFinderMatch.toIosWordFinderMatch(): IosWordFinderMatch = IosWordFinderMatch(
+    targetBoardId = targetBoardId,
+    targetBoardName = targetBoardName,
+    buttonId = buttonId,
+    label = label,
+    vocalization = vocalization,
+    isHidden = isHidden,
+    startsFromRoot = startsFromRoot,
+    steps = steps.map(WordFinderStep::toIosWordFinderStep),
+    formattedPath = formattedPath(),
+)

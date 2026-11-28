@@ -217,6 +217,8 @@ internal data class ObfBoardUiState(
     val showHiddenButtons: Boolean = false,
     val predictionLabels: Map<String, String> = emptyMap(),
     val highlightedButtonId: String? = null,
+    val guidedButtonId: String? = null,
+    val guidedButtonDescription: String? = null,
     /** The Page's decoded background image (#103); the caller loads it from [ObfBoard.backgroundImage]. */
     val backgroundImage: ImageBitmap? = null,
     val selectedFieldAnchor: Pair<Int, Int>? = null,
@@ -346,6 +348,8 @@ fun ObfBoardView(
     showHiddenButtons: Boolean = false,
     predictionLabels: Map<String, String> = emptyMap(),
     highlightedButtonId: String? = null,
+    guidedButtonId: String? = null,
+    guidedButtonDescription: String? = null,
     backgroundImage: ImageBitmap? = null,
     onCellClick: ((row: Int, column: Int, button: ObfButton?) -> Unit)? = null,
     onCellMove: ((fromRow: Int, fromColumn: Int, toRow: Int, toColumn: Int) -> Unit)? = null,
@@ -385,6 +389,8 @@ fun ObfBoardView(
             showHiddenButtons = showHiddenButtons,
             predictionLabels = predictionLabels,
             highlightedButtonId = highlightedButtonId,
+            guidedButtonId = guidedButtonId,
+            guidedButtonDescription = guidedButtonDescription,
             backgroundImage = backgroundImage,
             selectedFieldAnchor = selectedFieldAnchor,
             selectedFieldSpans = selectedFieldSpans,
@@ -450,6 +456,8 @@ internal fun ObfBoardContent(
     val showHiddenButtons = state.showHiddenButtons
     val predictionLabels = state.predictionLabels
     val highlightedButtonId = state.highlightedButtonId
+    val guidedButtonId = state.guidedButtonId
+    val guidedButtonDescription = state.guidedButtonDescription
     val selectedFieldAnchor = state.selectedFieldAnchor
     val selectedFieldSpans = state.selectedFieldSpans
     val homeBoardId = state.homeBoardId
@@ -551,6 +559,8 @@ internal fun ObfBoardContent(
                             showHiddenButtons,
                             predictionLabels,
                             highlightedButtonId,
+                            guidedButtonId,
+                            guidedButtonDescription,
                             onButtonLongClick, settings, feedback
                         )
                     }
@@ -569,6 +579,8 @@ internal fun ObfBoardContent(
                     showHiddenButtons,
                     predictionLabels,
                     highlightedButtonId,
+                    guidedButtonId,
+                    guidedButtonDescription,
                     onButtonLongClick, settings, feedback
                 )
             }
@@ -846,6 +858,8 @@ internal fun ObfBoardContent(
                                         boardSettings = effectiveBoardSettings,
                                         labelOverride = predictionLabels[button.id],
                                         isSelectionHighlighted = button.id == highlightedButtonId,
+                                        isGuidedHighlighted = button.id == guidedButtonId,
+                                        guidedDescription = guidedButtonDescription,
                                         fieldFontScale = fieldFontScale(item.rowSpan, item.columnSpan),
                                         rowSpan = item.rowSpan
                                     )
@@ -920,7 +934,10 @@ internal fun ObfBoardContent(
                                         boardStrings = board.strings,
                                         locale = settings.primaryLanguage,
                                         boardSettings = effectiveBoardSettings,
-                                        labelOverride = predictionLabels[button.id]
+                                        labelOverride = predictionLabels[button.id],
+                                        isSelectionHighlighted = button.id == highlightedButtonId,
+                                        isGuidedHighlighted = button.id == guidedButtonId,
+                                        guidedDescription = guidedButtonDescription,
                                         )
                                 }
                             }

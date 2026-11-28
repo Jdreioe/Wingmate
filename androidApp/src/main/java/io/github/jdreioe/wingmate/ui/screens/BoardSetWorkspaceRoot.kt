@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.hojmoseit.wingmate.R
 import io.github.jdreioe.wingmate.application.BoardSetUseCase
+import io.github.jdreioe.wingmate.application.BoardsFacade
 import io.github.jdreioe.wingmate.application.pageSwipeIsActive
 import io.github.jdreioe.wingmate.application.RemoteScreenActions
 import io.github.jdreioe.wingmate.application.EditingAccessController
@@ -88,6 +89,7 @@ internal fun BoardSetWorkspaceRoot(
     hideStatusBar: Boolean = true,
 ) {
     val useCase = koinInject<BoardSetUseCase>()
+    val boardsFacade = koinInject<BoardsFacade>()
     val remoteActions = koinInject<RemoteScreenActions>()
     val communicationSession = koinInject<CommunicationSession>()
     val communicationState by communicationSession.state.collectAsStateWithLifecycle()
@@ -136,6 +138,7 @@ internal fun BoardSetWorkspaceRoot(
     val showHiddenButtons = hiddenButtonsSession.revealed
     val showEditingAccessDialog = workspace.showEditingAccessDialog
     var showExportDialog by remember(boardSetId) { mutableStateOf(false) }
+    var showWordFinderDialog by remember(boardSetId) { mutableStateOf(false) }
     val unlockToEditMessage = stringResource(R.string.board_workspace_unlock_to_edit)
     val loadErrorMessage = stringResource(R.string.board_workspace_load_error)
     val saveErrorMessage = stringResource(R.string.board_workspace_save_error)
@@ -550,6 +553,7 @@ internal fun BoardSetWorkspaceRoot(
                         canResizePage = activeBoard.grid != null,
                         canUndo = editSession?.undoStack?.isNotEmpty() == true,
                         onLeave = ::leave,
+                        onFindWord = { showWordFinderDialog = true },
                         onRenameScreen = { showRenameScreenDialog = true },
                         onOpenScreenSettings = { settingsTarget = BoardSettingsTarget.Screen },
                         onSelectBoard = {
@@ -575,6 +579,7 @@ internal fun BoardSetWorkspaceRoot(
                         showHiddenButtons = showHiddenButtons,
                         isExporting = isExporting,
                         pageNavigation = pageNavigation,
+                        onFindWord = { showWordFinderDialog = true },
                         onEditScreen = ::startEditing,
                         onToggleHiddenButtons = hiddenButtonsSession::toggle,
                         onExport = { showExportDialog = true },
@@ -664,6 +669,33 @@ internal fun BoardSetWorkspaceRoot(
                     )
                 }
 
+                workspace.wordFinderGuidance?.let { guidance ->
+                    WordFinderGuidanceBanner(
+                        guidance = guidance,
+                        activeBoardId = workspace.selectedBoardId,
+                        selectOnTouchDown = settings.selectOnTouchDown,
+                        onGoToStep = { stepBoardId ->
+                            if (mode == BoardWorkspaceMode.Edit) {
+                                workspaceViewModel.onAction(BoardWorkspaceAction.SelectBoard(stepBoardId))
+                                selectedField = null
+                            } else if (stepBoardId == activeGraph.boardSet.rootBoardId) {
+                                workspaceViewModel.onAction(BoardWorkspaceAction.GoHome(stepBoardId))
+                            } else {
+                                workspaceViewModel.onAction(BoardWorkspaceAction.OpenBoard(stepBoardId))
+                            }
+                        },
+                        onStop = { workspaceViewModel.onAction(BoardWorkspaceAction.StopWordFinderGuidance) },
+                    )
+                }
+
+                val guidedButtonDescription = workspace.wordFinderGuidance?.let { guidance ->
+                    if (guidance.isOnFinalStep) {
+                        stringResource(R.string.word_finder_target_description)
+                    } else {
+                        stringResource(R.string.word_finder_next_step_description, guidance.match.label)
+                    }
+                }
+
                 PageSwipeBox(
                     enabled = pageSwipeIsActive(
                         isEditMode = mode == BoardWorkspaceMode.Edit,
@@ -690,6 +722,8 @@ internal fun BoardSetWorkspaceRoot(
                         showHiddenButtons = showHiddenButtons,
                         selectedButtons = selectedButtons,
                         highlightedButtonId = selectionHighlight.buttonId,
+                        guidedButtonId = workspace.guidedButtonId,
+                        guidedButtonDescription = guidedButtonDescription,
                         backgroundImage = backgroundBitmap,
                         predictionLabels = predictionsById,
                         onButtonClick = { button ->
@@ -716,6 +750,25 @@ internal fun BoardSetWorkspaceRoot(
                         },
                         onCellClick = if (mode == BoardWorkspaceMode.Edit) {
                             { row, column, button ->
+                                val activeGuidance = workspace.wordFinderGuidance
+                                if (button != null && activeGuidance?.highlightedButtonIdFor(activeBoard.id) == button.id) {
+                                    if (!activeGuidance.isOnFinalStep) {
+                                        val nextBoardId = activeGuidance.currentStep?.targetBoardId
+                                            ?: activeGraph.resolveLinkedBoard(button.loadBoard)?.id
+                                        workspaceViewModel.onAction(
+                                            BoardWorkspaceAction.WordFinderButtonActivated(activeBoard.id, button.id)
+                                        )
+                                        if (nextBoardId != null) {
+                                            selectedField = null
+                                            workspaceViewModel.onAction(BoardWorkspaceAction.SelectBoard(nextBoardId))
+                                            return@ObfBoardView
+                                        }
+                                    } else {
+                                        workspaceViewModel.onAction(
+                                            BoardWorkspaceAction.WordFinderButtonActivated(activeBoard.id, button.id)
+                                        )
+                                    }
+                                }
                                 when (
                                     val result = resolveCellTap(
                                         grid = activeBoard.grid,
@@ -848,6 +901,29 @@ internal fun BoardSetWorkspaceRoot(
                 }
             }
         }
+    }
+
+    if (showWordFinderDialog && activeGraph != null) {
+        val includeHidden = mode == BoardWorkspaceMode.Edit || showHiddenButtons
+        WordFinderDialog(
+            search = { query ->
+                boardsFacade.findWordsInGraph(
+                    graph = activeGraph,
+                    query = query,
+                    currentBoardId = workspace.selectedBoardId,
+                    locale = settings.primaryLanguage,
+                    includeHidden = includeHidden,
+                )
+            },
+            onSelectMatch = { match ->
+                showWordFinderDialog = false
+                selectedField = null
+                workspaceViewModel.onAction(
+                    BoardWorkspaceAction.StartWordFinderGuidance(match.toDomainMatch())
+                )
+            },
+            onDismiss = { showWordFinderDialog = false },
+        )
     }
 
     if (showRenameScreenDialog && activeGraph != null) {
